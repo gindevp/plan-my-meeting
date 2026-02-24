@@ -9,6 +9,7 @@ import CalendarPage from "./pages/CalendarPage";
 import MeetingListPage from "./pages/MeetingListPage";
 import CreateMeetingPage from "./pages/CreateMeetingPage";
 import RoomManagementPage from "./pages/RoomManagementPage";
+import EquipmentManagementPage from "./pages/EquipmentManagementPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="/meetings" element={<MeetingListPage />} />
             <Route path="/meetings/new" element={<CreateMeetingPage />} />
             <Route path="/rooms" element={<RoomManagementPage />} />
+            <Route path="/equipment" element={<EquipmentManagementPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

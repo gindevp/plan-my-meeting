@@ -9,6 +9,7 @@ import {
   FileText,
   ClipboardList,
   Building2,
+  HardDrive,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,7 @@ const navigation = [
 const management = [
   { name: "Nhân viên", href: "/staff", icon: Users },
   { name: "Phòng ban", href: "/departments", icon: Building2 },
+  { name: "Thiết bị", href: "/equipment", icon: HardDrive },
   { name: "Báo cáo", href: "/reports", icon: FileText },
   { name: "Cài đặt", href: "/settings", icon: Settings },
 ];

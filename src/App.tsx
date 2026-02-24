@@ -10,6 +10,7 @@ import MeetingListPage from "./pages/MeetingListPage";
 import CreateMeetingPage from "./pages/CreateMeetingPage";
 import RoomManagementPage from "./pages/RoomManagementPage";
 import EquipmentManagementPage from "./pages/EquipmentManagementPage";
+import ReportsPage from "./pages/ReportsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/meetings/new" element={<CreateMeetingPage />} />
             <Route path="/rooms" element={<RoomManagementPage />} />
             <Route path="/equipment" element={<EquipmentManagementPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

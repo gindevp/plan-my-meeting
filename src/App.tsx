@@ -11,6 +11,9 @@ import CreateMeetingPage from "./pages/CreateMeetingPage";
 import RoomManagementPage from "./pages/RoomManagementPage";
 import EquipmentManagementPage from "./pages/EquipmentManagementPage";
 import ReportsPage from "./pages/ReportsPage";
+import StaffPage from "./pages/StaffPage";
+import DepartmentsPage from "./pages/DepartmentsPage";
+import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +33,9 @@ const App = () => (
             <Route path="/rooms" element={<RoomManagementPage />} />
             <Route path="/equipment" element={<EquipmentManagementPage />} />
             <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/staff" element={<StaffPage />} />
+            <Route path="/departments" element={<DepartmentsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

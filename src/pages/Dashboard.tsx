@@ -1,7 +1,8 @@
-import { CalendarDays, Users, DoorOpen, ClipboardList, TrendingUp, Clock, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { CalendarDays, DoorOpen, ClipboardList, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { meetings, rooms, tasks, statusLabels, typeLabels } from "@/data/mockData";
+import { useAuth } from "@/contexts/AuthContext";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 const stats = [
@@ -43,6 +44,11 @@ const typeColorMap: Record<string, string> = {
 };
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const displayName = user?.firstName
+    ? `${user.firstName} ${user.lastName || ""}`.trim()
+    : user?.login ?? "User";
+
   const upcomingMeetings = meetings
     .filter(m => m.status === 'approved' || m.status === 'pending')
     .slice(0, 5);
@@ -52,7 +58,7 @@ export default function Dashboard() {
       {/* Page title */}
       <div>
         <h1 className="text-2xl font-display font-bold text-foreground">Tổng quan</h1>
-        <p className="text-sm text-muted-foreground mt-1">Xin chào, Nguyễn Văn An. Đây là tóm tắt hoạt động họp hôm nay.</p>
+        <p className="text-sm text-muted-foreground mt-1">Xin chào, {displayName}. Đây là tóm tắt hoạt động họp hôm nay.</p>
       </div>
 
       {/* Stats */}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { registerApi } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,10 @@ import { CalendarDays, UserPlus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function RegisterPage() {
+  const [login, setLogin] = useState("");
   const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -22,22 +25,26 @@ export default function RegisterPage() {
       toast({ variant: "destructive", title: "Lỗi", description: "Mật khẩu xác nhận không khớp" });
       return;
     }
-    if (password.length < 6) {
-      toast({ variant: "destructive", title: "Lỗi", description: "Mật khẩu phải có ít nhất 6 ký tự" });
+    if (password.length < 4) {
+      toast({ variant: "destructive", title: "Lỗi", description: "Mật khẩu phải có ít nhất 4 ký tự" });
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: window.location.origin },
-    });
-    setLoading(false);
-    if (error) {
-      toast({ variant: "destructive", title: "Đăng ký thất bại", description: error.message });
-    } else {
-      toast({ title: "Đăng ký thành công", description: "Vui lòng kiểm tra email để xác nhận tài khoản." });
+    try {
+      await registerApi({ login: login || email, email, password, firstName: firstName || undefined, lastName: lastName || undefined });
+      toast({
+        title: "Đăng ký thành công",
+        description: "Vui lòng kiểm tra email để kích hoạt tài khoản.",
+      });
       navigate("/login");
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Đăng ký thất bại",
+        description: err instanceof Error ? err.message : "Lỗi không xác định",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -56,12 +63,26 @@ export default function RegisterPage() {
         <CardContent>
           <form onSubmit={handleRegister} className="space-y-4">
             <div className="space-y-2">
+              <Label htmlFor="login">Tên đăng nhập</Label>
+              <Input id="login" type="text" placeholder="username" value={login} onChange={(e) => setLogin(e.target.value)} required />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" placeholder="email@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="firstName">Họ</Label>
+                <Input id="firstName" type="text" placeholder="Nguyễn" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Tên</Label>
+                <Input id="lastName" type="text" placeholder="Văn An" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+              </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="password">Mật khẩu</Label>
-              <Input id="password" type="password" placeholder="Tối thiểu 6 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <Input id="password" type="password" placeholder="Tối thiểu 4 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={4} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirm">Xác nhận mật khẩu</Label>

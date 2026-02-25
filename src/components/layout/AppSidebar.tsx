@@ -1,4 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -10,6 +11,7 @@ import {
   ClipboardList,
   Building2,
   HardDrive,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +33,7 @@ const management = [
 
 export default function AppSidebar() {
   const location = useLocation();
+  const { user, signOut } = useAuth();
 
   return (
     <aside className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-gradient-sidebar border-r border-sidebar-border">
@@ -105,11 +108,13 @@ export default function AppSidebar() {
       <div className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-accent text-sm font-semibold text-sidebar-primary">
-            NA
+            {user?.email?.slice(0, 2).toUpperCase() ?? "U"}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-sidebar-accent-foreground truncate">Nguyễn Văn An</p>
-            <p className="text-[11px] text-sidebar-muted">Quản trị viên</p>
+            <p className="text-sm font-medium text-sidebar-accent-foreground truncate">{user?.email ?? "User"}</p>
+            <button onClick={signOut} className="flex items-center gap-1 text-[11px] text-sidebar-muted hover:text-destructive transition-colors">
+              <LogOut className="h-3 w-3" /> Đăng xuất
+            </button>
           </div>
         </div>
       </div>

@@ -6,15 +6,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { rooms, users, departments, meetingTypes, meetingLevels, type MeetingType, type MeetingLevel } from "@/data/mockData";
-import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save } from "lucide-react";
+import { rooms, users, meetingTypes, meetingLevels, type MeetingType, type MeetingLevel } from "@/data/mockData";
+import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface AgendaForm {
   title: string;
   presenter: string;
   duration: string;
+}
+
+interface ValidationErrors {
+  [key: string]: string;
 }
 
 export default function CreateMeetingPage() {
@@ -33,40 +36,120 @@ export default function CreateMeetingPage() {
   const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
   const [agendaItems, setAgendaItems] = useState<AgendaForm[]>([]);
   const [conflicts, setConflicts] = useState<string[]>([]);
+  const [errors, setErrors] = useState<ValidationErrors>({});
+  const [attendeeSearch, setAttendeeSearch] = useState("");
 
   const steps = [
     { num: 1, label: "Thông tin chung" },
-    { num: 2, label: "Thành phần & Tài liệu" },
+    { num: 2, label: "Thành phần tham dự" },
     { num: 3, label: "Chương trình họp" },
   ];
+
+  const validateStep1 = (): boolean => {
+    const newErrors: ValidationErrors = {};
+    if (!title.trim()) newErrors.title = "Vui lòng nhập tiêu đề";
+    if (!startDate) newErrors.startDate = "Vui lòng chọn ngày";
+    if (!startTime) newErrors.startTime = "Vui lòng chọn giờ bắt đầu";
+    if (!endTime) newErrors.endTime = "Vui lòng chọn giờ kết thúc";
+    if (!chairperson) newErrors.chairperson = "Vui lòng chọn người chủ trì";
+    if ((meetingType === "offline" || meetingType === "hybrid") && !selectedRoom)
+      newErrors.room = "Vui lòng chọn phòng họp";
+    if ((meetingType === "online" || meetingType === "hybrid") && !meetingLink.trim())
+      newErrors.meetingLink = "Vui lòng nhập link họp";
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const validateStep2 = (): boolean => {
+    const newErrors: ValidationErrors = {};
+    if (selectedAttendees.length === 0)
+      newErrors.attendees = "Vui lòng chọn ít nhất 1 người tham dự";
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const validateStep3 = (): boolean => {
+    const newErrors: ValidationErrors = {};
+    if (agendaItems.length === 0)
+      newErrors.agenda = "Vui lòng tạo ít nhất 1 mục chương trình họp";
+    agendaItems.forEach((item, i) => {
+      if (!item.title.trim()) newErrors[`agenda_title_${i}`] = "Nhập tên nội dung";
+      if (!item.presenter) newErrors[`agenda_presenter_${i}`] = "Chọn người trình bày";
+    });
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const checkConflicts = () => {
     const found: string[] = [];
     if (selectedRoom) {
-      const room = rooms.find(r => r.id === selectedRoom);
-      if (room?.status === 'occupied') found.push(`Phòng ${room.name} đang được sử dụng`);
-      if (room?.status === 'maintenance') found.push(`Phòng ${room.name} đang bảo trì`);
-      if (room && selectedAttendees.length > room.capacity) found.push(`Số người tham dự (${selectedAttendees.length}) vượt sức chứa phòng (${room.capacity})`);
+      const room = rooms.find((r) => r.id === selectedRoom);
+      if (room?.status === "occupied") found.push(`Phòng ${room.name} đang được sử dụng`);
+      if (room?.status === "maintenance") found.push(`Phòng ${room.name} đang bảo trì`);
+      if (room && selectedAttendees.length > room.capacity)
+        found.push(`Số người tham dự (${selectedAttendees.length}) vượt sức chứa phòng (${room.capacity})`);
     }
     setConflicts(found);
   };
 
+  const goToStep = (targetStep: number) => {
+    if (targetStep > step) {
+      // Validate current step before advancing
+      if (step === 1 && !validateStep1()) return;
+      if (step === 2 && !validateStep2()) return;
+    }
+    setErrors({});
+    checkConflicts();
+    setStep(targetStep);
+  };
+
   const toggleAttendee = (name: string) => {
-    setSelectedAttendees(prev =>
-      prev.includes(name) ? prev.filter(a => a !== name) : [...prev, name]
+    setSelectedAttendees((prev) =>
+      prev.includes(name) ? prev.filter((a) => a !== name) : [...prev, name]
     );
+    if (errors.attendees) {
+      setErrors((prev) => {
+        const { attendees, ...rest } = prev;
+        return rest;
+      });
+    }
   };
 
   const addAgendaItem = () => {
-    setAgendaItems(prev => [...prev, { title: "", presenter: "", duration: "15" }]);
+    setAgendaItems((prev) => [...prev, { title: "", presenter: "", duration: "15" }]);
+    if (errors.agenda) {
+      setErrors((prev) => {
+        const { agenda, ...rest } = prev;
+        return rest;
+      });
+    }
   };
 
   const removeAgendaItem = (index: number) => {
-    setAgendaItems(prev => prev.filter((_, i) => i !== index));
+    setAgendaItems((prev) => prev.filter((_, i) => i !== index));
   };
 
   const updateAgendaItem = (index: number, field: keyof AgendaForm, value: string) => {
-    setAgendaItems(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item));
+    setAgendaItems((prev) => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)));
+  };
+
+  const handleClearForm = () => {
+    setTitle("");
+    setDescription("");
+    setStartDate("");
+    setStartTime("");
+    setEndTime("");
+    setChairperson("");
+    setMeetingLink("");
+    setSelectedRoom("");
+    setMeetingType("offline");
+    setMeetingLevel("department");
+    setSelectedAttendees([]);
+    setAgendaItems([]);
+    setConflicts([]);
+    setErrors({});
+    setStep(1);
+    toast({ title: "Đã xóa", description: "Tất cả dữ liệu đã được xóa." });
   };
 
   const handleSaveDraft = () => {
@@ -74,15 +157,27 @@ export default function CreateMeetingPage() {
   };
 
   const handleSubmit = () => {
+    if (!validateStep3()) return;
     checkConflicts();
     toast({ title: "Đã gửi duyệt", description: "Yêu cầu tạo cuộc họp đã được gửi đến người phê duyệt." });
   };
 
+  const filteredUsers = users.filter((u) =>
+    u.name.toLowerCase().includes(attendeeSearch.toLowerCase())
+  );
+
+  const errorClass = (field: string) => (errors[field] ? "border-destructive" : "");
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-display font-bold">Tạo cuộc họp mới</h1>
-        <p className="text-sm text-muted-foreground mt-1">Điền thông tin để tạo và gửi phê duyệt cuộc họp</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-display font-bold">Tạo cuộc họp mới</h1>
+          <p className="text-sm text-muted-foreground mt-1">Điền thông tin để tạo và gửi phê duyệt cuộc họp</p>
+        </div>
+        <Button variant="outline" onClick={handleClearForm} className="gap-1.5">
+          <RotateCcw className="h-4 w-4" /> Xóa dữ liệu
+        </Button>
       </div>
 
       {/* Steps */}
@@ -90,7 +185,7 @@ export default function CreateMeetingPage() {
         {steps.map((s, i) => (
           <div key={s.num} className="flex items-center gap-2">
             <button
-              onClick={() => setStep(s.num)}
+              onClick={() => goToStep(s.num)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 step === s.num
                   ? "bg-primary text-primary-foreground shadow-sm"
@@ -118,7 +213,9 @@ export default function CreateMeetingPage() {
               <div>
                 <p className="font-medium text-sm text-destructive">Phát hiện xung đột</p>
                 <ul className="mt-1 space-y-0.5 text-xs text-destructive/80">
-                  {conflicts.map((c, i) => <li key={i}>• {c}</li>)}
+                  {conflicts.map((c, i) => (
+                    <li key={i}>• {c}</li>
+                  ))}
                 </ul>
               </div>
             </div>
@@ -126,7 +223,7 @@ export default function CreateMeetingPage() {
         </Card>
       )}
 
-      {/* Step 1: General Info */}
+      {/* Step 1 */}
       {step === 1 && (
         <Card className="shadow-card animate-slide-up">
           <CardHeader>
@@ -135,7 +232,8 @@ export default function CreateMeetingPage() {
           <CardContent className="space-y-4">
             <div>
               <Label>Tiêu đề cuộc họp *</Label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nhập tiêu đề cuộc họp" className="mt-1.5" />
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nhập tiêu đề cuộc họp" className={`mt-1.5 ${errorClass("title")}`} />
+              {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -144,7 +242,7 @@ export default function CreateMeetingPage() {
                 <Select value={meetingType} onValueChange={(v) => setMeetingType(v as MeetingType)}>
                   <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {meetingTypes.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    {meetingTypes.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -153,7 +251,7 @@ export default function CreateMeetingPage() {
                 <Select value={meetingLevel} onValueChange={(v) => setMeetingLevel(v as MeetingLevel)}>
                   <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {meetingLevels.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+                    {meetingLevels.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -162,49 +260,55 @@ export default function CreateMeetingPage() {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Ngày *</Label>
-                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1.5" />
+                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={`mt-1.5 ${errorClass("startDate")}`} />
+                {errors.startDate && <p className="text-xs text-destructive mt-1">{errors.startDate}</p>}
               </div>
               <div>
                 <Label>Bắt đầu *</Label>
-                <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="mt-1.5" />
+                <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={`mt-1.5 ${errorClass("startTime")}`} />
+                {errors.startTime && <p className="text-xs text-destructive mt-1">{errors.startTime}</p>}
               </div>
               <div>
                 <Label>Kết thúc *</Label>
-                <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="mt-1.5" />
+                <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={`mt-1.5 ${errorClass("endTime")}`} />
+                {errors.endTime && <p className="text-xs text-destructive mt-1">{errors.endTime}</p>}
               </div>
             </div>
 
-            {(meetingType === 'offline' || meetingType === 'hybrid') && (
+            {(meetingType === "offline" || meetingType === "hybrid") && (
               <div>
                 <Label>Phòng họp *</Label>
                 <Select value={selectedRoom} onValueChange={setSelectedRoom}>
-                  <SelectTrigger className="mt-1.5"><SelectValue placeholder="Chọn phòng họp" /></SelectTrigger>
+                  <SelectTrigger className={`mt-1.5 ${errorClass("room")}`}><SelectValue placeholder="Chọn phòng họp" /></SelectTrigger>
                   <SelectContent>
-                    {rooms.map(r => (
-                      <SelectItem key={r.id} value={r.id} disabled={r.status !== 'available'}>
-                        {r.name} ({r.capacity} người) {r.status !== 'available' ? `- ${r.status === 'occupied' ? 'Đang sử dụng' : 'Bảo trì'}` : ''}
+                    {rooms.map((r) => (
+                      <SelectItem key={r.id} value={r.id} disabled={r.status !== "available"}>
+                        {r.name} ({r.capacity} người) {r.status !== "available" ? `- ${r.status === "occupied" ? "Đang sử dụng" : "Bảo trì"}` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.room && <p className="text-xs text-destructive mt-1">{errors.room}</p>}
               </div>
             )}
 
-            {(meetingType === 'online' || meetingType === 'hybrid') && (
+            {(meetingType === "online" || meetingType === "hybrid") && (
               <div>
                 <Label>Link họp trực tuyến *</Label>
-                <Input value={meetingLink} onChange={(e) => setMeetingLink(e.target.value)} placeholder="https://meet.example.com/..." className="mt-1.5" />
+                <Input value={meetingLink} onChange={(e) => setMeetingLink(e.target.value)} placeholder="https://meet.example.com/..." className={`mt-1.5 ${errorClass("meetingLink")}`} />
+                {errors.meetingLink && <p className="text-xs text-destructive mt-1">{errors.meetingLink}</p>}
               </div>
             )}
 
             <div>
               <Label>Người chủ trì *</Label>
               <Select value={chairperson} onValueChange={setChairperson}>
-                <SelectTrigger className="mt-1.5"><SelectValue placeholder="Chọn người chủ trì" /></SelectTrigger>
+                <SelectTrigger className={`mt-1.5 ${errorClass("chairperson")}`}><SelectValue placeholder="Chọn người chủ trì" /></SelectTrigger>
                 <SelectContent>
-                  {users.map(u => <SelectItem key={u.id} value={u.name}>{u.name} - {u.position}</SelectItem>)}
+                  {users.map((u) => <SelectItem key={u.id} value={u.name}>{u.name} - {u.position}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {errors.chairperson && <p className="text-xs text-destructive mt-1">{errors.chairperson}</p>}
             </div>
 
             <div>
@@ -215,46 +319,60 @@ export default function CreateMeetingPage() {
         </Card>
       )}
 
-      {/* Step 2: Attendees */}
+      {/* Step 2 */}
       {step === 2 && (
         <Card className="shadow-card animate-slide-up">
           <CardHeader>
             <CardTitle className="text-base font-display">Thành phần tham dự</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <Label>Chọn người tham dự</Label>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {users.map(u => (
-                  <button
-                    key={u.id}
-                    onClick={() => toggleAttendee(u.name)}
-                    className={`flex items-center gap-3 p-3 rounded-lg border text-left text-sm transition-all ${
-                      selectedAttendees.includes(u.name)
-                        ? "border-primary bg-primary/5 shadow-sm"
-                        : "border-border hover:border-primary/30"
-                    }`}
-                  >
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold">
-                      {u.name.split(' ').pop()?.[0]}
-                    </div>
-                    <div>
-                      <p className="font-medium text-xs">{u.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{u.position} • {u.department}</p>
-                    </div>
-                    {selectedAttendees.includes(u.name) && (
-                      <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
-                    )}
-                  </button>
-                ))}
-              </div>
+            {errors.attendees && (
+              <p className="text-sm text-destructive font-medium">{errors.attendees}</p>
+            )}
+
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Tìm kiếm người tham dự theo tên..."
+                value={attendeeSearch}
+                onChange={(e) => setAttendeeSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto">
+              {filteredUsers.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => toggleAttendee(u.name)}
+                  className={`flex items-center gap-3 p-3 rounded-lg border text-left text-sm transition-all ${
+                    selectedAttendees.includes(u.name)
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : "border-border hover:border-primary/30"
+                  }`}
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold">
+                    {u.name.split(" ").pop()?.[0]}
+                  </div>
+                  <div>
+                    <p className="font-medium text-xs">{u.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{u.position} • {u.department}</p>
+                  </div>
+                  {selectedAttendees.includes(u.name) && (
+                    <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
+                  )}
+                </button>
+              ))}
+              {filteredUsers.length === 0 && (
+                <p className="col-span-2 text-center text-sm text-muted-foreground py-4">Không tìm thấy người nào</p>
+              )}
             </div>
 
             {selectedAttendees.length > 0 && (
               <div>
                 <Label>Đã chọn ({selectedAttendees.length})</Label>
                 <div className="flex flex-wrap gap-1.5 mt-2">
-                  {selectedAttendees.map(a => (
+                  {selectedAttendees.map((a) => (
                     <Badge key={a} variant="secondary" className="cursor-pointer" onClick={() => toggleAttendee(a)}>
                       {a} ×
                     </Badge>
@@ -266,7 +384,7 @@ export default function CreateMeetingPage() {
         </Card>
       )}
 
-      {/* Step 3: Agenda */}
+      {/* Step 3 */}
       {step === 3 && (
         <Card className="shadow-card animate-slide-up">
           <CardHeader className="flex flex-row items-center justify-between">
@@ -276,6 +394,9 @@ export default function CreateMeetingPage() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-3">
+            {errors.agenda && (
+              <p className="text-sm text-destructive font-medium">{errors.agenda}</p>
+            )}
             {agendaItems.length === 0 && (
               <div className="text-center py-8 text-sm text-muted-foreground">
                 Chưa có mục nào. Nhấn "Thêm mục" để bắt đầu.
@@ -287,18 +408,25 @@ export default function CreateMeetingPage() {
                   {i + 1}
                 </span>
                 <div className="flex-1 space-y-2">
-                  <Input
-                    placeholder="Tên nội dung"
-                    value={item.title}
-                    onChange={(e) => updateAgendaItem(i, "title", e.target.value)}
-                  />
+                  <div>
+                    <Input
+                      placeholder="Tên nội dung"
+                      value={item.title}
+                      onChange={(e) => updateAgendaItem(i, "title", e.target.value)}
+                      className={errorClass(`agenda_title_${i}`)}
+                    />
+                    {errors[`agenda_title_${i}`] && <p className="text-xs text-destructive mt-1">{errors[`agenda_title_${i}`]}</p>}
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <Select value={item.presenter} onValueChange={(v) => updateAgendaItem(i, "presenter", v)}>
-                      <SelectTrigger><SelectValue placeholder="Người trình bày" /></SelectTrigger>
-                      <SelectContent>
-                        {users.map(u => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <div>
+                      <Select value={item.presenter} onValueChange={(v) => updateAgendaItem(i, "presenter", v)}>
+                        <SelectTrigger className={errorClass(`agenda_presenter_${i}`)}><SelectValue placeholder="Người trình bày" /></SelectTrigger>
+                        <SelectContent>
+                          {users.map((u) => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {errors[`agenda_presenter_${i}`] && <p className="text-xs text-destructive mt-1">{errors[`agenda_presenter_${i}`]}</p>}
+                    </div>
                     <Input
                       type="number"
                       placeholder="Thời lượng (phút)"
@@ -326,9 +454,7 @@ export default function CreateMeetingPage() {
             <Save className="h-4 w-4 mr-1.5" /> Lưu nháp
           </Button>
           {step < 3 ? (
-            <Button onClick={() => { checkConflicts(); setStep(step + 1); }}>
-              Tiếp theo
-            </Button>
+            <Button onClick={() => goToStep(step + 1)}>Tiếp theo</Button>
           ) : (
             <Button onClick={handleSubmit}>
               <Send className="h-4 w-4 mr-1.5" /> Gửi duyệt

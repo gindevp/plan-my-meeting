@@ -8,7 +8,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import AppLayout from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import CalendarPage from "./pages/CalendarPage";
-import MeetingListPage from "./pages/MeetingListPage";
+import MeetingPlanPage from "./pages/MeetingPlanPage";
 import CreateMeetingPage from "./pages/CreateMeetingPage";
 import RoomManagementPage from "./pages/RoomManagementPage";
 import EquipmentManagementPage from "./pages/EquipmentManagementPage";
@@ -18,6 +18,7 @@ import DepartmentsPage from "./pages/DepartmentsPage";
 import SettingsPage from "./pages/SettingsPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,10 +33,11 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/calendar" element={<CalendarPage />} />
-              <Route path="/meetings" element={<MeetingListPage />} />
+              <Route path="/plans" element={<MeetingPlanPage />} />
               <Route path="/meetings/new" element={<CreateMeetingPage />} />
               <Route path="/rooms" element={<RoomManagementPage />} />
               <Route path="/equipment" element={<EquipmentManagementPage />} />

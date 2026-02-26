@@ -58,6 +58,7 @@ export interface Account {
   lastName?: string;
   langKey?: string;
   activated?: boolean;
+  authorities?: string[];
 }
 
 export interface RegisterRequest {

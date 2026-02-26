@@ -7,6 +7,12 @@ export interface EquipmentListItem {
   description?: string;
 }
 
+interface EquipmentPayload {
+  code: string;
+  name: string;
+  description?: string;
+}
+
 export async function getEquipment(params?: { page?: number; size?: number }) {
   const sp = new URLSearchParams();
   if (params?.page != null) sp.set("page", String(params.page));
@@ -19,4 +25,24 @@ export async function getEquipment(params?: { page?: number; size?: number }) {
     name: e.name ?? "",
     description: e.description,
   }));
+}
+
+export async function createEquipment(data: EquipmentPayload) {
+  return fetchApi("/api/equipment", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateEquipment(id: string, data: EquipmentPayload) {
+  return fetchApi(`/api/equipment/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ ...data, id: Number(id) }),
+  });
+}
+
+export async function deleteEquipment(id: string) {
+  return fetchApi<void>(`/api/equipment/${id}`, {
+    method: "DELETE",
+  });
 }

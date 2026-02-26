@@ -7,7 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import type { RoomListItem } from "@/services/api/rooms";
+import { createRoom, updateRoom, deleteRoom } from "@/services/api/rooms";
 import { useRooms, useRoomEquipments } from "@/hooks/useRooms";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Users, Monitor, Wifi, Mic, PenTool, Camera, Plus, Pencil, Trash2, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -27,6 +29,7 @@ const emptyRoom: Omit<RoomListItem, "id"> & { equipment?: string[] } = { name: "
 
 export default function RoomManagementPage() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { data: roomList = [] } = useRooms();
   const { data: roomEquipments = [] } = useRoomEquipments();
   const [search, setSearch] = useState("");
@@ -40,6 +43,65 @@ export default function RoomManagementPage() {
     equipment: roomEquipments.find((re) => re.roomId === r.id)?.equipmentNames ?? r.equipment,
   }));
   const filtered = roomsWithEquipment.filter((r) => r.name.toLowerCase().includes(search.toLowerCase()));
+
+  const createMutation = useMutation({
+    mutationFn: (data: { name: string; code?: string; floor: string; capacity: number; status: RoomListItem["status"] }) =>
+      createRoom({
+        code: data.code && data.code.trim().length > 0 ? data.code : `ROOM_${Date.now()}`,
+        name: data.name,
+        location: data.floor,
+        capacity: data.capacity,
+        active: data.status !== "maintenance",
+      }),
+    onSuccess: () => {
+      toast({ title: "Đã thêm", description: "Phòng họp đã được tạo." });
+      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+    },
+    onError: (err: any) => {
+      toast({
+        variant: "destructive",
+        title: "Lỗi tạo phòng",
+        description: err?.message || "Không thể tạo phòng họp",
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (params: { id: string; data: { name: string; code?: string; floor: string; capacity: number; status: RoomListItem["status"] } }) =>
+      updateRoom(params.id, {
+        code: params.data.code && params.data.code.trim().length > 0 ? params.data.code : `ROOM_${params.id}`,
+        name: params.data.name,
+        location: params.data.floor,
+        capacity: params.data.capacity,
+        active: params.data.status !== "maintenance",
+      }),
+    onSuccess: () => {
+      toast({ title: "Đã cập nhật", description: "Phòng họp đã được cập nhật." });
+      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+    },
+    onError: (err: any) => {
+      toast({
+        variant: "destructive",
+        title: "Lỗi cập nhật phòng",
+        description: err?.message || "Không thể cập nhật phòng họp",
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteRoom(id),
+    onSuccess: () => {
+      toast({ title: "Đã xóa", description: "Phòng họp đã được xóa." });
+      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+    },
+    onError: (err: any) => {
+      toast({
+        variant: "destructive",
+        title: "Lỗi xóa phòng",
+        description: err?.message || "Không thể xóa phòng họp",
+      });
+    },
+  });
 
   const openCreate = () => {
     setEditingRoom(null);
@@ -58,13 +120,17 @@ export default function RoomManagementPage() {
       toast({ variant: "destructive", title: "Lỗi", description: "Vui lòng nhập đầy đủ thông tin" });
       return;
     }
-    toast({ title: "Lưu ý", description: "Chức năng tạo/sửa phòng cần tích hợp API PUT/POST. Hiện đang hiển thị dữ liệu từ API." });
+    if (editingRoom) {
+      updateMutation.mutate({ id: editingRoom.id, data: form });
+    } else {
+      createMutation.mutate(form);
+    }
     setModalOpen(false);
   };
 
   const handleDelete = (id: string) => {
     setDeleteConfirm(null);
-    toast({ title: "Lưu ý", description: "Chức năng xóa cần tích hợp API DELETE." });
+    deleteMutation.mutate(id);
   };
 
   return (

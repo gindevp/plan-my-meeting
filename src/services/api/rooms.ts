@@ -10,6 +10,14 @@ export interface RoomListItem {
   status: "available" | "occupied" | "maintenance";
 }
 
+interface RoomPayload {
+  code: string;
+  name: string;
+  location: string;
+  capacity: number;
+  active: boolean;
+}
+
 export async function getRooms(params?: { page?: number; size?: number }) {
   const sp = new URLSearchParams();
   if (params?.page != null) sp.set("page", String(params.page));
@@ -37,4 +45,33 @@ export async function getRoomEquipments(): Promise<{ roomId: string; equipmentNa
     if (name) byRoom[rid].push(name);
   }
   return Object.entries(byRoom).map(([roomId, equipmentNames]) => ({ roomId, equipmentNames }));
+}
+
+export async function createRoom(data: RoomPayload) {
+  return fetchApi("/api/rooms", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateRoom(id: string, data: RoomPayload) {
+  return fetchApi(`/api/rooms/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ ...data, id: Number(id) }),
+  });
+}
+
+export async function deleteRoom(id: string) {
+  const roomEquipments = await fetchApi<any[]>(`/api/room-equipments`);
+  const related = roomEquipments.filter((re) => String(re.room?.id) === id);
+
+  for (const re of related) {
+    await fetchApi<void>(`/api/room-equipments/${re.id}`, {
+      method: "DELETE",
+    });
+  }
+
+  return fetchApi<void>(`/api/rooms/${id}`, {
+    method: "DELETE",
+  });
 }

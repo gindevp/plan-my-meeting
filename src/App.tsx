@@ -1,3 +1,4 @@
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -31,7 +32,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-            <Route path="/login" element={<LoginPage />} />
+            <Route path="/login" element={<ErrorBoundary><LoginPage /></ErrorBoundary>} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>

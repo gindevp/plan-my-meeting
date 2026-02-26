@@ -6,18 +6,24 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { departments, users, meetings } from "@/data/mockData";
+import { useDepartments } from "@/hooks/useDepartments";
+import { useUsers } from "@/hooks/useUsers";
+import { useMeetings } from "@/hooks/useMeetings";
 import { Plus, Building2, Users, CalendarDays, Edit2, Trash2 } from "lucide-react";
 
-const deptDetails = departments.map((d) => ({
-  name: d,
-  staffCount: users.filter((u) => u.department === d).length,
-  meetingCount: meetings.filter((m) => m.department === d).length,
-  head: users.find((u) => u.department === d && (u.position.includes("Trưởng") || u.position.includes("Giám đốc")))?.name || "—",
-}));
-
 export default function DepartmentsPage() {
+  const { data: departments = [] } = useDepartments();
+  const { data: users = [] } = useUsers();
+  const { data: meetings = [] } = useMeetings();
   const [search, setSearch] = useState("");
+
+  const deptDetails = departments.map((d) => ({
+    id: d.id,
+    name: d.name,
+    staffCount: 0,
+    meetingCount: meetings.filter((m) => m.department === d.name).length,
+    head: "—",
+  }));
 
   const filtered = deptDetails.filter((d) => d.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -56,8 +62,8 @@ export default function DepartmentsPage() {
 
       {/* Department cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((dept) => (
-          <Card key={dept.name} className="hover:shadow-md transition-shadow">
+        {filtered.map((dept: { id: string; name: string; staffCount: number; meetingCount: number; head: string }) => (
+          <Card key={dept.id} className="hover:shadow-md transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">

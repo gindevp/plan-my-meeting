@@ -34,6 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return;
     }
+    const timeout = setTimeout(() => setLoading(false), 5000);
     getAccount()
       .then((account) => {
         setUser(account);
@@ -42,8 +43,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearStoredToken();
       })
       .finally(() => {
+        clearTimeout(timeout);
         setLoading(false);
       });
+    return () => clearTimeout(timeout);
   }, []);
 
   const login = async (username: string, password: string, rememberMe = false) => {

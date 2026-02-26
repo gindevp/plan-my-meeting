@@ -8,7 +8,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { users, departments, type User, type UserRole } from "@/data/mockData";
+import type { UserRole } from "@/data/mockData";
+import { useUsers } from "@/hooks/useUsers";
+import { useDepartments } from "@/hooks/useDepartments";
 import { Plus, Search, Mail, Phone, Edit2, Trash2, Users } from "lucide-react";
 
 const roleLabels: Record<UserRole, string> = {
@@ -26,11 +28,13 @@ const roleBadgeVariant: Record<UserRole, "default" | "secondary" | "outline" | "
 };
 
 export default function StaffPage() {
+  const { data: users = [] } = useUsers();
+  const { data: departments = [] } = useDepartments();
   const [search, setSearch] = useState("");
   const [filterDept, setFilterDept] = useState("all");
 
   const filtered = users.filter((u) => {
-    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || (u.email?.toLowerCase().includes(search.toLowerCase()) ?? false);
     const matchDept = filterDept === "all" || u.department === filterDept;
     return matchSearch && matchDept;
   });
@@ -56,7 +60,7 @@ export default function StaffPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Phòng ban</Label>
                   <Select><SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
-                    <SelectContent>{departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                    <SelectContent>{departments.map((d: { id: string; name: string }) => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2"><Label>Vai trò</Label>
@@ -77,7 +81,7 @@ export default function StaffPage() {
         {[
           { label: "Tổng nhân viên", value: users.length, icon: Users },
           { label: "Quản trị viên", value: users.filter((u) => u.role === "admin").length, icon: Users },
-          { label: "Phòng ban", value: new Set(users.map((u) => u.department)).size, icon: Users },
+          { label: "Phòng ban", value: new Set(users.map((u) => u.department).filter(Boolean)).size, icon: Users },
           { label: "Thư ký", value: users.filter((u) => u.role === "secretary").length, icon: Users },
         ].map((s) => (
           <Card key={s.label}>
@@ -99,7 +103,7 @@ export default function StaffPage() {
           <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tất cả phòng ban</SelectItem>
-            {departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+            {departments.map((d: { id: string; name: string }) => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -124,13 +128,13 @@ export default function StaffPage() {
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8"><AvatarFallback className="text-xs">{getInitials(u.name)}</AvatarFallback></Avatar>
-                      <span className="font-medium text-foreground">{u.name}</span>
+                      <span className="font-medium text-foreground">{u.name || u.login}</span>
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{u.email}</TableCell>
                   <TableCell>{u.department}</TableCell>
                   <TableCell>{u.position}</TableCell>
-                  <TableCell><Badge variant={roleBadgeVariant[u.role]}>{roleLabels[u.role]}</Badge></TableCell>
+                  <TableCell><Badge variant={roleBadgeVariant[u.role as UserRole] ?? "secondary"}>{roleLabels[u.role as UserRole] ?? u.role ?? "—"}</Badge></TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon"><Edit2 className="h-4 w-4" /></Button>
                     <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button>

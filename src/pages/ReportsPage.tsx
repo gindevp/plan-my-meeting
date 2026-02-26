@@ -3,42 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { meetings, rooms, tasks, departments } from "@/data/mockData";
+import { useMeetings } from "@/hooks/useMeetings";
+import { useRooms } from "@/hooks/useRooms";
+import { useMeetingTasks } from "@/hooks/useMeetingTasks";
+import { useDepartments } from "@/hooks/useDepartments";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from "recharts";
 import { Download, FileText, CalendarDays, DoorOpen, CheckCircle2, XCircle, TrendingUp, ClipboardList } from "lucide-react";
-
-// === Data computations ===
-const totalMeetings = meetings.length;
-const meetingsByType = [
-  { name: "Trực tiếp", value: meetings.filter(m => m.type === 'offline').length, color: "hsl(152, 60%, 40%)" },
-  { name: "Trực tuyến", value: meetings.filter(m => m.type === 'online').length, color: "hsl(210, 80%, 52%)" },
-  { name: "Kết hợp", value: meetings.filter(m => m.type === 'hybrid').length, color: "hsl(280, 60%, 50%)" },
-];
-
-const meetingsByLevel = [
-  { name: "Tổng công ty", value: meetings.filter(m => m.level === 'company').length, color: "hsl(222, 60%, 30%)" },
-  { name: "Phòng ban", value: meetings.filter(m => m.level === 'department').length, color: "hsl(222, 50%, 50%)" },
-  { name: "Nhóm/Team", value: meetings.filter(m => m.level === 'team').length, color: "hsl(222, 40%, 70%)" },
-];
-
-const completedTasks = tasks.filter(t => t.status === 'completed').length;
-const totalTasks = tasks.length;
-const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-const cancelledOrRejected = meetings.filter(m => m.status === 'cancelled' || m.status === 'rejected').length;
-const cancelRate = totalMeetings > 0 ? Math.round((cancelledOrRejected / totalMeetings) * 100) : 0;
-
-const roomUsageData = rooms.map(room => ({
-  name: room.name.replace("Phòng họp ", ""),
-  count: meetings.filter(m => m.roomId === room.id).length,
-}));
-
-const taskStatusData = [
-  { name: "Hoàn thành", value: tasks.filter(t => t.status === 'completed').length, color: "hsl(152, 60%, 40%)" },
-  { name: "Đang làm", value: tasks.filter(t => t.status === 'in_progress').length, color: "hsl(210, 80%, 52%)" },
-  { name: "Chưa bắt đầu", value: tasks.filter(t => t.status === 'not_started').length, color: "hsl(40, 90%, 50%)" },
-  { name: "Quá hạn", value: tasks.filter(t => t.status === 'overdue').length, color: "hsl(0, 70%, 50%)" },
-];
 
 const monthlyTrend = [
   { month: "T1", meetings: 18, completed: 15 },
@@ -55,14 +25,51 @@ const monthlyTrend = [
   { month: "T12", meetings: 23, completed: 20 },
 ];
 
-const summaryStats = [
+export default function ReportsPage() {
+  const { data: meetings = [] } = useMeetings();
+  const { data: rooms = [] } = useRooms();
+  const { data: tasks = [] } = useMeetingTasks();
+  const { data: departments = [] } = useDepartments();
+
+  const totalMeetings = meetings.length;
+  const meetingsByType = [
+    { name: "Trực tiếp", value: meetings.filter((m) => m.type === "offline").length, color: "hsl(152, 60%, 40%)" },
+    { name: "Trực tuyến", value: meetings.filter((m) => m.type === "online").length, color: "hsl(210, 80%, 52%)" },
+    { name: "Kết hợp", value: meetings.filter((m) => m.type === "hybrid").length, color: "hsl(280, 60%, 50%)" },
+  ];
+
+  const meetingsByLevel = [
+    { name: "Tổng công ty", value: meetings.filter((m) => m.level === "company").length, color: "hsl(222, 60%, 30%)" },
+    { name: "Phòng ban", value: meetings.filter((m) => m.level === "department").length, color: "hsl(222, 50%, 50%)" },
+    { name: "Nhóm/Team", value: meetings.filter((m) => m.level === "team").length, color: "hsl(222, 40%, 70%)" },
+  ];
+
+  const completedTasks = tasks.filter((t) => t.status === "completed").length;
+  const totalTasks = tasks.length;
+  const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  const cancelledOrRejected = meetings.filter((m) => m.status === "cancelled" || m.status === "rejected").length;
+  const cancelRate = totalMeetings > 0 ? Math.round((cancelledOrRejected / totalMeetings) * 100) : 0;
+
+  const roomUsageData = rooms.map((room) => ({
+    name: room.name.replace("Phòng họp ", ""),
+    count: meetings.filter((m) => m.roomId === room.id).length,
+  }));
+
+  const taskStatusData = [
+    { name: "Hoàn thành", value: tasks.filter((t) => t.status === "completed").length, color: "hsl(152, 60%, 40%)" },
+    { name: "Đang làm", value: tasks.filter((t) => t.status === "in_progress").length, color: "hsl(210, 80%, 52%)" },
+    { name: "Chưa bắt đầu", value: tasks.filter((t) => t.status === "not_started").length, color: "hsl(40, 90%, 50%)" },
+    { name: "Quá hạn", value: tasks.filter((t) => t.status === "overdue").length, color: "hsl(0, 70%, 50%)" },
+  ];
+
+  const summaryStats = [
   { label: "Tổng cuộc họp", value: totalMeetings, icon: CalendarDays, color: "text-primary" },
   { label: "Phòng họp", value: rooms.length, icon: DoorOpen, color: "text-info" },
   { label: "Tỷ lệ hoàn thành NV", value: `${taskCompletionRate}%`, icon: CheckCircle2, color: "text-success" },
   { label: "Tỷ lệ hủy/từ chối", value: `${cancelRate}%`, icon: XCircle, color: "text-destructive" },
 ];
 
-export default function ReportsPage() {
   const [timePeriod, setTimePeriod] = useState("month");
   const [department, setDepartment] = useState("all");
 
@@ -91,8 +98,8 @@ export default function ReportsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tất cả</SelectItem>
-              {departments.map(d => (
-                <SelectItem key={d} value={d}>{d}</SelectItem>
+              {departments.map((d: { id: string; name: string }) => (
+                <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>

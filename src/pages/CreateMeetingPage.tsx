@@ -6,7 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { rooms, users, meetingTypes, meetingLevels, type MeetingType, type MeetingLevel } from "@/data/mockData";
+import type { MeetingType, MeetingLevel } from "@/data/mockData";
+import { meetingTypes as mockTypes, meetingLevels as mockLevels } from "@/data/mockData";
+import { useRooms } from "@/hooks/useRooms";
+import { useUsers } from "@/hooks/useUsers";
 import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -22,6 +25,10 @@ interface ValidationErrors {
 
 export default function CreateMeetingPage() {
   const { toast } = useToast();
+  const { data: rooms = [] } = useRooms();
+  const { data: users = [] } = useUsers();
+  const meetingTypes = mockTypes;
+  const meetingLevels = mockLevels;
   const [step, setStep] = useState(1);
   const [meetingType, setMeetingType] = useState<MeetingType>("offline");
   const [meetingLevel, setMeetingLevel] = useState<MeetingLevel>("department");
@@ -281,7 +288,7 @@ export default function CreateMeetingPage() {
                 <Select value={selectedRoom} onValueChange={setSelectedRoom}>
                   <SelectTrigger className={`mt-1.5 ${errorClass("room")}`}><SelectValue placeholder="Chọn phòng họp" /></SelectTrigger>
                   <SelectContent>
-                    {rooms.map((r) => (
+                    {rooms.map((r: { id: string; name: string; capacity: number; status: string }) => (
                       <SelectItem key={r.id} value={r.id} disabled={r.status !== "available"}>
                         {r.name} ({r.capacity} người) {r.status !== "available" ? `- ${r.status === "occupied" ? "Đang sử dụng" : "Bảo trì"}` : ""}
                       </SelectItem>
@@ -305,7 +312,7 @@ export default function CreateMeetingPage() {
               <Select value={chairperson} onValueChange={setChairperson}>
                 <SelectTrigger className={`mt-1.5 ${errorClass("chairperson")}`}><SelectValue placeholder="Chọn người chủ trì" /></SelectTrigger>
                 <SelectContent>
-                  {users.map((u) => <SelectItem key={u.id} value={u.name}>{u.name} - {u.position}</SelectItem>)}
+                  {users.map((u) => <SelectItem key={u.id} value={u.name || u.login}>{u.name || u.login} - {u.position || ""}</SelectItem>)}
                 </SelectContent>
               </Select>
               {errors.chairperson && <p className="text-xs text-destructive mt-1">{errors.chairperson}</p>}
@@ -344,9 +351,9 @@ export default function CreateMeetingPage() {
               {filteredUsers.map((u) => (
                 <button
                   key={u.id}
-                  onClick={() => toggleAttendee(u.name)}
+                  onClick={() => toggleAttendee(u.name || u.login)}
                   className={`flex items-center gap-3 p-3 rounded-lg border text-left text-sm transition-all ${
-                    selectedAttendees.includes(u.name)
+                    selectedAttendees.includes(u.name || u.login)
                       ? "border-primary bg-primary/5 shadow-sm"
                       : "border-border hover:border-primary/30"
                   }`}
@@ -355,10 +362,10 @@ export default function CreateMeetingPage() {
                     {u.name.split(" ").pop()?.[0]}
                   </div>
                   <div>
-                    <p className="font-medium text-xs">{u.name}</p>
-                    <p className="text-[10px] text-muted-foreground">{u.position} • {u.department}</p>
+                    <p className="font-medium text-xs">{u.name || u.login}</p>
+                    <p className="text-[10px] text-muted-foreground">{[u.position, u.department].filter(Boolean).join(" • ") || "—"}</p>
                   </div>
-                  {selectedAttendees.includes(u.name) && (
+                  {selectedAttendees.includes(u.name || u.login) && (
                     <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
                   )}
                 </button>
@@ -422,7 +429,7 @@ export default function CreateMeetingPage() {
                       <Select value={item.presenter} onValueChange={(v) => updateAgendaItem(i, "presenter", v)}>
                         <SelectTrigger className={errorClass(`agenda_presenter_${i}`)}><SelectValue placeholder="Người trình bày" /></SelectTrigger>
                         <SelectContent>
-                          {users.map((u) => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}
+                          {users.map((u) => <SelectItem key={u.id} value={u.name || u.login}>{u.name || u.login}</SelectItem>)}
                         </SelectContent>
                       </Select>
                       {errors[`agenda_presenter_${i}`] && <p className="text-xs text-destructive mt-1">{errors[`agenda_presenter_${i}`]}</p>}

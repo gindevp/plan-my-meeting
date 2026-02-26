@@ -9,7 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Monitor, Camera, Mic, PenTool, Wifi, Settings, Plus, Search, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { rooms } from "@/data/mockData";
+import { useEquipment } from "@/hooks/useEquipment";
+import { useRooms } from "@/hooks/useRooms";
 
 interface Equipment {
   id: string;
@@ -19,14 +20,6 @@ interface Equipment {
   status: string;
   lastMaintenance: string;
 }
-
-const initialEquipment: Equipment[] = [
-  { id: "EQ001", name: "Máy chiếu Sony 4K", type: "Máy chiếu", room: "Phòng họp Hội đồng", status: "good", lastMaintenance: "2024-01-15" },
-  { id: "EQ002", name: "Hệ thống âm thanh Bosch", type: "Hệ thống âm thanh", room: "Phòng họp Hội đồng", status: "good", lastMaintenance: "2023-12-10" },
-  { id: "EQ003", name: "TV Samsung 65\"", type: "TV", room: "Phòng họp Sáng tạo", status: "repairing", lastMaintenance: "2024-02-01" },
-  { id: "EQ004", name: "Logitech MeetUp", type: "Camera", room: "Phòng họp Nhanh A", status: "good", lastMaintenance: "2024-01-20" },
-  { id: "EQ005", name: "Micro không dây Shure", type: "Micro", room: "Phòng họp Đào tạo", status: "good", lastMaintenance: "2024-02-15" },
-];
 
 const typeIcons: Record<string, any> = {
   "Máy chiếu": Monitor, "TV": Monitor, "Camera": Camera,
@@ -45,7 +38,16 @@ const emptyEquipment: Omit<Equipment, "id"> = { name: "", type: "Máy chiếu", 
 
 export default function EquipmentManagementPage() {
   const { toast } = useToast();
-  const [equipmentList, setEquipmentList] = useState<Equipment[]>(initialEquipment);
+  const { data: apiEquipment = [] } = useEquipment();
+  const { data: rooms = [] } = useRooms();
+  const equipmentList: Equipment[] = apiEquipment.map((e) => ({
+    id: e.code || String(e.id),
+    name: e.name,
+    type: e.description || "Thiết bị",
+    room: "-",
+    status: "good",
+    lastMaintenance: "",
+  }));
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -73,23 +75,18 @@ export default function EquipmentManagementPage() {
       toast({ variant: "destructive", title: "Lỗi", description: "Vui lòng nhập tên thiết bị" });
       return;
     }
-    const newEq: Equipment = { ...form, id: `EQ${String(equipmentList.length + 1).padStart(3, "0")}` };
-    setEquipmentList((prev) => [...prev, newEq]);
     setAddOpen(false);
-    toast({ title: "Đã thêm", description: `Thiết bị ${form.name} đã được thêm.` });
+    toast({ title: "Lưu ý", description: "Chức năng thêm thiết bị cần tích hợp API POST." });
   };
 
   const handleUpdate = () => {
-    if (!editingEq) return;
-    setEquipmentList((prev) => prev.map((eq) => (eq.id === editingEq.id ? { ...eq, ...form } : eq)));
     setEditOpen(false);
-    toast({ title: "Đã cập nhật", description: `Thiết bị ${form.name} đã được cập nhật.` });
+    toast({ title: "Lưu ý", description: "Chức năng cập nhật cần tích hợp API PUT." });
   };
 
-  const handleDelete = (id: string) => {
-    setEquipmentList((prev) => prev.filter((eq) => eq.id !== id));
+  const handleDelete = (_id: string) => {
     setDeleteConfirm(null);
-    toast({ title: "Đã xóa", description: "Thiết bị đã được xóa." });
+    toast({ title: "Lưu ý", description: "Chức năng xóa cần tích hợp API DELETE." });
   };
 
   const renderForm = () => (
@@ -123,7 +120,7 @@ export default function EquipmentManagementPage() {
         <Select value={form.room} onValueChange={(v) => setForm({ ...form, room: v })}>
           <SelectTrigger className="mt-1.5"><SelectValue placeholder="Chọn phòng" /></SelectTrigger>
           <SelectContent>
-            {rooms.map((r) => <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}
+            {rooms.map((r: { id: string; name: string }) => <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>

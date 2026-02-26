@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { meetings, statusLabels, typeLabels, levelLabels, type MeetingStatus } from "@/data/mockData";
+import { statusLabels, typeLabels, levelLabels, type MeetingStatus } from "@/data/mockData";
+import { useMeetings } from "@/hooks/useMeetings";
 import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
@@ -33,10 +34,11 @@ const typeIconMap: Record<string, typeof MapPin> = {
 };
 
 export default function MeetingPlanPage() {
+  const { data: meetings = [] } = useMeetings();
   const [activeTab, setActiveTab] = useState<string>("approved");
   const [search, setSearch] = useState("");
   const [showFilter, setShowFilter] = useState(false);
-  const [selectedMeeting, setSelectedMeeting] = useState<(typeof meetings)[0] | null>(null);
+  const [selectedMeeting, setSelectedMeeting] = useState<typeof meetings[0] | null>(null);
   const navigate = useNavigate();
 
   const filtered = meetings.filter((m) => {
@@ -127,10 +129,10 @@ export default function MeetingPlanPage() {
                   <TableCell>
                     <div>
                       <p className="font-medium text-sm">{meeting.title}</p>
-                      <p className="text-xs text-muted-foreground">{meeting.attendees.length} đơn vị tham gia</p>
+                      <p className="text-xs text-muted-foreground">{(meeting.attendees?.length ?? 0)} đơn vị tham gia</p>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm">{levelLabels[meeting.level]}</TableCell>
+                  <TableCell className="text-sm">{levelLabels[meeting.level as keyof typeof levelLabels] ?? meeting.level}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5 text-sm">
                       <TypeIcon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -209,7 +211,7 @@ export default function MeetingPlanPage() {
                   <p className="font-medium mb-1">Mô tả</p>
                   <p className="text-muted-foreground">{selectedMeeting.description}</p>
                 </div>
-                {selectedMeeting.agenda.length > 0 && (
+                {(selectedMeeting.agenda?.length ?? 0) > 0 && (
                   <>
                     <Separator />
                     <div>
@@ -230,7 +232,7 @@ export default function MeetingPlanPage() {
                 )}
                 <Separator />
                 <div>
-                  <p className="font-medium mb-1">Thành phần tham dự ({selectedMeeting.attendees.length})</p>
+                  <p className="font-medium mb-1">Thành phần tham dự ({selectedMeeting.attendees?.length ?? 0})</p>
                   <div className="flex flex-wrap gap-1.5 mt-1">
                     {selectedMeeting.attendees.map((a) => (
                       <Badge key={a} variant="secondary" className="text-[11px]">{a}</Badge>

@@ -40,14 +40,17 @@ export default function LoginPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center bg-background" style={{ minHeight: "100vh" }}>
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" strokeWidth={2} />
+          <p className="text-sm text-muted-foreground">Đang tải...</p>
+        </div>
       </div>
     );
   }
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4" style={{ minHeight: "100vh" }}>
+      <Card className="w-full max-w-md" style={{ maxWidth: "28rem" }}>
         <CardHeader className="text-center space-y-3">
           <div className="flex justify-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">

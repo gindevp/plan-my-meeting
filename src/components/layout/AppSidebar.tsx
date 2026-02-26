@@ -18,8 +18,8 @@ import { cn } from "@/lib/utils";
 const navigation = [
   { name: "Tổng quan", href: "/", icon: LayoutDashboard },
   { name: "Lịch họp", href: "/calendar", icon: CalendarDays },
-  { name: "Tạo cuộc họp", href: "/meetings/new", icon: Plus },
-  { name: "Danh sách họp", href: "/meetings", icon: ClipboardList },
+  { name: "Quản lý kế hoạch", href: "/plans", icon: ClipboardList },
+  { name: "Lên lịch họp", href: "/meetings/new", icon: Plus },
   { name: "Phòng họp", href: "/rooms", icon: DoorOpen },
 ];
 
@@ -59,7 +59,7 @@ export default function AppSidebar() {
               <li key={item.name}>
                 <NavLink
                   to={item.href}
-                  end={item.href === "/"}
+                  end
                   className={({ isActive }) =>
                     cn(
                       "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
@@ -86,6 +86,7 @@ export default function AppSidebar() {
               <li key={item.name}>
                 <NavLink
                   to={item.href}
+                  end
                   className={({ isActive }) =>
                     cn(
                       "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",

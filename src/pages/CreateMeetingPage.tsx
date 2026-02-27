@@ -6,7 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { rooms, users, meetingTypes, meetingLevels, type MeetingType, type MeetingLevel } from "@/data/mockData";
+import type { MeetingType, MeetingLevel } from "@/data/mockData";
+import { meetingTypes as mockTypes, meetingLevels as mockLevels } from "@/data/mockData";
+import { useRooms } from "@/hooks/useRooms";
+import { useUsers } from "@/hooks/useUsers";
+import { useAuth } from "@/contexts/AuthContext";
+import { createMeetingFromForm, submitMeeting } from "@/services/api/meetings";
+import { useNavigate } from "react-router-dom";
 import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -22,6 +28,12 @@ interface ValidationErrors {
 
 export default function CreateMeetingPage() {
   const { toast } = useToast();
+  const { user: account } = useAuth();
+  const navigate = useNavigate();
+  const { data: rooms = [] } = useRooms();
+  const { data: users = [] } = useUsers();
+  const meetingTypes = mockTypes;
+  const meetingLevels = mockLevels.filter((l) => l.value === "company" || l.value === "department");
   const [step, setStep] = useState(1);
   const [meetingType, setMeetingType] = useState<MeetingType>("offline");
   const [meetingLevel, setMeetingLevel] = useState<MeetingLevel>("department");
@@ -31,7 +43,7 @@ export default function CreateMeetingPage() {
   const [startDate, setStartDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
-  const [chairperson, setChairperson] = useState("");
+  const [chairpersonId, setChairpersonId] = useState("");
   const [meetingLink, setMeetingLink] = useState("");
   const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
   const [agendaItems, setAgendaItems] = useState<AgendaForm[]>([]);
@@ -51,11 +63,20 @@ export default function CreateMeetingPage() {
     if (!startDate) newErrors.startDate = "Vui lòng chọn ngày";
     if (!startTime) newErrors.startTime = "Vui lòng chọn giờ bắt đầu";
     if (!endTime) newErrors.endTime = "Vui lòng chọn giờ kết thúc";
-    if (!chairperson) newErrors.chairperson = "Vui lòng chọn người chủ trì";
+    if (!chairpersonId) newErrors.chairperson = "Vui lòng chọn người chủ trì";
     if ((meetingType === "offline" || meetingType === "hybrid") && !selectedRoom)
       newErrors.room = "Vui lòng chọn phòng họp";
     if ((meetingType === "online" || meetingType === "hybrid") && !meetingLink.trim())
       newErrors.meetingLink = "Vui lòng nhập link họp";
+
+    if (startDate && startTime && endTime) {
+      const start = new Date(`${startDate}T${startTime}:00`);
+      const end = new Date(`${startDate}T${endTime}:00`);
+      if (end <= start) {
+        newErrors.timeRange = "Giờ kết thúc phải sau giờ bắt đầu";
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -152,14 +173,94 @@ export default function CreateMeetingPage() {
     toast({ title: "Đã xóa", description: "Tất cả dữ liệu đã được xóa." });
   };
 
-  const handleSaveDraft = () => {
-    toast({ title: "Đã lưu nháp", description: "Cuộc họp đã được lưu ở trạng thái nháp." });
+  const handleSaveDraft = async () => {
+    if (!validateStep1()) return;
+    if (!account?.id) {
+      toast({ variant: "destructive", title: "Lỗi", description: "Không xác định được người yêu cầu (requester)." });
+      return;
+    }
+    if (!chairpersonId) {
+      toast({ variant: "destructive", title: "Lỗi", description: "Vui lòng chọn người chủ trì." });
+      return;
+    }
+
+    try {
+      await createMeetingFromForm({
+        title,
+        description,
+        startDate,
+        startTime,
+        endTime,
+        meetingType,
+        meetingLevel,
+        selectedRoomId: selectedRoom || undefined,
+        meetingLink,
+        requesterId: account.id,
+        hostId: chairpersonId,
+      });
+      setTitle("");
+      setDescription("");
+      setStartDate("");
+      setStartTime("");
+      setEndTime("");
+      setSelectedRoom("");
+      setMeetingLink("");
+      setSelectedAttendees([]);
+      setAgendaItems([]);
+      setConflicts([]);
+      setErrors({});
+      setStep(1);
+      toast({ title: "Đã lưu nháp", description: "Cuộc họp đã được lưu ở trạng thái nháp." });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Lỗi lưu nháp",
+        description: err instanceof Error ? err.message : "Lỗi không xác định",
+      });
+    }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validateStep3()) return;
     checkConflicts();
-    toast({ title: "Đã gửi duyệt", description: "Yêu cầu tạo cuộc họp đã được gửi đến người phê duyệt." });
+    if (!account?.id) {
+      toast({ variant: "destructive", title: "Lỗi", description: "Không xác định được người yêu cầu (requester)." });
+      return;
+    }
+    if (!chairpersonId) {
+      toast({ variant: "destructive", title: "Lỗi", description: "Vui lòng chọn người chủ trì." });
+      return;
+    }
+
+    try {
+      const created = await createMeetingFromForm({
+        title,
+        description,
+        startDate,
+        startTime,
+        endTime,
+        meetingType,
+        meetingLevel,
+        selectedRoomId: selectedRoom || undefined,
+        meetingLink,
+        requesterId: account.id,
+        hostId: chairpersonId,
+      });
+      if (created?.id != null) {
+        await submitMeeting(created.id);
+      }
+      toast({
+        title: "Đã gửi duyệt",
+        description: "Cuộc họp đã được tạo và gửi phê duyệt.",
+      });
+      navigate("/plans");
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Lỗi tạo cuộc họp",
+        description: err instanceof Error ? err.message : "Lỗi không xác định",
+      });
+    }
   };
 
   const filteredUsers = users.filter((u) =>
@@ -272,6 +373,7 @@ export default function CreateMeetingPage() {
                 <Label>Kết thúc *</Label>
                 <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={`mt-1.5 ${errorClass("endTime")}`} />
                 {errors.endTime && <p className="text-xs text-destructive mt-1">{errors.endTime}</p>}
+                {errors.timeRange && <p className="text-xs text-destructive mt-1">{errors.timeRange}</p>}
               </div>
             </div>
 
@@ -281,7 +383,7 @@ export default function CreateMeetingPage() {
                 <Select value={selectedRoom} onValueChange={setSelectedRoom}>
                   <SelectTrigger className={`mt-1.5 ${errorClass("room")}`}><SelectValue placeholder="Chọn phòng họp" /></SelectTrigger>
                   <SelectContent>
-                    {rooms.map((r) => (
+                    {rooms.map((r: { id: string; name: string; capacity: number; status: string }) => (
                       <SelectItem key={r.id} value={r.id} disabled={r.status !== "available"}>
                         {r.name} ({r.capacity} người) {r.status !== "available" ? `- ${r.status === "occupied" ? "Đang sử dụng" : "Bảo trì"}` : ""}
                       </SelectItem>
@@ -302,10 +404,14 @@ export default function CreateMeetingPage() {
 
             <div>
               <Label>Người chủ trì *</Label>
-              <Select value={chairperson} onValueChange={setChairperson}>
+              <Select value={chairpersonId} onValueChange={setChairpersonId}>
                 <SelectTrigger className={`mt-1.5 ${errorClass("chairperson")}`}><SelectValue placeholder="Chọn người chủ trì" /></SelectTrigger>
                 <SelectContent>
-                  {users.map((u) => <SelectItem key={u.id} value={u.name}>{u.name} - {u.position}</SelectItem>)}
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={String(u.id)}>
+                      {(u.name || u.login) + (u.position ? ` - ${u.position}` : "")}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               {errors.chairperson && <p className="text-xs text-destructive mt-1">{errors.chairperson}</p>}
@@ -344,9 +450,9 @@ export default function CreateMeetingPage() {
               {filteredUsers.map((u) => (
                 <button
                   key={u.id}
-                  onClick={() => toggleAttendee(u.name)}
+                  onClick={() => toggleAttendee(u.name || u.login)}
                   className={`flex items-center gap-3 p-3 rounded-lg border text-left text-sm transition-all ${
-                    selectedAttendees.includes(u.name)
+                    selectedAttendees.includes(u.name || u.login)
                       ? "border-primary bg-primary/5 shadow-sm"
                       : "border-border hover:border-primary/30"
                   }`}
@@ -355,10 +461,10 @@ export default function CreateMeetingPage() {
                     {u.name.split(" ").pop()?.[0]}
                   </div>
                   <div>
-                    <p className="font-medium text-xs">{u.name}</p>
-                    <p className="text-[10px] text-muted-foreground">{u.position} • {u.department}</p>
+                    <p className="font-medium text-xs">{u.name || u.login}</p>
+                    <p className="text-[10px] text-muted-foreground">{[u.position, u.department].filter(Boolean).join(" • ") || "—"}</p>
                   </div>
-                  {selectedAttendees.includes(u.name) && (
+                  {selectedAttendees.includes(u.name || u.login) && (
                     <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
                   )}
                 </button>
@@ -422,7 +528,7 @@ export default function CreateMeetingPage() {
                       <Select value={item.presenter} onValueChange={(v) => updateAgendaItem(i, "presenter", v)}>
                         <SelectTrigger className={errorClass(`agenda_presenter_${i}`)}><SelectValue placeholder="Người trình bày" /></SelectTrigger>
                         <SelectContent>
-                          {users.map((u) => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}
+                          {users.map((u) => <SelectItem key={u.id} value={u.name || u.login}>{u.name || u.login}</SelectItem>)}
                         </SelectContent>
                       </Select>
                       {errors[`agenda_presenter_${i}`] && <p className="text-xs text-destructive mt-1">{errors[`agenda_presenter_${i}`]}</p>}

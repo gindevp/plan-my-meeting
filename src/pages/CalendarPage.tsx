@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { meetings, statusLabels, typeLabels } from "@/data/mockData";
+import { statusLabels, typeLabels } from "@/data/mockData";
+import { useMeetings } from "@/hooks/useMeetings";
 import { ChevronLeft, ChevronRight, Filter, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
@@ -35,12 +36,13 @@ const statusDisplayLabels: Record<string, string> = {
 const dayNames = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 
 export default function CalendarPage() {
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 1, 1));
+  const { data: meetings = [] } = useMeetings();
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("day");
   const [weekIndex, setWeekIndex] = useState(0);
   const [modalDate, setModalDate] = useState<Date | null>(null);
 
-  const today = new Date(2026, 1, 26);
+  const today = new Date();
 
   const getMeetingsForDay = (date: Date) => {
     return meetings.filter((m) => {
@@ -388,7 +390,7 @@ export default function CalendarPage() {
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">{m.description}</p>
                       <div className="flex flex-wrap gap-1 mt-2">
-                        {m.attendees.map((a) => (
+                        {(m.attendees ?? []).map((a) => (
                           <Badge key={a} variant="secondary" className="text-[10px]">{a}</Badge>
                         ))}
                       </div>

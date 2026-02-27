@@ -1,31 +1,12 @@
-import { CalendarDays, Users, DoorOpen, ClipboardList, TrendingUp, Clock, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { CalendarDays, DoorOpen, ClipboardList, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { meetings, rooms, tasks, statusLabels, typeLabels } from "@/data/mockData";
+import { statusLabels, typeLabels } from "@/data/mockData";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMeetings } from "@/hooks/useMeetings";
+import { useRooms } from "@/hooks/useRooms";
+import { useMeetingTasks } from "@/hooks/useMeetingTasks";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-
-const stats = [
-  { label: "Cuộc họp hôm nay", value: 3, icon: CalendarDays, color: "text-info" },
-  { label: "Phòng trống", value: rooms.filter(r => r.status === 'available').length, icon: DoorOpen, color: "text-success" },
-  { label: "Chờ duyệt", value: meetings.filter(m => m.status === 'pending').length, icon: Clock, color: "text-warning" },
-  { label: "Nhiệm vụ đang làm", value: tasks.filter(t => t.status === 'in_progress').length, icon: ClipboardList, color: "text-accent" },
-];
-
-const meetingsByType = [
-  { name: "Trực tiếp", value: meetings.filter(m => m.type === 'offline').length, color: "hsl(152, 60%, 40%)" },
-  { name: "Trực tuyến", value: meetings.filter(m => m.type === 'online').length, color: "hsl(210, 80%, 52%)" },
-  { name: "Kết hợp", value: meetings.filter(m => m.type === 'hybrid').length, color: "hsl(280, 60%, 50%)" },
-];
-
-const weeklyData = [
-  { day: "T2", meetings: 4 },
-  { day: "T3", meetings: 6 },
-  { day: "T4", meetings: 3 },
-  { day: "T5", meetings: 7 },
-  { day: "T6", meetings: 5 },
-  { day: "T7", meetings: 1 },
-  { day: "CN", meetings: 0 },
-];
 
 const statusColorMap: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
@@ -43,16 +24,49 @@ const typeColorMap: Record<string, string> = {
 };
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const { data: meetings = [] } = useMeetings();
+  const { data: rooms = [] } = useRooms();
+  const { data: tasks = [] } = useMeetingTasks();
+  const displayName = user?.firstName
+    ? `${user.firstName} ${user.lastName || ""}`.trim()
+    : user?.login ?? "User";
+
+  const stats = [
+    { label: "Cuộc họp hôm nay", value: meetings.filter((m) => new Date(m.startTime).toDateString() === new Date().toDateString()).length, icon: CalendarDays, color: "text-info" },
+    { label: "Phòng trống", value: rooms.filter((r) => r.status === "available").length, icon: DoorOpen, color: "text-success" },
+    { label: "Chờ duyệt", value: meetings.filter((m) => m.status === "pending").length, icon: Clock, color: "text-warning" },
+    { label: "Nhiệm vụ đang làm", value: tasks.filter((t) => t.status === "in_progress").length, icon: ClipboardList, color: "text-accent" },
+  ];
+
+  const meetingsByType = [
+    { name: "Trực tiếp", value: meetings.filter((m) => m.type === "offline").length, color: "hsl(152, 60%, 40%)" },
+    { name: "Trực tuyến", value: meetings.filter((m) => m.type === "online").length, color: "hsl(210, 80%, 52%)" },
+    { name: "Kết hợp", value: meetings.filter((m) => m.type === "hybrid").length, color: "hsl(280, 60%, 50%)" },
+  ];
+
   const upcomingMeetings = meetings
-    .filter(m => m.status === 'approved' || m.status === 'pending')
+    .filter((m) => m.status === "approved" || m.status === "pending")
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
     .slice(0, 5);
+
+  const dayNames = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const weeklyData = dayNames.map((day, i) => {
+    const d = new Date(startOfWeek);
+    d.setDate(startOfWeek.getDate() + i);
+    const count = meetings.filter((m) => new Date(m.startTime).toDateString() === d.toDateString()).length;
+    return { day, meetings: count };
+  });
 
   return (
     <div className="space-y-6">
       {/* Page title */}
       <div>
         <h1 className="text-2xl font-display font-bold text-foreground">Tổng quan</h1>
-        <p className="text-sm text-muted-foreground mt-1">Xin chào, Nguyễn Văn An. Đây là tóm tắt hoạt động họp hôm nay.</p>
+        <p className="text-sm text-muted-foreground mt-1">Xin chào, {displayName}. Đây là tóm tắt hoạt động họp hôm nay.</p>
       </div>
 
       {/* Stats */}

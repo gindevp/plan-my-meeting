@@ -1,47 +1,68 @@
 import { useEffect, useState, createContext, useContext } from "react";
-import { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  getStoredToken,
+  setStoredToken,
+  clearStoredToken,
+  loginApi,
+  getAccount,
+  type Account,
+} from "@/lib/api";
 
 interface AuthContextType {
-  session: Session | null;
-  user: User | null;
+  user: Account | null;
   loading: boolean;
+  login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
-  session: null,
   user: null,
   loading: true,
+  login: async () => {},
   signOut: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<Account | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    const token = getStoredToken();
+    if (!token) {
       setLoading(false);
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+      return;
+    }
+    const timeout = setTimeout(() => setLoading(false), 5000);
+    getAccount()
+      .then((account) => {
+        setUser(account);
+      })
+      .catch(() => {
+        clearStoredToken();
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+        setLoading(false);
+      });
+    return () => clearTimeout(timeout);
   }, []);
 
+  const login = async (username: string, password: string, rememberMe = false) => {
+    const { token } = await loginApi({ username, password, rememberMe });
+    setStoredToken(token, rememberMe);
+    const account = await getAccount();
+    setUser(account);
+  };
+
   const signOut = async () => {
-    await supabase.auth.signOut();
+    clearStoredToken();
+    setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signOut }}>
+    <AuthContext.Provider value={{ user, loading, login, signOut }}>
       {children}
     </AuthContext.Provider>
   );

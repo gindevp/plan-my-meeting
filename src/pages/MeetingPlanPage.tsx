@@ -2,7 +2,11 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { meetings, statusLabels, typeLabels, levelLabels, type MeetingStatus } from "@/data/mockData";
+import { statusLabels, typeLabels, levelLabels, type MeetingStatus } from "@/data/mockData";
+import { useMeetings } from "@/hooks/useMeetings";
+import { useAuth } from "@/contexts/AuthContext";
+import { approveRoom, approveUnit, rejectMeeting, getAgendaItemsByMeeting, getParticipantsByMeeting } from "@/services/api/meetings";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
@@ -33,10 +37,13 @@ const typeIconMap: Record<string, typeof MapPin> = {
 };
 
 export default function MeetingPlanPage() {
+  const { data: meetings = [] } = useMeetings();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<string>("approved");
   const [search, setSearch] = useState("");
   const [showFilter, setShowFilter] = useState(false);
-  const [selectedMeeting, setSelectedMeeting] = useState<(typeof meetings)[0] | null>(null);
+  const [selectedMeeting, setSelectedMeeting] = useState<typeof meetings[0] | null>(null);
   const navigate = useNavigate();
 
   const filtered = meetings.filter((m) => {
@@ -46,6 +53,42 @@ export default function MeetingPlanPage() {
   });
 
   const getTabCount = (status: string) => meetings.filter((m) => m.status === status).length;
+
+  const canApproveRoom = user?.authorities?.includes("ROLE_ROOM_MANAGER") || user?.authorities?.includes("ROLE_ADMIN");
+  const canApproveUnit = user?.authorities?.includes("ROLE_UNIT_MANAGER") || user?.authorities?.includes("ROLE_ADMIN");
+
+  const approveRoomMutation = useMutation({
+    mutationFn: (id: string) => approveRoom(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+    },
+  });
+
+  const approveUnitMutation = useMutation({
+    mutationFn: (id: string) => approveUnit(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (params: { id: string; reason: string }) => rejectMeeting(params.id, params.reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+    },
+  });
+
+  const { data: agendaItems = [] } = useQuery({
+    queryKey: ["agenda-items", selectedMeeting?.id],
+    queryFn: () => getAgendaItemsByMeeting(selectedMeeting!.id),
+    enabled: !!selectedMeeting,
+  });
+
+  const { data: participants = [] } = useQuery({
+    queryKey: ["participants", selectedMeeting?.id],
+    queryFn: () => getParticipantsByMeeting(selectedMeeting!.id),
+    enabled: !!selectedMeeting,
+  });
 
   return (
     <div className="space-y-6">
@@ -127,10 +170,10 @@ export default function MeetingPlanPage() {
                   <TableCell>
                     <div>
                       <p className="font-medium text-sm">{meeting.title}</p>
-                      <p className="text-xs text-muted-foreground">{meeting.attendees.length} đơn vị tham gia</p>
+                      <p className="text-xs text-muted-foreground">{(meeting.attendees?.length ?? 0)} đơn vị tham gia</p>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm">{levelLabels[meeting.level]}</TableCell>
+                  <TableCell className="text-sm">{levelLabels[meeting.level as keyof typeof levelLabels] ?? meeting.level}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5 text-sm">
                       <TypeIcon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -209,13 +252,13 @@ export default function MeetingPlanPage() {
                   <p className="font-medium mb-1">Mô tả</p>
                   <p className="text-muted-foreground">{selectedMeeting.description}</p>
                 </div>
-                {selectedMeeting.agenda.length > 0 && (
+                {agendaItems.length > 0 && (
                   <>
                     <Separator />
                     <div>
                       <p className="font-medium mb-2">Chương trình họp</p>
                       <div className="space-y-2">
-                        {selectedMeeting.agenda.map((item) => (
+                        {agendaItems.map((item) => (
                           <div key={item.order} className="flex items-center gap-3 text-xs p-2 rounded-lg bg-secondary/50">
                             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold">{item.order}</span>
                             <div className="flex-1">
@@ -230,13 +273,45 @@ export default function MeetingPlanPage() {
                 )}
                 <Separator />
                 <div>
-                  <p className="font-medium mb-1">Thành phần tham dự ({selectedMeeting.attendees.length})</p>
+                  <p className="font-medium mb-1">Thành phần tham dự ({participants.length})</p>
                   <div className="flex flex-wrap gap-1.5 mt-1">
-                    {selectedMeeting.attendees.map((a) => (
-                      <Badge key={a} variant="secondary" className="text-[11px]">{a}</Badge>
+                    {participants.map((p: any) => (
+                      <Badge key={p.id} variant="secondary" className="text-[11px]">{p.name}</Badge>
                     ))}
                   </div>
                 </div>
+
+                {(canApproveRoom || canApproveUnit) && selectedMeeting.status === "pending" && (
+                  <>
+                    <Separator />
+                    <div className="flex gap-2 justify-end">
+                      {canApproveRoom && (
+                        <Button size="sm" variant="outline" onClick={() => approveRoomMutation.mutate(selectedMeeting.id)}>
+                          Phê duyệt phòng
+                        </Button>
+                      )}
+                      {canApproveUnit && (
+                        <>
+                          <Button size="sm" onClick={() => approveUnitMutation.mutate(selectedMeeting.id)}>
+                            Phê duyệt đơn vị
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => {
+                              const reason = window.prompt("Lý do từ chối:", "") || "";
+                              if (reason.trim()) {
+                                rejectMutation.mutate({ id: selectedMeeting.id, reason });
+                              }
+                            }}
+                          >
+                            Từ chối
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </>
           )}

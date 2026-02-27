@@ -109,10 +109,12 @@ export default function AppSidebar() {
       <div className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-accent text-sm font-semibold text-sidebar-primary">
-            {user?.email?.slice(0, 2).toUpperCase() ?? "U"}
+            {(user?.firstName?.[0] || user?.login?.[0] || "U").toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-sidebar-accent-foreground truncate">{user?.email ?? "User"}</p>
+            <p className="text-sm font-medium text-sidebar-accent-foreground truncate">
+              {user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : user?.login ?? "User"}
+            </p>
             <button onClick={signOut} className="flex items-center gap-1 text-[11px] text-sidebar-muted hover:text-destructive transition-colors">
               <LogOut className="h-3 w-3" /> Đăng xuất
             </button>

@@ -6,7 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { rooms as initialRooms, type Room } from "@/data/mockData";
+import type { RoomListItem } from "@/services/api/rooms";
+import { createRoom, updateRoom, deleteRoom } from "@/services/api/rooms";
+import { useRooms, useRoomEquipments } from "@/hooks/useRooms";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Users, Monitor, Wifi, Mic, PenTool, Camera, Plus, Pencil, Trash2, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -22,18 +25,83 @@ const statusConfig: Record<string, { label: string; class: string }> = {
   maintenance: { label: "Bảo trì", class: "bg-destructive/15 text-destructive border-destructive/20" },
 };
 
-const emptyRoom: Omit<Room, "id"> = { name: "", capacity: 10, floor: "", equipment: [], status: "available" };
+const emptyRoom: Omit<RoomListItem, "id"> & { equipment?: string[] } = { name: "", code: "", capacity: 10, floor: "", equipment: [], status: "available" };
 
 export default function RoomManagementPage() {
   const { toast } = useToast();
-  const [roomList, setRoomList] = useState<Room[]>(initialRooms);
+  const queryClient = useQueryClient();
+  const { data: roomList = [] } = useRooms();
+  const { data: roomEquipments = [] } = useRoomEquipments();
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingRoom, setEditingRoom] = useState<Room | null>(null);
+  const [editingRoom, setEditingRoom] = useState<RoomListItem | null>(null);
   const [form, setForm] = useState(emptyRoom);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  const filtered = roomList.filter((r) => r.name.toLowerCase().includes(search.toLowerCase()));
+  const roomsWithEquipment = roomList.map((r) => ({
+    ...r,
+    equipment: roomEquipments.find((re) => re.roomId === r.id)?.equipmentNames ?? r.equipment,
+  }));
+  const filtered = roomsWithEquipment.filter((r) => r.name.toLowerCase().includes(search.toLowerCase()));
+
+  const createMutation = useMutation({
+    mutationFn: (data: { name: string; code?: string; floor: string; capacity: number; status: RoomListItem["status"] }) =>
+      createRoom({
+        code: data.code && data.code.trim().length > 0 ? data.code : `ROOM_${Date.now()}`,
+        name: data.name,
+        location: data.floor,
+        capacity: data.capacity,
+        active: data.status !== "maintenance",
+      }),
+    onSuccess: () => {
+      toast({ title: "Đã thêm", description: "Phòng họp đã được tạo." });
+      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+    },
+    onError: (err: any) => {
+      toast({
+        variant: "destructive",
+        title: "Lỗi tạo phòng",
+        description: err?.message || "Không thể tạo phòng họp",
+      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (params: { id: string; data: { name: string; code?: string; floor: string; capacity: number; status: RoomListItem["status"] } }) =>
+      updateRoom(params.id, {
+        code: params.data.code && params.data.code.trim().length > 0 ? params.data.code : `ROOM_${params.id}`,
+        name: params.data.name,
+        location: params.data.floor,
+        capacity: params.data.capacity,
+        active: params.data.status !== "maintenance",
+      }),
+    onSuccess: () => {
+      toast({ title: "Đã cập nhật", description: "Phòng họp đã được cập nhật." });
+      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+    },
+    onError: (err: any) => {
+      toast({
+        variant: "destructive",
+        title: "Lỗi cập nhật phòng",
+        description: err?.message || "Không thể cập nhật phòng họp",
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteRoom(id),
+    onSuccess: () => {
+      toast({ title: "Đã xóa", description: "Phòng họp đã được xóa." });
+      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+    },
+    onError: (err: any) => {
+      toast({
+        variant: "destructive",
+        title: "Lỗi xóa phòng",
+        description: err?.message || "Không thể xóa phòng họp",
+      });
+    },
+  });
 
   const openCreate = () => {
     setEditingRoom(null);
@@ -41,9 +109,9 @@ export default function RoomManagementPage() {
     setModalOpen(true);
   };
 
-  const openEdit = (room: Room) => {
+  const openEdit = (room: typeof roomsWithEquipment[0]) => {
     setEditingRoom(room);
-    setForm({ name: room.name, capacity: room.capacity, floor: room.floor, equipment: room.equipment, status: room.status });
+    setForm({ name: room.name, code: room.code, capacity: room.capacity, floor: room.floor, equipment: room.equipment, status: room.status });
     setModalOpen(true);
   };
 
@@ -53,20 +121,16 @@ export default function RoomManagementPage() {
       return;
     }
     if (editingRoom) {
-      setRoomList((prev) => prev.map((r) => (r.id === editingRoom.id ? { ...r, ...form } : r)));
-      toast({ title: "Đã cập nhật", description: `Phòng ${form.name} đã được cập nhật.` });
+      updateMutation.mutate({ id: editingRoom.id, data: form });
     } else {
-      const newRoom: Room = { ...form, id: `r${Date.now()}` };
-      setRoomList((prev) => [...prev, newRoom]);
-      toast({ title: "Đã thêm", description: `Phòng ${form.name} đã được thêm.` });
+      createMutation.mutate(form);
     }
     setModalOpen(false);
   };
 
   const handleDelete = (id: string) => {
-    setRoomList((prev) => prev.filter((r) => r.id !== id));
     setDeleteConfirm(null);
-    toast({ title: "Đã xóa", description: "Phòng họp đã được xóa." });
+    deleteMutation.mutate(id);
   };
 
   return (

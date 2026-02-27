@@ -33,7 +33,7 @@ export default function CreateMeetingPage() {
   const { data: rooms = [] } = useRooms();
   const { data: users = [] } = useUsers();
   const meetingTypes = mockTypes;
-  const meetingLevels = mockLevels;
+  const meetingLevels = mockLevels.filter((l) => l.value === "company" || l.value === "department");
   const [step, setStep] = useState(1);
   const [meetingType, setMeetingType] = useState<MeetingType>("offline");
   const [meetingLevel, setMeetingLevel] = useState<MeetingLevel>("department");

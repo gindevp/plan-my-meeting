@@ -160,7 +160,7 @@ export default function CreateMeetingPage() {
     setStartDate("");
     setStartTime("");
     setEndTime("");
-    setChairperson("");
+    setChairpersonId("");
     setMeetingLink("");
     setSelectedRoom("");
     setMeetingType("offline");

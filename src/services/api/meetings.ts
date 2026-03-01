@@ -48,6 +48,7 @@ export async function getMeetings(params?: { page?: number; size?: number }) {
     type: meetingModeMap[m.mode] ?? "offline",
     level: m.level?.name ?? "",
     status: meetingStatusMap[m.status] ?? "draft",
+    statusRecord: m.statusRecord ?? "ACTIVE",
     startTime: m.startTime,
     endTime: m.endTime,
     roomId: m.room?.id != null ? String(m.room.id) : undefined,
@@ -147,6 +148,48 @@ export async function rejectMeeting(id: number | string, reason: string) {
   return fetchApi<any>(`/api/meetings/${id}/reject`, {
     method: "POST",
     body: JSON.stringify({ reason }),
+  });
+}
+
+export async function cancelMeeting(id: number | string) {
+  return fetchApi<any>(`/api/meetings/${id}/cancel`, {
+    method: "POST",
+  });
+}
+
+export async function softDeleteMeeting(id: number | string) {
+  // Soft delete: set status_record to INACTIVE (for draft meetings)
+  // PATCH requires ID in the body
+  return fetchApi<any>(`/api/meetings/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ id: Number(id), statusRecord: "INACTIVE" }),
+  });
+}
+
+export async function updateMeeting(id: number | string, payload: Partial<CreateMeetingFormPayload>) {
+  // Build update payload for the API - use PATCH for partial update
+  const body: any = { id: Number(id) };
+  
+  if (payload.title !== undefined) body.title = payload.title;
+  if (payload.description !== undefined) body.objectives = payload.description;
+  if (payload.startDate !== undefined && payload.startTime !== undefined) {
+    body.startTime = new Date(`${payload.startDate}T${payload.startTime}:00`).toISOString();
+  }
+  if (payload.startDate !== undefined && payload.endTime !== undefined) {
+    body.endTime = new Date(`${payload.startDate}T${payload.endTime}:00`).toISOString();
+  }
+  if (payload.meetingType !== undefined) {
+    body.mode = payload.meetingType === "offline" ? "IN_PERSON" : payload.meetingType === "online" ? "ONLINE" : "HYBRID";
+  }
+  if (payload.meetingLink !== undefined) body.onlineLink = payload.meetingLink || null;
+  if (payload.selectedRoomId !== undefined) {
+    body.room = payload.selectedRoomId ? { id: Number(payload.selectedRoomId) } : null;
+  }
+  if (payload.hostId !== undefined) body.host = { id: Number(payload.hostId) };
+
+  return fetchApi<any>(`/api/meetings/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
   });
 }
 

@@ -38,8 +38,8 @@ export async function loginApi(body: LoginRequest): Promise<{ token: string }> {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || res.statusText || "Đăng nhập thất bại");
+    // Lỗi đăng nhập - hiển thị thông báo chung
+    throw new Error("Tên đăng nhập hoặc mật khẩu không đúng");
   }
   let token = res.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
   if (!token) {
@@ -77,7 +77,15 @@ export async function registerApi(body: RegisterRequest): Promise<void> {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || res.statusText || "Đăng ký thất bại");
+    // Kiểm tra lỗi trùng email hoặc username
+    const errorMessage = err.message || err.title || "";
+    if (errorMessage.toLowerCase().includes("email")) {
+      throw new Error("Email đã được sử dụng");
+    }
+    if (errorMessage.toLowerCase().includes("login") || errorMessage.toLowerCase().includes("username")) {
+      throw new Error("Tên đăng nhập đã được sử dụng");
+    }
+    throw new Error("Đăng ký thất bại. Vui lòng thử lại.");
   }
 }
 

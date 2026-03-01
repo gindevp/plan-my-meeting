@@ -5,13 +5,22 @@ import { Input } from "@/components/ui/input";
 import { statusLabels, typeLabels, levelLabels, type MeetingStatus } from "@/data/mockData";
 import { useMeetings } from "@/hooks/useMeetings";
 import { useAuth } from "@/contexts/AuthContext";
-import { approveRoom, approveUnit, rejectMeeting, getAgendaItemsByMeeting, getParticipantsByMeeting } from "@/services/api/meetings";
+import { approveRoom, approveUnit, rejectMeeting, getAgendaItemsByMeeting, getParticipantsByMeeting, submitMeeting, cancelMeeting, softDeleteMeeting } from "@/services/api/meetings";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
-import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit } from "lucide-react";
+import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit, Send } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
+
+// Helper: Format time as hh:mm
+function formatTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
 
 const statusTabs: { key: MeetingStatus | "cancelled"; label: string; icon: typeof CheckCircle }[] = [
   { key: "approved", label: "Đã phê duyệt", icon: CheckCircle },
@@ -37,6 +46,7 @@ const typeIconMap: Record<string, typeof MapPin> = {
 };
 
 export default function MeetingPlanPage() {
+  const { toast } = useToast();
   const { data: meetings = [] } = useMeetings();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -75,6 +85,36 @@ export default function MeetingPlanPage() {
     mutationFn: (params: { id: string; reason: string }) => rejectMeeting(params.id, params.reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
+    },
+  });
+
+  const submitMutation = useMutation({
+    mutationFn: (id: string) => submitMeeting(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      setSelectedMeeting(null);
+    },
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      if (status === "draft") {
+        return softDeleteMeeting(id);
+      } else {
+        return cancelMeeting(id);
+      }
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      setSelectedMeeting(null);
+      if (variables.status === "draft") {
+        toast({ title: "Đã xóa", description: "Cuộc họp nháp đã được xóa." });
+      } else {
+        toast({ title: "Đã hủy", description: "Cuộc họp đã được chuyển sang danh sách đã hủy." });
+      }
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Lỗi", description: "Không thể xóa/hủy cuộc họp." });
     },
   });
 
@@ -186,11 +226,11 @@ export default function MeetingPlanPage() {
                     {new Date(meeting.startTime).toLocaleDateString("vi-VN")}
                   </TableCell>
                   <TableCell className="text-sm">
-                    {new Date(meeting.startTime).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                    {formatTime(meeting.startTime)}
                     {" - "}
-                    {new Date(meeting.endTime).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                    {formatTime(meeting.endTime)}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-sm">
                     <Badge variant="outline" className={`text-[11px] ${statusColorMap[meeting.status]}`}>
                       {statusLabels[meeting.status]}
                     </Badge>
@@ -200,12 +240,20 @@ export default function MeetingPlanPage() {
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedMeeting(meeting)}>
                         <Eye className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {meeting.status !== "approved" && meeting.status !== "rejected" && (
+                        <>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/meetings/edit/${meeting.id}`)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => {
+                            if (window.confirm("Bạn có chắc chắn muốn xóa cuộc họp này?")) {
+                              cancelMutation.mutate({ id: meeting.id, status: meeting.status });
+                            }
+                          }}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -309,6 +357,32 @@ export default function MeetingPlanPage() {
                           </Button>
                         </>
                       )}
+                    </div>
+                  </>
+                )}
+
+                {selectedMeeting.status === "draft" && (
+                  <>
+                    <Separator />
+                    <div className="flex justify-end">
+                      <Button 
+                        onClick={() => submitMutation.mutate(selectedMeeting.id)}
+                        disabled={submitMutation.isPending}
+                        className="gap-2"
+                      >
+                        <Send className="h-4 w-4" />
+                        {submitMutation.isPending ? "Đang gửi..." : "Gửi duyệt"}
+                      </Button>
+                    </div>
+                  </>
+                )}
+
+                {selectedMeeting.status === "rejected" && (selectedMeeting as any).rejectionReason && (
+                  <>
+                    <Separator />
+                    <div className="p-3 bg-destructive/10 rounded-lg border border-destructive/20">
+                      <p className="font-medium text-destructive mb-1">Lý do từ chối:</p>
+                      <p className="text-sm text-destructive">{(selectedMeeting as any).rejectionReason}</p>
                     </div>
                   </>
                 )}

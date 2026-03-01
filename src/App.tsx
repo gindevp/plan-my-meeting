@@ -20,6 +20,7 @@ import SettingsPage from "./pages/SettingsPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ActivateAccountPage from "./pages/ActivateAccountPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,11 +36,13 @@ const App = () => (
             <Route path="/login" element={<ErrorBoundary><LoginPage /></ErrorBoundary>} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/activate" element={<ActivateAccountPage />} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/plans" element={<MeetingPlanPage />} />
               <Route path="/meetings/new" element={<CreateMeetingPage />} />
+              <Route path="/meetings/edit/:id" element={<CreateMeetingPage />} />
               <Route path="/rooms" element={<RoomManagementPage />} />
               <Route path="/equipment" element={<EquipmentManagementPage />} />
               <Route path="/reports" element={<ReportsPage />} />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,13 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import type { MeetingType, MeetingLevel } from "@/data/mockData";
 import { meetingTypes as mockTypes, meetingLevels as mockLevels } from "@/data/mockData";
+import { useMeetings } from "@/hooks/useMeetings";
 import { useRooms } from "@/hooks/useRooms";
 import { useUsers } from "@/hooks/useUsers";
 import { useAuth } from "@/contexts/AuthContext";
-import { createMeetingFromForm, submitMeeting } from "@/services/api/meetings";
-import { useNavigate } from "react-router-dom";
-import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search } from "lucide-react";
+import { createMeetingFromForm, submitMeeting, updateMeeting } from "@/services/api/meetings";
+import { useNavigate, useParams } from "react-router-dom";
+import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface AgendaForm {
   title: string;
@@ -30,6 +32,9 @@ export default function CreateMeetingPage() {
   const { toast } = useToast();
   const { user: account } = useAuth();
   const navigate = useNavigate();
+  const { id: meetingId } = useParams<{ id: string }>();
+  const isEditMode = Boolean(meetingId);
+
   const { data: rooms = [] } = useRooms();
   const { data: users = [] } = useUsers();
   const meetingTypes = mockTypes;
@@ -50,6 +55,45 @@ export default function CreateMeetingPage() {
   const [conflicts, setConflicts] = useState<string[]>([]);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [attendeeSearch, setAttendeeSearch] = useState("");
+  const queryClient = useQueryClient();
+
+  // Get meetings from cache/useMeetings hook
+  const { data: meetings = [] } = useMeetings();
+
+  // Find the meeting from the list (simpler than fetching separately)
+  const existingMeeting = isEditMode ? meetings.find(m => m.id === meetingId) : null;
+  const isFetchingMeeting = isEditMode && !existingMeeting && meetings.length === 0;
+
+  // Populate form when existingMeeting data is available
+  useEffect(() => {
+    if (existingMeeting) {
+      setTitle(existingMeeting.title || "");
+      setDescription(existingMeeting.description || existingMeeting.objectives || existingMeeting.note || "");
+
+      const start = new Date(existingMeeting.startTime);
+      const end = new Date(existingMeeting.endTime);
+
+      setStartDate(start.toISOString().split("T")[0]);
+      setStartTime(start.toTimeString().slice(0, 5));
+      setEndTime(end.toTimeString().slice(0, 5));
+
+      // Use type field (mapped from mode in getMeetings)
+      setMeetingType(existingMeeting.type || "offline");
+      setMeetingLevel(existingMeeting.level?.toLowerCase() || "department");
+      setSelectedRoom(existingMeeting.roomId || "");
+      setMeetingLink(existingMeeting.meetingLink || "");
+      setChairpersonId(existingMeeting.host?.id?.toString() || "");
+    }
+  }, [existingMeeting]);
+
+  // Loading state
+  if (isEditMode && isFetchingMeeting) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">Đang tải thông tin cuộc họp...</div>
+      </div>
+    );
+  }
 
   const steps = [
     { num: 1, label: "Thông tin chung" },
@@ -220,6 +264,19 @@ export default function CreateMeetingPage() {
     }
   };
 
+  // Update mutation for edit mode
+  const updateMutation = useMutation({
+    mutationFn: (data: { id: string; payload: any }) => updateMeeting(data.id, data.payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      toast({ title: "Đã cập nhật", description: "Cuộc họp đã được cập nhật thành công." });
+      navigate("/plans");
+    },
+    onError: (err) => {
+      toast({ variant: "destructive", title: "Lỗi cập nhật", description: err instanceof Error ? err.message : "Lỗi không xác định" });
+    },
+  });
+
   const handleSubmit = async () => {
     if (!validateStep3()) return;
     checkConflicts();
@@ -233,33 +290,46 @@ export default function CreateMeetingPage() {
     }
 
     try {
-      const created = await createMeetingFromForm({
-        title,
-        description,
-        startDate,
-        startTime,
-        endTime,
-        meetingType,
-        meetingLevel,
-        selectedRoomId: selectedRoom || undefined,
-        meetingLink,
-        requesterId: account.id,
-        hostId: chairpersonId,
-      });
-      if (created?.id != null) {
-        await submitMeeting(created.id);
+      if (isEditMode && meetingId) {
+        // Update existing meeting
+        await updateMutation.mutateAsync({
+          id: meetingId,
+          payload: {
+            title,
+            description,
+            startDate,
+            startTime,
+            endTime,
+            meetingType,
+            meetingLevel,
+            selectedRoomId: selectedRoom || undefined,
+            meetingLink,
+            hostId: chairpersonId,
+          },
+        });
+      } else {
+        // Create new meeting
+        const created = await createMeetingFromForm({
+          title,
+          description,
+          startDate,
+          startTime,
+          endTime,
+          meetingType,
+          meetingLevel,
+          selectedRoomId: selectedRoom || undefined,
+          meetingLink,
+          requesterId: account.id,
+          hostId: chairpersonId,
+        });
+        if (created?.id != null) {
+          await submitMeeting(created.id);
+        }
+        toast({ title: "Đã gửi duyệt", description: "Cuộc họp đã được tạo và gửi phê duyệt." });
+        navigate("/plans");
       }
-      toast({
-        title: "Đã gửi duyệt",
-        description: "Cuộc họp đã được tạo và gửi phê duyệt.",
-      });
-      navigate("/plans");
     } catch (err) {
-      toast({
-        variant: "destructive",
-        title: "Lỗi tạo cuộc họp",
-        description: err instanceof Error ? err.message : "Lỗi không xác định",
-      });
+      toast({ variant: "destructive", title: isEditMode ? "Lỗi cập nhật" : "Lỗi tạo cuộc họp", description: err instanceof Error ? err.message : "Lỗi không xác định" });
     }
   };
 
@@ -273,8 +343,8 @@ export default function CreateMeetingPage() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-display font-bold">Tạo cuộc họp mới</h1>
-          <p className="text-sm text-muted-foreground mt-1">Điền thông tin để tạo và gửi phê duyệt cuộc họp</p>
+          <h1 className="text-2xl font-display font-bold">{isEditMode ? "Chỉnh sửa cuộc họp" : "Tạo cuộc họp mới"}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{isEditMode ? "Cập nhật thông tin cuộc họp" : "Điền thông tin để tạo và gửi phê duyệt cuộc họp"}</p>
         </div>
         <Button variant="outline" onClick={handleClearForm} className="gap-1.5">
           <RotateCcw className="h-4 w-4" /> Xóa dữ liệu

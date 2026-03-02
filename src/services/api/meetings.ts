@@ -77,6 +77,8 @@ export async function getMeetings(params?: { page?: number; size?: number }) {
     description: m.objectives ?? m.note ?? "",
     // Get rejection reason from approvals map
     rejectionReason: rejectionReasons[m.id] ?? "",
+    // Requester info
+    requesterId: m.requester?.id,
     attendees: [] as string[],
     agenda: [] as { order: number; title: string; presenter: string; duration: number }[],
   }));
@@ -188,7 +190,7 @@ export async function softDeleteMeeting(id: number | string) {
 
 export async function updateMeeting(id: number | string, payload: Partial<CreateMeetingFormPayload>) {
   const body: any = { id: Number(id), statusRecord: "ACTIVE" };
-
+  
   if (payload.title !== undefined) body.title = payload.title;
   if (payload.description !== undefined) body.objectives = payload.description;
   if (payload.startDate !== undefined && payload.startTime !== undefined) {

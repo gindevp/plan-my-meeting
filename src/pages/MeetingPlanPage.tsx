@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { statusLabels, typeLabels, levelLabels, type MeetingStatus } from "@/data/mockData";
 import { useMeetings } from "@/hooks/useMeetings";
 import { useAuth } from "@/contexts/AuthContext";
-import { approveRoom, approveUnit, rejectMeeting, getAgendaItemsByMeeting, getParticipantsByMeeting, submitMeeting, cancelMeeting, softDeleteMeeting, getMeetingRejectionReason } from "@/services/api/meetings";
+import { approveRoom, approveUnit, rejectMeeting, getAgendaItemsByMeeting, getParticipantsByMeeting, submitMeeting, cancelMeeting, softDeleteMeeting } from "@/services/api/meetings";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit, Send } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -75,10 +75,12 @@ export default function MeetingPlanPage() {
   const filtered = meetings.filter((m) => {
     const matchStatus = m.status === activeTab;
     const matchSearch = m.title.toLowerCase().includes(search.toLowerCase());
-    return matchStatus && matchSearch;
+    // For all tabs, only show meetings created by current user
+    const isOwner = m.requesterId === user?.id;
+    return matchStatus && matchSearch && isOwner;
   });
 
-  const getTabCount = (status: string) => meetings.filter((m) => m.status === status).length;
+  const getTabCount = (status: string) => meetings.filter((m) => m.status === status && m.requesterId === user?.id).length;
 
   const canApproveRoom = user?.authorities?.includes("ROLE_ROOM_MANAGER") || user?.authorities?.includes("ROLE_ADMIN");
   const canApproveUnit = user?.authorities?.includes("ROLE_UNIT_MANAGER") || user?.authorities?.includes("ROLE_ADMIN");
@@ -142,20 +144,6 @@ export default function MeetingPlanPage() {
     queryKey: ["participants", selectedMeeting?.id],
     queryFn: () => getParticipantsByMeeting(selectedMeeting!.id),
     enabled: !!selectedMeeting,
-  });
-
-  // Fetch rejection reason for rejected meetings
-  const { data: rejectionReasons = {} } = useQuery({
-    queryKey: ["rejection-reasons"],
-    queryFn: async () => {
-      const reasons: Record<string, string> = {};
-      const rejectedMeetings = meetings.filter(m => m.status === "rejected");
-      for (const meeting of rejectedMeetings) {
-        reasons[meeting.id] = await getMeetingRejectionReason(meeting.id);
-      }
-      return reasons;
-    },
-    enabled: meetings.some(m => m.status === "rejected"),
   });
 
   return (
@@ -395,22 +383,7 @@ export default function MeetingPlanPage() {
                   </>
                 )}
 
-                {selectedMeeting.status === "draft" && (
-                  <>
-                    <Separator />
-                    <div className="flex justify-end">
-                      <Button 
-                        onClick={() => submitMutation.mutate(selectedMeeting.id)}
-                        disabled={submitMutation.isPending}
-                        className="gap-2"
-                      >
-                        <Send className="h-4 w-4" />
-                        {submitMutation.isPending ? "Đang gửi..." : "Gửi duyệt"}
-                      </Button>
-                    </div>
-                  </>
-                )}
-
+                {/* Rejection reason for rejected meetings */}
                 {selectedMeeting.status === "rejected" && (selectedMeeting as any).rejectionReason && (
                   <>
                     <Separator />

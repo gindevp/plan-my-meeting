@@ -30,8 +30,10 @@ export interface MeetingListItem {
   meetingLink?: string;
   organizer: string;
   chairperson: string;
+  host?: any;
   department: string;
   description: string;
+  rejectionReason?: string;
   attendees: string[];
   agenda: { order: number; title: string; presenter: string; duration: number }[];
 }
@@ -41,8 +43,22 @@ export async function getMeetings(params?: { page?: number; size?: number }) {
   if (params?.page != null) sp.set("page", String(params.page));
   if (params?.size != null) sp.set("size", String(params.size ?? 100));
   const q = sp.toString();
-  const list = await fetchApi<unknown[]>(`/api/meetings${q ? "?" + q : ""}`);
-  return (list as any[]).map((m: any) => ({
+
+  // Fetch both meetings and approvals in parallel
+  const [meetings, approvals] = await Promise.all([
+    fetchApi<unknown[]>(`/api/meetings${q ? "?" + q : ""}`),
+    fetchApi<unknown[]>("/api/meeting-approvals"),
+  ]);
+
+  // Build a map of meetingId -> rejection reason from approvals
+  const rejectionReasons: Record<string, string> = {};
+  (approvals as any[]).forEach((a: any) => {
+    if (a.decision === "REJECTED" && a.meeting?.id) {
+      rejectionReasons[String(a.meeting.id)] = a.reason ?? "";
+    }
+  });
+
+  return (meetings as any[]).map((m: any) => ({
     id: String(m.id),
     title: m.title ?? "",
     type: meetingModeMap[m.mode] ?? "offline",
@@ -55,9 +71,12 @@ export async function getMeetings(params?: { page?: number; size?: number }) {
     roomName: m.room?.name,
     meetingLink: m.onlineLink,
     organizer: m.requester?.login ?? m.host?.login ?? "",
+    host: m.host,
     chairperson: m.host?.login ?? m.requester?.login ?? "",
     department: m.organizerDepartment?.name ?? "",
     description: m.objectives ?? m.note ?? "",
+    // Get rejection reason from approvals map
+    rejectionReason: rejectionReasons[m.id] ?? "",
     attendees: [] as string[],
     agenda: [] as { order: number; title: string; presenter: string; duration: number }[],
   }));
@@ -69,6 +88,7 @@ export interface CreateMeetingFormPayload {
   startDate: string;
   startTime: string;
   endTime: string;
+  endDate?: string;
   meetingType: "offline" | "online" | "hybrid";
   meetingLevel: "company" | "department" | "team";
   selectedRoomId?: string;
@@ -85,7 +105,8 @@ export async function createMeetingFromForm(payload: CreateMeetingFormPayload) {
   ]);
 
   const start = new Date(`${payload.startDate}T${payload.startTime}:00`);
-  const end = new Date(`${payload.startDate}T${payload.endTime}:00`);
+  const endDateStr = payload.endDate || payload.startDate;
+  const end = new Date(`${endDateStr}T${payload.endTime}:00`);
   const nowIso = new Date().toISOString();
 
   const mode =
@@ -108,6 +129,7 @@ export async function createMeetingFromForm(payload: CreateMeetingFormPayload) {
     objectives: payload.description || null,
     note: null,
     status: "DRAFT",
+    statusRecord: "ACTIVE",
     createdAt: nowIso,
     type: typeRef,
     level: levelRef,
@@ -158,8 +180,6 @@ export async function cancelMeeting(id: number | string) {
 }
 
 export async function softDeleteMeeting(id: number | string) {
-  // Soft delete: set status_record to INACTIVE (for draft meetings)
-  // PATCH requires ID in the body
   return fetchApi<any>(`/api/meetings/${id}`, {
     method: "PATCH",
     body: JSON.stringify({ id: Number(id), statusRecord: "INACTIVE" }),
@@ -167,16 +187,16 @@ export async function softDeleteMeeting(id: number | string) {
 }
 
 export async function updateMeeting(id: number | string, payload: Partial<CreateMeetingFormPayload>) {
-  // Build update payload for the API - use PATCH for partial update
-  const body: any = { id: Number(id) };
-  
+  const body: any = { id: Number(id), statusRecord: "ACTIVE" };
+
   if (payload.title !== undefined) body.title = payload.title;
   if (payload.description !== undefined) body.objectives = payload.description;
   if (payload.startDate !== undefined && payload.startTime !== undefined) {
     body.startTime = new Date(`${payload.startDate}T${payload.startTime}:00`).toISOString();
   }
   if (payload.startDate !== undefined && payload.endTime !== undefined) {
-    body.endTime = new Date(`${payload.startDate}T${payload.endTime}:00`).toISOString();
+    const endDateStr = payload.endDate || payload.startDate;
+    body.endTime = new Date(`${endDateStr}T${payload.endTime}:00`).toISOString();
   }
   if (payload.meetingType !== undefined) {
     body.mode = payload.meetingType === "offline" ? "IN_PERSON" : payload.meetingType === "online" ? "ONLINE" : "HYBRID";
@@ -219,3 +239,13 @@ export async function getParticipantsByMeeting(meetingId: number | string) {
     }));
 }
 
+export async function getMeetingRejectionReason(meetingId: number | string): Promise<string> {
+  try {
+    const list = await fetchApi<unknown[]>("/api/meeting-approvals");
+    const approvals = (list as any[]).filter((a: any) => a.meeting?.id === Number(meetingId));
+    const rejected = approvals.find((a: any) => a.decision === "REJECTED");
+    return rejected?.reason ?? "";
+  } catch {
+    return "";
+  }
+}

@@ -31,6 +31,11 @@ const management = [
   { name: "Cài đặt", href: "/settings", icon: Settings },
 ];
 
+// Helper to check if a path should be active for "Quản lý kế hoạch"
+const isPlansActive = (pathname: string) => {
+  return pathname === "/plans" || pathname.startsWith("/plans?") || pathname.startsWith("/meetings/edit");
+};
+
 export default function AppSidebar() {
   const location = useLocation();
   const { user, signOut } = useAuth();
@@ -59,11 +64,11 @@ export default function AppSidebar() {
               <li key={item.name}>
                 <NavLink
                   to={item.href}
-                  end
+                  end={item.href !== "/plans"}
                   className={({ isActive }) =>
                     cn(
                       "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                      isActive
+                      (item.href === "/plans" ? isPlansActive(location.pathname) : isActive)
                         ? "bg-sidebar-accent text-sidebar-primary shadow-sm"
                         : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
                     )

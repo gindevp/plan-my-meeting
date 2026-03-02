@@ -59,6 +59,7 @@ export interface Account {
   langKey?: string;
   activated?: boolean;
   authorities?: string[];
+  department?: string;
 }
 
 export interface RegisterRequest {

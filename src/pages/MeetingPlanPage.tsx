@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { statusLabels, typeLabels, levelLabels, type MeetingStatus } from "@/data/mockData";
 import { useMeetings } from "@/hooks/useMeetings";
 import { useAuth } from "@/contexts/AuthContext";
-import { approveRoom, approveUnit, rejectMeeting, getAgendaItemsByMeeting, getParticipantsByMeeting, submitMeeting, cancelMeeting, softDeleteMeeting } from "@/services/api/meetings";
+import { approveRoom, approveUnit, rejectMeeting, getAgendaItemsByMeeting, getParticipantsByMeeting, submitMeeting, cancelMeeting, softDeleteMeeting, getMeetingRejectionReason } from "@/services/api/meetings";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit, Send } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -50,10 +52,24 @@ export default function MeetingPlanPage() {
   const { data: meetings = [] } = useMeetings();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<string>("approved");
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    // Try to get from sessionStorage first
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('meetingPlanActiveTab');
+      if (saved) return saved;
+    }
+    return "approved";
+  });
+
+  // Save activeTab to sessionStorage whenever it changes
+  useEffect(() => {
+    sessionStorage.setItem('meetingPlanActiveTab', activeTab);
+  }, [activeTab]);
   const [search, setSearch] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<typeof meetings[0] | null>(null);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
   const navigate = useNavigate();
 
   const filtered = meetings.filter((m) => {
@@ -85,6 +101,10 @@ export default function MeetingPlanPage() {
     mutationFn: (params: { id: string; reason: string }) => rejectMeeting(params.id, params.reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      setSelectedMeeting(null);
+      setShowRejectDialog(false);
+      setRejectReason("");
+      setActiveTab("rejected");
     },
   });
 
@@ -98,20 +118,14 @@ export default function MeetingPlanPage() {
 
   const cancelMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      if (status === "draft") {
-        return softDeleteMeeting(id);
-      } else {
-        return cancelMeeting(id);
-      }
+      // For all statuses (including draft), use cancel to set status = CANCELED
+      // status_record will remain ACTIVE
+      return cancelMeeting(id);
     },
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
       setSelectedMeeting(null);
-      if (variables.status === "draft") {
-        toast({ title: "Đã xóa", description: "Cuộc họp nháp đã được xóa." });
-      } else {
-        toast({ title: "Đã hủy", description: "Cuộc họp đã được chuyển sang danh sách đã hủy." });
-      }
+      toast({ title: "Đã xóa", description: "Cuộc họp đã được chuyển sang danh sách đã xóa." });
     },
     onError: () => {
       toast({ variant: "destructive", title: "Lỗi", description: "Không thể xóa/hủy cuộc họp." });
@@ -128,6 +142,20 @@ export default function MeetingPlanPage() {
     queryKey: ["participants", selectedMeeting?.id],
     queryFn: () => getParticipantsByMeeting(selectedMeeting!.id),
     enabled: !!selectedMeeting,
+  });
+
+  // Fetch rejection reason for rejected meetings
+  const { data: rejectionReasons = {} } = useQuery({
+    queryKey: ["rejection-reasons"],
+    queryFn: async () => {
+      const reasons: Record<string, string> = {};
+      const rejectedMeetings = meetings.filter(m => m.status === "rejected");
+      for (const meeting of rejectedMeetings) {
+        reasons[meeting.id] = await getMeetingRejectionReason(meeting.id);
+      }
+      return reasons;
+    },
+    enabled: meetings.some(m => m.status === "rejected"),
   });
 
   return (
@@ -199,6 +227,7 @@ export default function MeetingPlanPage() {
               <TableHead>Ngày</TableHead>
               <TableHead>Thời gian</TableHead>
               <TableHead>Trạng thái</TableHead>
+              {activeTab === "rejected" && <TableHead>Lý do từ chối</TableHead>}
               <TableHead className="text-right">Thao tác</TableHead>
             </TableRow>
           </TableHeader>
@@ -235,12 +264,17 @@ export default function MeetingPlanPage() {
                       {statusLabels[meeting.status]}
                     </Badge>
                   </TableCell>
+                  {activeTab === "rejected" && (
+                    <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate" title={meeting.rejectionReason}>
+                      {meeting.rejectionReason || "-"}
+                    </TableCell>
+                  )}
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedMeeting(meeting)}>
                         <Eye className="h-4 w-4" />
                       </Button>
-                      {meeting.status !== "approved" && meeting.status !== "rejected" && (
+                      {meeting.status === "draft" && (
                         <>
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/meetings/edit/${meeting.id}`)}>
                             <Pencil className="h-4 w-4" />
@@ -253,6 +287,11 @@ export default function MeetingPlanPage() {
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </>
+                      )}
+                      {meeting.status === "pending" && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/meetings/edit/${meeting.id}`)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                       )}
                     </div>
                   </TableCell>
@@ -346,12 +385,7 @@ export default function MeetingPlanPage() {
                           <Button
                             size="sm"
                             variant="destructive"
-                            onClick={() => {
-                              const reason = window.prompt("Lý do từ chối:", "") || "";
-                              if (reason.trim()) {
-                                rejectMutation.mutate({ id: selectedMeeting.id, reason });
-                              }
-                            }}
+                            onClick={() => setShowRejectDialog(true)}
                           >
                             Từ chối
                           </Button>
@@ -389,6 +423,46 @@ export default function MeetingPlanPage() {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Dialog */}
+      <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">Từ chối cuộc họp</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label className="text-sm font-medium">Lý do từ chối</Label>
+              <Textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Nhập lý do từ chối cuộc họp..."
+                className="mt-1.5"
+                rows={4}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => {
+                setShowRejectDialog(false);
+                setRejectReason("");
+              }}>
+                Hủy
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={!rejectReason.trim() || rejectMutation.isPending}
+                onClick={() => {
+                  if (rejectReason.trim()) {
+                    rejectMutation.mutate({ id: selectedMeeting?.id || "", reason: rejectReason });
+                  }
+                }}
+              >
+                {rejectMutation.isPending ? "Đang xử lý..." : "Xác nhận từ chối"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

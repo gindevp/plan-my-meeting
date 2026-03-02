@@ -1,22 +1,24 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import type { MeetingType, MeetingLevel } from "@/data/mockData";
 import { meetingTypes as mockTypes, meetingLevels as mockLevels } from "@/data/mockData";
 import { useMeetings } from "@/hooks/useMeetings";
 import { useRooms } from "@/hooks/useRooms";
 import { useUsers } from "@/hooks/useUsers";
+import { useDepartments } from "@/hooks/useDepartments";
 import { useAuth } from "@/contexts/AuthContext";
 import { createMeetingFromForm, submitMeeting, updateMeeting } from "@/services/api/meetings";
 import { useNavigate, useParams } from "react-router-dom";
-import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft, Building2, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface AgendaForm {
   title: string;
@@ -37,20 +39,25 @@ export default function CreateMeetingPage() {
 
   const { data: rooms = [] } = useRooms();
   const { data: users = [] } = useUsers();
+  const { data: departments = [] } = useDepartments();
   const meetingTypes = mockTypes;
   const meetingLevels = mockLevels.filter((l) => l.value === "company" || l.value === "department");
   const [step, setStep] = useState(1);
   const [meetingType, setMeetingType] = useState<MeetingType>("offline");
   const [meetingLevel, setMeetingLevel] = useState<MeetingLevel>("department");
+  const [selectedDepartment, setSelectedDepartment] = useState<string>(""); // For company level
   const [selectedRoom, setSelectedRoom] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [isOvernight, setIsOvernight] = useState(false);
   const [chairpersonId, setChairpersonId] = useState("");
   const [meetingLink, setMeetingLink] = useState("");
   const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]); // For company level
   const [agendaItems, setAgendaItems] = useState<AgendaForm[]>([]);
   const [conflicts, setConflicts] = useState<string[]>([]);
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -58,11 +65,21 @@ export default function CreateMeetingPage() {
   const queryClient = useQueryClient();
 
   // Get meetings from cache/useMeetings hook
-  const { data: meetings = [] } = useMeetings();
+  const { data: meetings = [], isLoading: isFetchingMeeting } = useMeetings();
 
-  // Find the meeting from the list (simpler than fetching separately)
-  const existingMeeting = isEditMode ? meetings.find(m => m.id === meetingId) : null;
-  const isFetchingMeeting = isEditMode && !existingMeeting && meetings.length === 0;
+  // Find existing meeting from cache for edit mode
+  const existingMeeting = isEditMode ? meetings.find((m: any) => m.id === meetingId) : null;
+
+  // Get user's department (creator's department)
+  const userDepartment = account?.department || "";
+
+  // Filter users by department when meeting level is "department"
+  const usersByDepartment = useMemo(() => {
+    if (meetingLevel === "department") {
+      return users.filter((u: any) => u.department === userDepartment);
+    }
+    return users;
+  }, [users, meetingLevel, userDepartment]);
 
   // Populate form when existingMeeting data is available
   useEffect(() => {
@@ -77,14 +94,33 @@ export default function CreateMeetingPage() {
       setStartTime(start.toTimeString().slice(0, 5));
       setEndTime(end.toTimeString().slice(0, 5));
 
-      // Use type field (mapped from mode in getMeetings)
+      // Check if it's an overnight meeting
+      const startDateStr = start.toISOString().split("T")[0];
+      const endDateStr = end.toISOString().split("T")[0];
+      if (endDateStr !== startDateStr) {
+        setIsOvernight(true);
+        setEndDate(endDateStr);
+      }
+
       setMeetingType(existingMeeting.type || "offline");
-      setMeetingLevel(existingMeeting.level?.toLowerCase() || "department");
+      const levelValue = existingMeeting.level?.toLowerCase() || "department";
+      setMeetingLevel(["company", "department", "team"].includes(levelValue) ? levelValue as MeetingLevel : "department");
       setSelectedRoom(existingMeeting.roomId || "");
       setMeetingLink(existingMeeting.meetingLink || "");
       setChairpersonId(existingMeeting.host?.id?.toString() || "");
     }
   }, [existingMeeting]);
+
+  // Reset department selection when meeting level changes
+  useEffect(() => {
+    if (meetingLevel === "department") {
+      setSelectedDepartment(userDepartment);
+    } else {
+      setSelectedDepartment("");
+    }
+    setSelectedAttendees([]);
+    setSelectedDepartments([]);
+  }, [meetingLevel, userDepartment]);
 
   // Loading state
   if (isEditMode && isFetchingMeeting) {
@@ -115,9 +151,17 @@ export default function CreateMeetingPage() {
 
     if (startDate && startTime && endTime) {
       const start = new Date(`${startDate}T${startTime}:00`);
-      const end = new Date(`${startDate}T${endTime}:00`);
-      if (end <= start) {
-        newErrors.timeRange = "Giờ kết thúc phải sau giờ bắt đầu";
+      let end: Date;
+      
+      if (isOvernight && endDate) {
+        end = new Date(`${endDate}T${endTime}:00`);
+      } else if (!isOvernight) {
+        end = new Date(`${startDate}T${endTime}:00`);
+        if (end <= start) {
+          newErrors.timeRange = "Giờ kết thúc phải sau giờ bắt đầu (họp trong ngày)";
+        }
+      } else {
+        end = new Date(`${startDate}T${endTime}:00`);
       }
     }
 
@@ -127,8 +171,15 @@ export default function CreateMeetingPage() {
 
   const validateStep2 = (): boolean => {
     const newErrors: ValidationErrors = {};
-    if (selectedAttendees.length === 0)
-      newErrors.attendees = "Vui lòng chọn ít nhất 1 người tham dự";
+    if (meetingLevel === "company") {
+      // Company level: must select at least one department
+      if (selectedDepartments.length === 0)
+        newErrors.attendees = "Vui lòng chọn ít nhất 1 phòng ban";
+    } else {
+      // Department level: must select at least one participant
+      if (selectedAttendees.length === 0)
+        newErrors.attendees = "Vui lòng chọn ít nhất 1 người tham dự";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -151,15 +202,22 @@ export default function CreateMeetingPage() {
       const room = rooms.find((r) => r.id === selectedRoom);
       if (room?.status === "occupied") found.push(`Phòng ${room.name} đang được sử dụng`);
       if (room?.status === "maintenance") found.push(`Phòng ${room.name} đang bảo trì`);
-      if (room && selectedAttendees.length > room.capacity)
-        found.push(`Số người tham dự (${selectedAttendees.length}) vượt sức chứa phòng (${room.capacity})`);
+      
+      // Calculate total participants
+      let totalParticipants = selectedAttendees.length;
+      if (meetingLevel === "company") {
+        // For company level, count users from selected departments
+        totalParticipants = users.filter((u: any) => selectedDepartments.includes(u.department)).length;
+      }
+      
+      if (room && totalParticipants > room.capacity)
+        found.push(`Số người tham dự (${totalParticipants}) vượt sức chứa phòng (${room.capacity})`);
     }
     setConflicts(found);
   };
 
   const goToStep = (targetStep: number) => {
     if (targetStep > step) {
-      // Validate current step before advancing
       if (step === 1 && !validateStep1()) return;
       if (step === 2 && !validateStep2()) return;
     }
@@ -171,6 +229,18 @@ export default function CreateMeetingPage() {
   const toggleAttendee = (name: string) => {
     setSelectedAttendees((prev) =>
       prev.includes(name) ? prev.filter((a) => a !== name) : [...prev, name]
+    );
+    if (errors.attendees) {
+      setErrors((prev) => {
+        const { attendees, ...rest } = prev;
+        return rest;
+      });
+    }
+  };
+
+  const toggleDepartment = (deptName: string) => {
+    setSelectedDepartments((prev) =>
+      prev.includes(deptName) ? prev.filter((d) => d !== deptName) : [...prev, deptName]
     );
     if (errors.attendees) {
       setErrors((prev) => {
@@ -204,12 +274,16 @@ export default function CreateMeetingPage() {
     setStartDate("");
     setStartTime("");
     setEndTime("");
+    setEndDate("");
+    setIsOvernight(false);
     setChairpersonId("");
     setMeetingLink("");
     setSelectedRoom("");
     setMeetingType("offline");
     setMeetingLevel("department");
+    setSelectedDepartment(userDepartment);
     setSelectedAttendees([]);
+    setSelectedDepartments([]);
     setAgendaItems([]);
     setConflicts([]);
     setErrors({});
@@ -235,6 +309,7 @@ export default function CreateMeetingPage() {
         startDate,
         startTime,
         endTime,
+        endDate: isOvernight ? endDate : undefined,
         meetingType,
         meetingLevel,
         selectedRoomId: selectedRoom || undefined,
@@ -242,19 +317,8 @@ export default function CreateMeetingPage() {
         requesterId: account.id,
         hostId: chairpersonId,
       });
-      setTitle("");
-      setDescription("");
-      setStartDate("");
-      setStartTime("");
-      setEndTime("");
-      setSelectedRoom("");
-      setMeetingLink("");
-      setSelectedAttendees([]);
-      setAgendaItems([]);
-      setConflicts([]);
-      setErrors({});
-      setStep(1);
       toast({ title: "Đã lưu nháp", description: "Cuộc họp đã được lưu ở trạng thái nháp." });
+      navigate("/plans");
     } catch (err) {
       toast({
         variant: "destructive",
@@ -264,7 +328,6 @@ export default function CreateMeetingPage() {
     }
   };
 
-  // Update mutation for edit mode
   const updateMutation = useMutation({
     mutationFn: (data: { id: string; payload: any }) => updateMeeting(data.id, data.payload),
     onSuccess: () => {
@@ -291,7 +354,6 @@ export default function CreateMeetingPage() {
 
     try {
       if (isEditMode && meetingId) {
-        // Update existing meeting
         await updateMutation.mutateAsync({
           id: meetingId,
           payload: {
@@ -300,6 +362,7 @@ export default function CreateMeetingPage() {
             startDate,
             startTime,
             endTime,
+            endDate: isOvernight ? endDate : undefined,
             meetingType,
             meetingLevel,
             selectedRoomId: selectedRoom || undefined,
@@ -308,13 +371,13 @@ export default function CreateMeetingPage() {
           },
         });
       } else {
-        // Create new meeting
         const created = await createMeetingFromForm({
           title,
           description,
           startDate,
           startTime,
           endTime,
+          endDate: isOvernight ? endDate : undefined,
           meetingType,
           meetingLevel,
           selectedRoomId: selectedRoom || undefined,
@@ -333,7 +396,7 @@ export default function CreateMeetingPage() {
     }
   };
 
-  const filteredUsers = users.filter((u) =>
+  const filteredUsers = usersByDepartment.filter((u: any) =>
     u.name.toLowerCase().includes(attendeeSearch.toLowerCase())
   );
 
@@ -342,13 +405,22 @@ export default function CreateMeetingPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-display font-bold">{isEditMode ? "Chỉnh sửa cuộc họp" : "Tạo cuộc họp mới"}</h1>
-          <p className="text-sm text-muted-foreground mt-1">{isEditMode ? "Cập nhật thông tin cuộc họp" : "Điền thông tin để tạo và gửi phê duyệt cuộc họp"}</p>
+        <div className="flex items-center gap-3">
+          {isEditMode && (
+            <Button variant="ghost" size="icon" onClick={() => navigate("/plans")} className="h-9 w-9">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
+          <div>
+            <h1 className="text-2xl font-display font-bold">{isEditMode ? "Chỉnh sửa cuộc họp" : "Tạo cuộc họp mới"}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{isEditMode ? "Cập nhật thông tin cuộc họp" : "Điền thông tin để tạo và gửi phê duyệt cuộc họp"}</p>
+          </div>
         </div>
-        <Button variant="outline" onClick={handleClearForm} className="gap-1.5">
-          <RotateCcw className="h-4 w-4" /> Xóa dữ liệu
-        </Button>
+        {!isEditMode && (
+          <Button variant="outline" onClick={handleClearForm} className="gap-1.5">
+            <RotateCcw className="h-4 w-4" /> Xóa dữ liệu
+          </Button>
+        )}
       </div>
 
       {/* Steps */}
@@ -431,7 +503,19 @@ export default function CreateMeetingPage() {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Ngày *</Label>
-                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={`mt-1.5 ${errorClass("startDate")}`} />
+                <Input 
+                  type="date" 
+                  value={startDate} 
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    if (isOvernight && e.target.value) {
+                      const nextDay = new Date(e.target.value);
+                      nextDay.setDate(nextDay.getDate() + 1);
+                      setEndDate(nextDay.toISOString().split("T")[0]);
+                    }
+                  }} 
+                  className={`mt-1.5 ${errorClass("startDate")}`} 
+                />
                 {errors.startDate && <p className="text-xs text-destructive mt-1">{errors.startDate}</p>}
               </div>
               <div>
@@ -446,6 +530,35 @@ export default function CreateMeetingPage() {
                 {errors.timeRange && <p className="text-xs text-destructive mt-1">{errors.timeRange}</p>}
               </div>
             </div>
+
+            {/* Overnight meeting option */}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isOvernight"
+                checked={isOvernight}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setIsOvernight(checked);
+                  if (checked && startDate) {
+                    const nextDay = new Date(startDate);
+                    nextDay.setDate(nextDay.getDate() + 1);
+                    setEndDate(nextDay.toISOString().split("T")[0]);
+                  } else if (!checked) {
+                    setEndDate("");
+                  }
+                }}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <Label htmlFor="isOvernight" className="text-sm font-normal cursor-pointer">Họp qua đêm (sang ngày hôm sau)</Label>
+            </div>
+
+            {isOvernight && (
+              <div>
+                <Label>Ngày kết thúc (tự động)</Label>
+                <Input type="date" value={endDate} disabled className="mt-1.5 bg-muted cursor-not-allowed" />
+              </div>
+            )}
 
             {(meetingType === "offline" || meetingType === "hybrid") && (
               <div>
@@ -495,66 +608,137 @@ export default function CreateMeetingPage() {
         </Card>
       )}
 
-      {/* Step 2 */}
+      {/* Step 2 - Attendees */}
       {step === 2 && (
         <Card className="shadow-card animate-slide-up">
           <CardHeader>
-            <CardTitle className="text-base font-display">Thành phần tham dự</CardTitle>
+            <CardTitle className="text-base font-display">
+              <div className="flex items-center gap-2">
+                {meetingLevel === "company" ? (
+                  <>
+                    <Building2 className="h-5 w-5" />
+                    <span>Chọn phòng ban tham dự (Cấp Tổng công ty)</span>
+                  </>
+                ) : (
+                  <>
+                    <Users className="h-5 w-5" />
+                    <span>Chọn người tham dự (Cấp Phòng ban - {userDepartment})</span>
+                  </>
+                )}
+              </div>
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {errors.attendees && (
               <p className="text-sm text-destructive font-medium">{errors.attendees}</p>
             )}
 
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Tìm kiếm người tham dự theo tên..."
-                value={attendeeSearch}
-                onChange={(e) => setAttendeeSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto">
-              {filteredUsers.map((u) => (
-                <button
-                  key={u.id}
-                  onClick={() => toggleAttendee(u.name || u.login)}
-                  className={`flex items-center gap-3 p-3 rounded-lg border text-left text-sm transition-all ${
-                    selectedAttendees.includes(u.name || u.login)
-                      ? "border-primary bg-primary/5 shadow-sm"
-                      : "border-border hover:border-primary/30"
-                  }`}
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold">
-                    {u.name.split(" ").pop()?.[0]}
-                  </div>
-                  <div>
-                    <p className="font-medium text-xs">{u.name || u.login}</p>
-                    <p className="text-[10px] text-muted-foreground">{[u.position, u.department].filter(Boolean).join(" • ") || "—"}</p>
-                  </div>
-                  {selectedAttendees.includes(u.name || u.login) && (
-                    <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
-                  )}
-                </button>
-              ))}
-              {filteredUsers.length === 0 && (
-                <p className="col-span-2 text-center text-sm text-muted-foreground py-4">Không tìm thấy người nào</p>
-              )}
-            </div>
-
-            {selectedAttendees.length > 0 && (
-              <div>
-                <Label>Đã chọn ({selectedAttendees.length})</Label>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {selectedAttendees.map((a) => (
-                    <Badge key={a} variant="secondary" className="cursor-pointer" onClick={() => toggleAttendee(a)}>
-                      {a} ×
-                    </Badge>
-                  ))}
+            {meetingLevel === "company" ? (
+              // Company level - show departments
+              <>
+                <div className="text-sm text-muted-foreground mb-2">
+                  Chọn các phòng ban tham gia cuộc họp:
                 </div>
-              </div>
+                <div className="grid grid-cols-2 gap-2 max-h-[400px] overflow-y-auto">
+                  {departments.map((d: any) => (
+                    <button
+                      key={d.id}
+                      onClick={() => toggleDepartment(d.name)}
+                      className={`flex items-center gap-3 p-3 rounded-lg border text-left text-sm transition-all ${
+                        selectedDepartments.includes(d.name)
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-border hover:border-primary/30"
+                      }`}
+                    >
+                      <Checkbox checked={selectedDepartments.includes(d.name)} />
+                      <div>
+                        <p className="font-medium text-xs">{d.name}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {users.filter((u: any) => u.department === d.name).length} nhân viên
+                        </p>
+                      </div>
+                      {selectedDepartments.includes(d.name) && (
+                        <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
+                      )}
+                    </button>
+                  ))}
+                  {departments.length === 0 && (
+                    <p className="col-span-2 text-center text-sm text-muted-foreground py-4">Không có phòng ban nào</p>
+                  )}
+                </div>
+
+                {selectedDepartments.length > 0 && (
+                  <div>
+                    <Label>Đã chọn ({selectedDepartments.length} phòng ban)</Label>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {selectedDepartments.map((d) => (
+                        <Badge key={d} variant="secondary" className="cursor-pointer" onClick={() => toggleDepartment(d)}>
+                          {d} ×
+                        </Badge>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Tổng số người tham dự dự kiến: {users.filter((u: any) => selectedDepartments.includes(u.department)).length}
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              // Department level - show users from creator's department
+              <>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Tìm kiếm người tham dự theo tên..."
+                    value={attendeeSearch}
+                    onChange={(e) => setAttendeeSearch(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto">
+                  {filteredUsers.map((u: any) => (
+                    <button
+                      key={u.id}
+                      onClick={() => toggleAttendee(u.name || u.login)}
+                      className={`flex items-center gap-3 p-3 rounded-lg border text-left text-sm transition-all ${
+                        selectedAttendees.includes(u.name || u.login)
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-border hover:border-primary/30"
+                      }`}
+                    >
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold">
+                        {u.name?.split(" ")?.[0]?.[0] || "?"}
+                      </div>
+                      <div>
+                        <p className="font-medium text-xs">{u.name || u.login}</p>
+                        <p className="text-[10px] text-muted-foreground">{[u.position, u.department].filter(Boolean).join(" • ") || "—"}</p>
+                      </div>
+                      {selectedAttendees.includes(u.name || u.login) && (
+                        <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
+                      )}
+                    </button>
+                  ))}
+                  {filteredUsers.length === 0 && (
+                    <p className="col-span-2 text-center text-sm text-muted-foreground py-4">
+                      {userDepartment ? `Không có nhân viên nào trong phòng ban ${userDepartment}` : "Vui lòng chọn phòng ban của bạn trong hồ sơ"}
+                    </p>
+                  )}
+                </div>
+
+                {selectedAttendees.length > 0 && (
+                  <div>
+                    <Label>Đã chọn ({selectedAttendees.length})</Label>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {selectedAttendees.map((a) => (
+                        <Badge key={a} variant="secondary" className="cursor-pointer" onClick={() => toggleAttendee(a)}>
+                          {a} ×
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

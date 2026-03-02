@@ -41,8 +41,8 @@ const App = () => (
               <Route path="/" element={<Dashboard />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/plans" element={<MeetingPlanPage />} />
-              <Route path="/meetings/new" element={<CreateMeetingPage />} />
-              <Route path="/meetings/edit/:id" element={<CreateMeetingPage />} />
+              <Route path="/meetings/new" element={<CreateMeetingPage key="create" />} />
+              <Route path="/meetings/edit/:id" element={<CreateMeetingPage key="edit" />} />
               <Route path="/rooms" element={<RoomManagementPage />} />
               <Route path="/equipment" element={<EquipmentManagementPage />} />
               <Route path="/reports" element={<ReportsPage />} />

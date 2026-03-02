@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { statusLabels, typeLabels, levelLabels, type MeetingStatus } from "@/data/mockData";
 import { useMeetings } from "@/hooks/useMeetings";
 import { useAuth } from "@/contexts/AuthContext";
-import { approveRoom, approveUnit, rejectMeeting, getAgendaItemsByMeeting, getParticipantsByMeeting, submitMeeting, cancelMeeting, softDeleteMeeting } from "@/services/api/meetings";
+import { approveRoom, approveUnit, rejectMeeting, getAgendaItemsByMeeting, getParticipantsByMeeting, submitMeeting, cancelMeeting, softDeleteMeeting, completeMeeting } from "@/services/api/meetings";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit, Send } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -24,12 +24,13 @@ function formatTime(dateStr: string): string {
   return `${hours}:${minutes}`;
 }
 
-const statusTabs: { key: MeetingStatus | "cancelled"; label: string; icon: typeof CheckCircle }[] = [
+const statusTabs: { key: MeetingStatus | "cancelled" | "completed"; label: string; icon: typeof CheckCircle }[] = [
   { key: "approved", label: "Đã phê duyệt", icon: CheckCircle },
   { key: "pending", label: "Chờ phê duyệt", icon: Clock },
   { key: "rejected", label: "Từ chối", icon: XCircle },
   { key: "cancelled", label: "Đã xóa", icon: FileX },
   { key: "draft", label: "Lưu nháp", icon: FileEdit },
+  { key: "completed", label: "Hoàn thành", icon: CheckCircle },
 ];
 
 const statusColorMap: Record<string, string> = {
@@ -75,12 +76,12 @@ export default function MeetingPlanPage() {
   const filtered = meetings.filter((m) => {
     const matchStatus = m.status === activeTab;
     const matchSearch = m.title.toLowerCase().includes(search.toLowerCase());
-    // For all tabs, only show meetings created by current user
-    const isOwner = m.requesterId === user?.id;
+    // Show meetings where user is either requester OR host
+    const isOwner = m.requesterId === user?.id || m.hostId === user?.id;
     return matchStatus && matchSearch && isOwner;
   });
 
-  const getTabCount = (status: string) => meetings.filter((m) => m.status === status && m.requesterId === user?.id).length;
+  const getTabCount = (status: string) => meetings.filter((m) => m.status === status && (m.requesterId === user?.id || m.hostId === user?.id)).length;
 
   const canApproveRoom = user?.authorities?.includes("ROLE_ROOM_MANAGER") || user?.authorities?.includes("ROLE_ADMIN");
   const canApproveUnit = user?.authorities?.includes("ROLE_UNIT_MANAGER") || user?.authorities?.includes("ROLE_ADMIN");
@@ -131,6 +132,18 @@ export default function MeetingPlanPage() {
     },
     onError: () => {
       toast({ variant: "destructive", title: "Lỗi", description: "Không thể xóa/hủy cuộc họp." });
+    },
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: (id: string) => completeMeeting(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      setSelectedMeeting(null);
+      toast({ title: "Hoàn thành", description: "Cuộc họp đã được đánh dấu hoàn thành." });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Lỗi", description: "Không thể đánh dấu hoàn thành." });
     },
   });
 
@@ -379,6 +392,22 @@ export default function MeetingPlanPage() {
                           </Button>
                         </>
                       )}
+                    </div>
+                  </>
+                )}
+
+                {selectedMeeting.status === "approved" && (selectedMeeting.host?.id === user?.id || selectedMeeting.requesterId === user?.id) && (
+                  <>
+                    <Separator />
+                    <div className="flex justify-end">
+                      <Button 
+                        onClick={() => completeMutation.mutate(selectedMeeting.id)}
+                        disabled={completeMutation.isPending}
+                        className="gap-2"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        {completeMutation.isPending ? "Đang xử lý..." : "Hoàn thành"}
+                      </Button>
                     </div>
                   </>
                 )}

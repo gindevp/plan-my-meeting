@@ -79,6 +79,7 @@ export async function getMeetings(params?: { page?: number; size?: number }) {
     rejectionReason: rejectionReasons[m.id] ?? "",
     // Requester info
     requesterId: m.requester?.id,
+    hostId: m.host?.id,
     attendees: [] as string[],
     agenda: [] as { order: number; title: string; presenter: string; duration: number }[],
   }));
@@ -177,6 +178,12 @@ export async function rejectMeeting(id: number | string, reason: string) {
 
 export async function cancelMeeting(id: number | string) {
   return fetchApi<any>(`/api/meetings/${id}/cancel`, {
+    method: "POST",
+  });
+}
+
+export async function completeMeeting(id: number | string) {
+  return fetchApi<any>(`/api/meetings/${id}/complete`, {
     method: "POST",
   });
 }

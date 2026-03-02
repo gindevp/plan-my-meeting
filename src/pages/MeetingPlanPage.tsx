@@ -76,12 +76,20 @@ export default function MeetingPlanPage() {
   const filtered = meetings.filter((m) => {
     const matchStatus = m.status === activeTab;
     const matchSearch = m.title.toLowerCase().includes(search.toLowerCase());
-    // Show meetings where user is either requester OR host
-    const isOwner = m.requesterId === user?.id || m.hostId === user?.id;
+    // Draft: only requester can see. Other tabs: requester OR host
+    const isOwner = activeTab === "draft" 
+      ? m.requesterId === user?.id 
+      : m.requesterId === user?.id || m.hostId === user?.id;
     return matchStatus && matchSearch && isOwner;
   });
 
-  const getTabCount = (status: string) => meetings.filter((m) => m.status === status && (m.requesterId === user?.id || m.hostId === user?.id)).length;
+  const getTabCount = (status: string) => {
+    // Draft: only requester. Other tabs: requester OR host
+    if (status === "draft") {
+      return meetings.filter((m) => m.status === status && m.requesterId === user?.id).length;
+    }
+    return meetings.filter((m) => m.status === status && (m.requesterId === user?.id || m.hostId === user?.id)).length;
+  };
 
   const canApproveRoom = user?.authorities?.includes("ROLE_ROOM_MANAGER") || user?.authorities?.includes("ROLE_ADMIN");
   const canApproveUnit = user?.authorities?.includes("ROLE_UNIT_MANAGER") || user?.authorities?.includes("ROLE_ADMIN");
@@ -289,7 +297,7 @@ export default function MeetingPlanPage() {
                           </Button>
                         </>
                       )}
-                      {meeting.status === "pending" && (
+                      {meeting.status === "pending" && meeting.requesterId === user?.id && (
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/meetings/edit/${meeting.id}`)}>
                           <Pencil className="h-4 w-4" />
                         </Button>

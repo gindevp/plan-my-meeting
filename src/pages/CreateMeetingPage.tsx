@@ -177,8 +177,8 @@ export default function CreateMeetingPage() {
         newErrors.attendees = "Vui lòng chọn ít nhất 1 phòng ban";
     } else {
       // Department level: must select at least one participant
-      if (selectedAttendees.length === 0)
-        newErrors.attendees = "Vui lòng chọn ít nhất 1 người tham dự";
+    if (selectedAttendees.length === 0)
+      newErrors.attendees = "Vui lòng chọn ít nhất 1 người tham dự";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -686,57 +686,57 @@ export default function CreateMeetingPage() {
             ) : (
               // Department level - show users from creator's department
               <>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Tìm kiếm người tham dự theo tên..."
-                    value={attendeeSearch}
-                    onChange={(e) => setAttendeeSearch(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Tìm kiếm người tham dự theo tên..."
+                value={attendeeSearch}
+                onChange={(e) => setAttendeeSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
 
-                <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto">
+            <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto">
                   {filteredUsers.map((u: any) => (
-                    <button
-                      key={u.id}
-                      onClick={() => toggleAttendee(u.name || u.login)}
-                      className={`flex items-center gap-3 p-3 rounded-lg border text-left text-sm transition-all ${
-                        selectedAttendees.includes(u.name || u.login)
-                          ? "border-primary bg-primary/5 shadow-sm"
-                          : "border-border hover:border-primary/30"
-                      }`}
-                    >
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold">
+                <button
+                  key={u.id}
+                  onClick={() => toggleAttendee(u.name || u.login)}
+                  className={`flex items-center gap-3 p-3 rounded-lg border text-left text-sm transition-all ${
+                    selectedAttendees.includes(u.name || u.login)
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : "border-border hover:border-primary/30"
+                  }`}
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold">
                         {u.name?.split(" ")?.[0]?.[0] || "?"}
-                      </div>
-                      <div>
-                        <p className="font-medium text-xs">{u.name || u.login}</p>
-                        <p className="text-[10px] text-muted-foreground">{[u.position, u.department].filter(Boolean).join(" • ") || "—"}</p>
-                      </div>
-                      {selectedAttendees.includes(u.name || u.login) && (
-                        <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
-                      )}
-                    </button>
-                  ))}
-                  {filteredUsers.length === 0 && (
+                  </div>
+                  <div>
+                    <p className="font-medium text-xs">{u.name || u.login}</p>
+                    <p className="text-[10px] text-muted-foreground">{[u.position, u.department].filter(Boolean).join(" • ") || "—"}</p>
+                  </div>
+                  {selectedAttendees.includes(u.name || u.login) && (
+                    <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
+                  )}
+                </button>
+              ))}
+              {filteredUsers.length === 0 && (
                     <p className="col-span-2 text-center text-sm text-muted-foreground py-4">
                       {userDepartment ? `Không có nhân viên nào trong phòng ban ${userDepartment}` : "Vui lòng chọn phòng ban của bạn trong hồ sơ"}
                     </p>
-                  )}
-                </div>
+              )}
+            </div>
 
-                {selectedAttendees.length > 0 && (
-                  <div>
-                    <Label>Đã chọn ({selectedAttendees.length})</Label>
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {selectedAttendees.map((a) => (
-                        <Badge key={a} variant="secondary" className="cursor-pointer" onClick={() => toggleAttendee(a)}>
-                          {a} ×
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
+            {selectedAttendees.length > 0 && (
+              <div>
+                <Label>Đã chọn ({selectedAttendees.length})</Label>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {selectedAttendees.map((a) => (
+                    <Badge key={a} variant="secondary" className="cursor-pointer" onClick={() => toggleAttendee(a)}>
+                      {a} ×
+                    </Badge>
+                  ))}
+                </div>
+              </div>
                 )}
               </>
             )}

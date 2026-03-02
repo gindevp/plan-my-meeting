@@ -85,7 +85,7 @@ export default function CreateMeetingPage() {
   useEffect(() => {
     if (existingMeeting) {
       setTitle(existingMeeting.title || "");
-      setDescription(existingMeeting.description || existingMeeting.objectives || existingMeeting.note || "");
+      setDescription(existingMeeting.description );
 
       const start = new Date(existingMeeting.startTime);
       const end = new Date(existingMeeting.endTime);

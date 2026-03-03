@@ -38,7 +38,7 @@ interface StaffForm {
   email: string;
   role: UserRole;
   department: string;
-  position: string;
+  departmentId?: number;
 }
 
 const emptyForm: StaffForm = {
@@ -48,7 +48,6 @@ const emptyForm: StaffForm = {
   email: "",
   role: "employee",
   department: "",
-  position: "",
 };
 
 export default function StaffPage() {
@@ -56,6 +55,21 @@ export default function StaffPage() {
   const queryClient = useQueryClient();
   const { data: users = [] } = useUsers();
   const { data: departments = [] } = useDepartments();
+  
+  // Helper to get department name from ID
+  const getDepartmentName = (deptId?: number) => {
+    if (!deptId) return "";
+    const dept = departments.find((d: any) => Number(d.id) === deptId);
+    return dept?.name || "";
+  };
+  
+  // Helper to get department ID from name
+  const getDepartmentId = (deptName?: string) => {
+    if (!deptName) return undefined;
+    const dept = departments.find((d: any) => d.name === deptName);
+    return dept?.id ? Number(dept.id) : undefined;
+  };
+  
   const [search, setSearch] = useState("");
   const [filterDept, setFilterDept] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
@@ -71,10 +85,11 @@ export default function StaffPage() {
           u.name.toLowerCase().includes(search.toLowerCase()) ||
           (u.email?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
           u.login.toLowerCase().includes(search.toLowerCase());
-        const matchDept = filterDept === "all" || u.department === filterDept;
+        const deptName = getDepartmentName(u.departmentId);
+        const matchDept = filterDept === "all" || deptName === filterDept;
         return matchSearch && matchDept;
       }),
-    [users, search, filterDept]
+    [users, search, filterDept, departments]
   );
 
   const createMutation = useMutation({
@@ -85,6 +100,7 @@ export default function StaffPage() {
         lastName: data.lastName,
         email: data.email,
         role: data.role,
+        departmentId: data.departmentId,
       }),
     onSuccess: () => {
       toast({ title: "Đã thêm", description: "Nhân viên đã được tạo." });
@@ -103,6 +119,7 @@ export default function StaffPage() {
         lastName: params.data.lastName,
         email: params.data.email,
         role: params.data.role,
+        departmentId: params.data.departmentId,
       }),
     onSuccess: () => {
       toast({ title: "Đã cập nhật", description: "Nhân viên đã được cập nhật." });
@@ -208,7 +225,6 @@ export default function StaffPage() {
                 <TableHead>Nhân viên</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Phòng ban</TableHead>
-                <TableHead>Chức vụ</TableHead>
                 <TableHead>Vai trò</TableHead>
                 <TableHead className="text-right">Thao tác</TableHead>
               </TableRow>
@@ -228,8 +244,7 @@ export default function StaffPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                    <TableCell>{u.department ?? "—"}</TableCell>
-                    <TableCell>{u.position ?? "—"}</TableCell>
+                    <TableCell>{getDepartmentName(u.departmentId) || "-"}</TableCell>
                     <TableCell><Badge variant={roleBadgeVariant[role]}>{roleLabels[role]}</Badge></TableCell>
                     <TableCell className="text-right">
                       <Button
@@ -237,6 +252,7 @@ export default function StaffPage() {
                         size="icon"
                         onClick={() => {
                           const [firstName = "", ...rest] = (u.name || "").split(" ");
+                          const deptName = getDepartmentName(u.departmentId ? Number(u.departmentId) : undefined);
                           setEditingUserId(u.id);
                           setForm({
                             login: u.login,
@@ -244,8 +260,8 @@ export default function StaffPage() {
                             lastName: rest.join(" "),
                             email: u.email || "",
                             role,
-                            department: u.department || "",
-                            position: u.position || "",
+                            department: deptName,
+                            departmentId: u.departmentId ? Number(u.departmentId) : undefined,
                           });
                           setEditOpen(true);
                         }}
@@ -278,7 +294,10 @@ export default function StaffPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Phòng ban</Label>
-                <Select value={form.department || "none"} onValueChange={(v) => setForm({ ...form, department: v === "none" ? "" : v })}>
+                <Select value={form.department || "none"} onValueChange={(v) => {
+                  const selectedDept = v === "none" ? undefined : getDepartmentId(v);
+                  setForm({ ...form, department: v === "none" ? "" : v, departmentId: selectedDept });
+                }}>
                   <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Không chọn</SelectItem>
@@ -293,7 +312,6 @@ export default function StaffPage() {
                 </Select>
               </div>
             </div>
-            <div className="space-y-2"><Label>Chức vụ</Label><Input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>Hủy</Button>
@@ -316,7 +334,10 @@ export default function StaffPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Phòng ban</Label>
-                <Select value={form.department || "none"} onValueChange={(v) => setForm({ ...form, department: v === "none" ? "" : v })}>
+                <Select value={form.department || "none"} onValueChange={(v) => {
+                  const selectedDept = v === "none" ? undefined : getDepartmentId(v);
+                  setForm({ ...form, department: v === "none" ? "" : v, departmentId: selectedDept });
+                }}>
                   <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Không chọn</SelectItem>
@@ -331,7 +352,6 @@ export default function StaffPage() {
                 </Select>
               </div>
             </div>
-            <div className="space-y-2"><Label>Chức vụ</Label><Input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>Hủy</Button>

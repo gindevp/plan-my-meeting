@@ -6,6 +6,7 @@ export interface UserListItem {
   name: string;
   email?: string;
   department?: string;
+  departmentId?: number;
   position?: string;
   role?: string;
   activated?: boolean;
@@ -20,6 +21,7 @@ interface AdminUserPayload {
   activated: boolean;
   langKey?: string;
   authorities: string[];
+  department?: { id: number };
 }
 
 function toAuthorities(role?: string): string[] {
@@ -52,9 +54,30 @@ export async function getUsers(params?: { page?: number; size?: number }) {
       login: u.login ?? "",
       name,
       email: u.email,
+      departmentId: u.departmentId,
       department: undefined,
       position: undefined,
       role: fromAuthorities(u.authorities),
+      activated: u.activated,
+    };
+  });
+}
+
+export async function getUsersByDepartment(departmentId: number | string) {
+  const list = await fetchApi<unknown[]>(`/api/users/department/${departmentId}`);
+  return (list as any[]).map((u) => {
+    const first = u.firstName ?? "";
+    const last = u.lastName ?? "";
+    const name = (`${first} ${last}`.trim() || u.login) ?? "";
+    return {
+      id: String(u.id),
+      login: u.login ?? "",
+      name,
+      email: u.email,
+      departmentId: u.department?.id,
+      department: u.department?.name,
+      position: undefined,
+      role: undefined,
       activated: u.activated,
     };
   });
@@ -66,8 +89,9 @@ export async function createUser(data: {
   lastName?: string;
   email: string;
   role?: string;
+  departmentId?: number;
 }) {
-  const payload: AdminUserPayload = {
+  const payload: any = {
     login: data.login,
     firstName: data.firstName,
     lastName: data.lastName,
@@ -76,6 +100,11 @@ export async function createUser(data: {
     langKey: "vi",
     authorities: toAuthorities(data.role),
   };
+  
+  if (data.departmentId) {
+    payload.departmentId = data.departmentId;
+  }
+  
   return fetchApi("/api/admin/users", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -91,9 +120,10 @@ export async function updateUser(
     email: string;
     role?: string;
     activated?: boolean;
+    departmentId?: number;
   }
 ) {
-  const payload: AdminUserPayload = {
+  const payload: any = {
     id: Number(id),
     login: data.login,
     firstName: data.firstName,
@@ -103,6 +133,11 @@ export async function updateUser(
     langKey: "vi",
     authorities: toAuthorities(data.role),
   };
+  
+  if (data.departmentId) {
+    payload.departmentId = data.departmentId;
+  }
+  
   return fetchApi(`/api/admin/users/${data.login}`, {
     method: "PUT",
     body: JSON.stringify(payload),

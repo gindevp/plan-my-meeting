@@ -60,6 +60,7 @@ export interface Account {
   activated?: boolean;
   authorities?: string[];
   department?: string;
+  departmentId?: number;
 }
 
 export interface RegisterRequest {

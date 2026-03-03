@@ -15,6 +15,7 @@ import { useUsers } from "@/hooks/useUsers";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useAuth } from "@/contexts/AuthContext";
 import { createMeetingFromForm, submitMeeting, updateMeeting } from "@/services/api/meetings";
+import { getUsersByDepartment } from "@/services/api/users";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft, Building2, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -40,8 +41,15 @@ export default function CreateMeetingPage() {
   const { data: rooms = [] } = useRooms();
   const { data: users = [] } = useUsers();
   const { data: departments = [] } = useDepartments();
+  
+  // Check if user is secretary (can create company level meetings)
+  const isSecretary = account?.authorities?.includes("ROLE_SECRETARY") || false;
+  
   const meetingTypes = mockTypes;
-  const meetingLevels = mockLevels.filter((l) => l.value === "company" || l.value === "department");
+  const meetingLevels = mockLevels.filter((l) => {
+    if (l.value === "company" && !isSecretary) return false;
+    return l.value === "company" || l.value === "department";
+  });
   const [step, setStep] = useState(1);
   const [meetingType, setMeetingType] = useState<MeetingType>("offline");
   const [meetingLevel, setMeetingLevel] = useState<MeetingLevel>("department");
@@ -71,15 +79,16 @@ export default function CreateMeetingPage() {
   const existingMeeting = isEditMode ? meetings.find((m: any) => m.id === meetingId) : null;
 
   // Get user's department (creator's department)
+  const userDepartmentId = account?.departmentId || "";
   const userDepartment = account?.department || "";
 
   // Filter users by department when meeting level is "department"
   const usersByDepartment = useMemo(() => {
     if (meetingLevel === "department") {
-      return users.filter((u: any) => u.department === userDepartment);
+      return users.filter((u: any) => u.departmentId === account?.departmentId);
     }
     return users;
-  }, [users, meetingLevel, userDepartment]);
+  }, [users, meetingLevel, account?.departmentId]);
 
   // Populate form when existingMeeting data is available
   useEffect(() => {
@@ -316,6 +325,15 @@ export default function CreateMeetingPage() {
         meetingLink,
         requesterId: account.id,
         hostId: chairpersonId,
+        participants: selectedAttendees.map((login: string) => {
+          const user = users.find((u: any) => (u.name || u.login) === login);
+          return { userId: user?.id, isRequired: true };
+        }),
+        agendaItems: agendaItems.map((item) => ({
+          title: item.title,
+          presenter: item.presenter,
+          duration: parseInt(item.duration) || 15
+        }))
       });
       toast({ title: "Đã lưu nháp", description: "Cuộc họp đã được lưu ở trạng thái nháp." });
       navigate("/plans");
@@ -384,11 +402,25 @@ export default function CreateMeetingPage() {
           meetingLink,
           requesterId: account.id,
           hostId: chairpersonId,
+          participants: selectedAttendees.map((login: string) => {
+            const user = users.find((u: any) => (u.name || u.login) === login);
+            return { userId: user?.id, isRequired: true };
+          }),
+          agendaItems: agendaItems.map((item) => ({
+            title: item.title,
+            presenter: item.presenter,
+            duration: parseInt(item.duration) || 15
+          }))
         });
         if (created?.id != null) {
-          await submitMeeting(created.id);
+          if (meetingLevel === "company") {
+            // Company level - no approval needed, just create
+            toast({ title: "Tạo phòng thành công", description: "Phòng họp đã được tạo." });
+          } else {
+            await submitMeeting(created.id);
+            toast({ title: "Đã gửi duyệt", description: "Cuộc họp đã được tạo và gửi phê duyệt." });
+          }
         }
-        toast({ title: "Đã gửi duyệt", description: "Cuộc họp đã được tạo và gửi phê duyệt." });
         navigate("/plans");
       }
     } catch (err) {
@@ -817,7 +849,15 @@ export default function CreateMeetingPage() {
             <Button onClick={() => goToStep(step + 1)}>Tiếp theo</Button>
           ) : (
             <Button onClick={handleSubmit}>
-              <Send className="h-4 w-4 mr-1.5" /> Gửi duyệt
+              {meetingLevel === "company" ? (
+                <>
+                  <Send className="h-4 w-4 mr-1.5" /> Tạo phòng
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-1.5" /> Gửi duyệt
+                </>
+              )}
             </Button>
           )}
         </div>

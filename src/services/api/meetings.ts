@@ -98,6 +98,8 @@ export interface CreateMeetingFormPayload {
   meetingLink?: string;
   requesterId: number | string;
   hostId: number | string;
+  participants?: { userId: number; role?: string; isRequired?: boolean }[];
+  agendaItems?: { title: string; presenter: string; duration: number }[];
 }
 
 export async function createMeetingFromForm(payload: CreateMeetingFormPayload) {
@@ -120,7 +122,16 @@ export async function createMeetingFromForm(payload: CreateMeetingFormPayload) {
       : "HYBRID";
 
   const typeRef = types[0] ? { id: types[0].id } : null;
-  const levelRef = levels[0] ? { id: levels[0].id } : null;
+  
+  // Find the correct level based on meetingLevel
+  const levelMap: Record<string, string> = {
+    "company": "CORPORATE",
+    "department": "DEPARTMENT",
+    "team": "DEPARTMENT"
+  };
+  const targetLevelName = levelMap[payload.meetingLevel] || "DEPARTMENT";
+  const levelRef = levels.find((l: any) => l.name === targetLevelName) ? { id: levels.find((l: any) => l.name === targetLevelName).id } : (levels[0] ? { id: levels[0].id } : null);
+  
   const deptRef = departments[0] ? { id: departments[0].id } : null;
 
   const body: any = {
@@ -143,6 +154,31 @@ export async function createMeetingFromForm(payload: CreateMeetingFormPayload) {
 
   if (payload.selectedRoomId) {
     body.room = { id: Number(payload.selectedRoomId) };
+  }
+
+  // If there are participants or agenda items, use the new API
+  if ((payload.participants && payload.participants.length > 0) || (payload.agendaItems && payload.agendaItems.length > 0)) {
+    const participants = payload.participants?.map((p: any) => ({
+      userId: Number(p.userId),
+      role: p.role || "ATTENDEE",
+      isRequired: p.isRequired !== false
+    })) || [];
+    
+    const agendaItems = payload.agendaItems?.map((a: any, index: number) => ({
+      topic: a.title,
+      presenterName: a.presenter,
+      durationMinutes: parseInt(a.duration) || 15,
+      itemOrder: index + 1
+    })) || [];
+
+    return fetchApi<any>("/api/meetings/with-details", {
+      method: "POST",
+      body: JSON.stringify({
+        meeting: body,
+        participants,
+        agendaItems
+      }),
+    });
   }
 
   return fetchApi<any>("/api/meetings", {

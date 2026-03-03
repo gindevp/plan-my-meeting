@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { statusLabels, typeLabels, levelLabels, type MeetingStatus } from "@/data/mockData";
 import { useMeetings } from "@/hooks/useMeetings";
 import { useAuth } from "@/contexts/AuthContext";
-import { approveRoom, approveUnit, rejectMeeting, getAgendaItemsByMeeting, getParticipantsByMeeting, submitMeeting, cancelMeeting, softDeleteMeeting, completeMeeting } from "@/services/api/meetings";
+import { approveRoom, rejectMeeting, getAgendaItemsByMeeting, getParticipantsByMeeting, submitMeeting, cancelMeeting, softDeleteMeeting, completeMeeting } from "@/services/api/meetings";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit, Send } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -93,18 +93,14 @@ export default function MeetingPlanPage() {
 
   const canApproveRoom = user?.authorities?.includes("ROLE_ROOM_MANAGER") || user?.authorities?.includes("ROLE_ADMIN");
   const canApproveUnit = user?.authorities?.includes("ROLE_UNIT_MANAGER") || user?.authorities?.includes("ROLE_ADMIN");
+  const canApprove = canApproveRoom || canApproveUnit;
 
   const approveRoomMutation = useMutation({
     mutationFn: (id: string) => approveRoom(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
-    },
-  });
-
-  const approveUnitMutation = useMutation({
-    mutationFn: (id: string) => approveUnit(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      setSelectedMeeting(null);
+      setActiveTab("approved");
     },
   });
 
@@ -381,25 +377,12 @@ export default function MeetingPlanPage() {
                   <>
                     <Separator />
                     <div className="flex gap-2 justify-end">
-                      {canApproveRoom && (
-                        <Button size="sm" variant="outline" onClick={() => approveRoomMutation.mutate(selectedMeeting.id)}>
-                          Phê duyệt phòng
-                        </Button>
-                      )}
-                      {canApproveUnit && (
-                        <>
-                          <Button size="sm" onClick={() => approveUnitMutation.mutate(selectedMeeting.id)}>
-                            Phê duyệt đơn vị
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => setShowRejectDialog(true)}
-                          >
-                            Từ chối
-                          </Button>
-                        </>
-                      )}
+                      <Button size="sm" onClick={() => approveRoomMutation.mutate(selectedMeeting.id)}>
+                        Phê duyệt
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => setShowRejectDialog(true)}>
+                        Từ chối
+                      </Button>
                     </div>
                   </>
                 )}

@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -5,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { getIsApiLoading, subscribeApiLoading } from "@/lib/api";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppLayout from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
@@ -25,11 +28,33 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const GlobalApiLoadingOverlay = () => {
+  const [isLoading, setIsLoading] = useState<boolean>(getIsApiLoading());
+
+  useEffect(() => {
+    return subscribeApiLoading(() => {
+      setIsLoading(getIsApiLoading());
+    });
+  }, []);
+
+  if (!isLoading) return null;
+
+  return (
+    <div className="fixed inset-0 z-[9999] bg-background/60 backdrop-blur-[1px] flex items-center justify-center pointer-events-auto">
+      <div className="rounded-lg border bg-card px-6 py-4 shadow-lg flex items-center gap-3">
+        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+        <span className="text-sm font-medium text-foreground">Đang xử lý, vui lòng chờ...</span>
+      </div>
+    </div>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <GlobalApiLoadingOverlay />
       <BrowserRouter>
         <AuthProvider>
           <Routes>

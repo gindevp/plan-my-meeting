@@ -4,6 +4,43 @@
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080";
 const AUTH_TOKEN_KEY = "jhi-authenticationToken";
 
+let pendingRequests = 0;
+const loadingListeners = new Set<() => void>();
+
+function notifyLoadingListeners(): void {
+  loadingListeners.forEach(listener => listener());
+}
+
+function startRequest(): void {
+  pendingRequests += 1;
+  notifyLoadingListeners();
+}
+
+function finishRequest(): void {
+  pendingRequests = Math.max(0, pendingRequests - 1);
+  notifyLoadingListeners();
+}
+
+async function withGlobalLoading<T>(request: () => Promise<T>): Promise<T> {
+  startRequest();
+  try {
+    return await request();
+  } finally {
+    finishRequest();
+  }
+}
+
+export function subscribeApiLoading(listener: () => void): () => void {
+  loadingListeners.add(listener);
+  return () => {
+    loadingListeners.delete(listener);
+  };
+}
+
+export function getIsApiLoading(): boolean {
+  return pendingRequests > 0;
+}
+
 export function getStoredToken(): string | null {
   return localStorage.getItem(AUTH_TOKEN_KEY) || sessionStorage.getItem(AUTH_TOKEN_KEY);
 }
@@ -32,22 +69,24 @@ export interface LoginResponse {
 }
 
 export async function loginApi(body: LoginRequest): Promise<{ token: string }> {
-  const res = await fetch(`${API_BASE}/api/authenticate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+  return withGlobalLoading(async () => {
+    const res = await fetch(`${API_BASE}/api/authenticate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      // Lỗi đăng nhập - hiển thị thông báo chung
+      throw new Error("Tên đăng nhập hoặc mật khẩu không đúng");
+    }
+    let token = res.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
+    if (!token) {
+      const data = (await res.json()) as LoginResponse;
+      token = data?.id_token;
+    }
+    if (!token) throw new Error("Không nhận được token");
+    return { token };
   });
-  if (!res.ok) {
-    // Lỗi đăng nhập - hiển thị thông báo chung
-    throw new Error("Tên đăng nhập hoặc mật khẩu không đúng");
-  }
-  let token = res.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
-  if (!token) {
-    const data = (await res.json()) as LoginResponse;
-    token = data?.id_token;
-  }
-  if (!token) throw new Error("Không nhận được token");
-  return { token };
 }
 
 export interface Account {
@@ -72,54 +111,60 @@ export interface RegisterRequest {
 }
 
 export async function registerApi(body: RegisterRequest): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+  return withGlobalLoading(async () => {
+    const res = await fetch(`${API_BASE}/api/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      // Kiểm tra lỗi trùng email hoặc username
+      const errorMessage = err.message || err.title || "";
+      if (errorMessage.toLowerCase().includes("email")) {
+        throw new Error("Email đã được sử dụng");
+      }
+      if (errorMessage.toLowerCase().includes("login") || errorMessage.toLowerCase().includes("username")) {
+        throw new Error("Tên đăng nhập đã được sử dụng");
+      }
+      throw new Error("Đăng ký thất bại. Vui lòng thử lại.");
+    }
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    // Kiểm tra lỗi trùng email hoặc username
-    const errorMessage = err.message || err.title || "";
-    if (errorMessage.toLowerCase().includes("email")) {
-      throw new Error("Email đã được sử dụng");
-    }
-    if (errorMessage.toLowerCase().includes("login") || errorMessage.toLowerCase().includes("username")) {
-      throw new Error("Tên đăng nhập đã được sử dụng");
-    }
-    throw new Error("Đăng ký thất bại. Vui lòng thử lại.");
-  }
 }
 
 export async function getAccount(): Promise<Account | null> {
-  const token = getStoredToken();
-  if (!token) return null;
-  const res = await fetch(`${API_BASE}/api/account`, {
-    headers: { Authorization: `Bearer ${token}` },
+  return withGlobalLoading(async () => {
+    const token = getStoredToken();
+    if (!token) return null;
+    const res = await fetch(`${API_BASE}/api/account`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.status === 401) return null;
+    if (!res.ok) throw new Error("Lỗi tải thông tin tài khoản");
+    return res.json();
   });
-  if (res.status === 401) return null;
-  if (!res.ok) throw new Error("Lỗi tải thông tin tài khoản");
-  return res.json();
 }
 
 export async function fetchApi<T>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
-  const token = getStoredToken();
-  const headers = new Headers(init?.headers);
-  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
-  if (res.status === 401) {
-    clearStoredToken();
-    window.location.href = "/login";
-    throw new Error("Phiên đăng nhập hết hạn");
-  }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || res.statusText || "Lỗi yêu cầu");
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json();
+  return withGlobalLoading(async () => {
+    const token = getStoredToken();
+    const headers = new Headers(init?.headers);
+    if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+    if (res.status === 401) {
+      clearStoredToken();
+      window.location.href = "/login";
+      throw new Error("Phiên đăng nhập hết hạn");
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || res.statusText || "Lỗi yêu cầu");
+    }
+    if (res.status === 204) return undefined as T;
+    return res.json();
+  });
 }

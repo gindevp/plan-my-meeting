@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { I18nProvider } from "@/contexts/I18nContext";
 import { getIsApiLoading, subscribeApiLoading } from "@/lib/api";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppLayout from "./components/layout/AppLayout";
@@ -56,28 +57,30 @@ const App = () => (
       <Sonner />
       <GlobalApiLoadingOverlay />
       <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<ErrorBoundary><LoginPage /></ErrorBoundary>} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/activate" element={<ActivateAccountPage />} />
-            <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/calendar" element={<CalendarPage />} />
-              <Route path="/plans" element={<MeetingPlanPage />} />
-              <Route path="/meetings/new" element={<CreateMeetingPage key="create" />} />
-              <Route path="/meetings/edit/:id" element={<CreateMeetingPage key="edit" />} />
-              <Route path="/rooms" element={<RoomManagementPage />} />
-              <Route path="/equipment" element={<EquipmentManagementPage />} />
-              <Route path="/reports" element={<ReportsPage />} />
-              <Route path="/staff" element={<StaffPage />} />
-              <Route path="/departments" element={<DepartmentsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
+        <I18nProvider>
+          <AuthProvider>
+            <Routes>
+              <Route path="/login" element={<ErrorBoundary><LoginPage /></ErrorBoundary>} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/activate" element={<ActivateAccountPage />} />
+              <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/calendar" element={<CalendarPage />} />
+                <Route path="/plans" element={<MeetingPlanPage />} />
+                <Route path="/meetings/new" element={<CreateMeetingPage key="create" />} />
+                <Route path="/meetings/edit/:id" element={<CreateMeetingPage key="edit" />} />
+                <Route path="/rooms" element={<RoomManagementPage />} />
+                <Route path="/equipment" element={<EquipmentManagementPage />} />
+                <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/staff" element={<StaffPage />} />
+                <Route path="/departments" element={<DepartmentsPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
+        </I18nProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

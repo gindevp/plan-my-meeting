@@ -14,24 +14,24 @@ import {
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/contexts/I18nContext";
 
 const navigation = [
-  { name: "Tổng quan", href: "/", icon: LayoutDashboard },
-  { name: "Lịch họp", href: "/calendar", icon: CalendarDays },
-  { name: "Quản lý kế hoạch", href: "/plans", icon: ClipboardList },
-  { name: "Lên lịch họp", href: "/meetings/new", icon: Plus },
-  { name: "Phòng họp", href: "/rooms", icon: DoorOpen },
+  { key: "sidebar.dashboard", href: "/", icon: LayoutDashboard },
+  { key: "sidebar.calendar", href: "/calendar", icon: CalendarDays },
+  { key: "sidebar.plans", href: "/plans", icon: ClipboardList },
+  { key: "sidebar.schedule", href: "/meetings/new", icon: Plus },
+  { key: "sidebar.rooms", href: "/rooms", icon: DoorOpen },
 ];
 
 const management = [
-  { name: "Nhân viên", href: "/staff", icon: Users },
-  { name: "Phòng ban", href: "/departments", icon: Building2 },
-  { name: "Thiết bị", href: "/equipment", icon: HardDrive },
-  { name: "Báo cáo", href: "/reports", icon: FileText },
-  { name: "Cài đặt", href: "/settings", icon: Settings },
+  { key: "sidebar.staff", href: "/staff", icon: Users },
+  { key: "sidebar.departments", href: "/departments", icon: Building2 },
+  { key: "sidebar.equipment", href: "/equipment", icon: HardDrive },
+  { key: "sidebar.reports", href: "/reports", icon: FileText },
+  { key: "sidebar.settings", href: "/settings", icon: Settings },
 ];
 
-// Helper to check if a path should be active for "Quản lý kế hoạch"
 const isPlansActive = (pathname: string) => {
   return pathname === "/plans" || pathname.startsWith("/plans?") || pathname.startsWith("/meetings/edit");
 };
@@ -39,29 +39,28 @@ const isPlansActive = (pathname: string) => {
 export default function AppSidebar() {
   const location = useLocation();
   const { user, signOut } = useAuth();
+  const { t } = useI18n();
 
   return (
     <aside className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-gradient-sidebar border-r border-sidebar-border">
-      {/* Logo */}
       <div className="flex h-16 items-center gap-3 px-6 border-b border-sidebar-border">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent">
           <CalendarDays className="h-5 w-5 text-accent-foreground" />
         </div>
         <div>
           <h1 className="text-sm font-display font-bold text-sidebar-accent-foreground">MeetFlow</h1>
-          <p className="text-[10px] text-sidebar-muted">Quản lý lịch họp</p>
+          <p className="text-[10px] text-sidebar-muted">{t("sidebar.plans")}</p>
         </div>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
         <div>
           <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
-            Chính
+            {t("sidebar.main")}
           </p>
           <ul className="space-y-0.5">
-            {navigation.map((item) => (
-              <li key={item.name}>
+            {navigation.map(item => (
+              <li key={item.key}>
                 <NavLink
                   to={item.href}
                   end={item.href !== "/plans"}
@@ -75,7 +74,7 @@ export default function AppSidebar() {
                   }
                 >
                   <item.icon className="h-4.5 w-4.5 shrink-0" />
-                  {item.name}
+                  {t(item.key)}
                 </NavLink>
               </li>
             ))}
@@ -84,11 +83,11 @@ export default function AppSidebar() {
 
         <div>
           <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
-            Quản lý
+            {t("sidebar.management")}
           </p>
           <ul className="space-y-0.5">
-            {management.map((item) => (
-              <li key={item.name}>
+            {management.map(item => (
+              <li key={item.key}>
                 <NavLink
                   to={item.href}
                   end
@@ -102,7 +101,7 @@ export default function AppSidebar() {
                   }
                 >
                   <item.icon className="h-4.5 w-4.5 shrink-0" />
-                  {item.name}
+                  {t(item.key)}
                 </NavLink>
               </li>
             ))}
@@ -110,7 +109,6 @@ export default function AppSidebar() {
         </div>
       </nav>
 
-      {/* User */}
       <div className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-accent text-sm font-semibold text-sidebar-primary">
@@ -121,7 +119,7 @@ export default function AppSidebar() {
               {user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : user?.login ?? "User"}
             </p>
             <button onClick={signOut} className="flex items-center gap-1 text-[11px] text-sidebar-muted hover:text-destructive transition-colors">
-              <LogOut className="h-3 w-3" /> Đăng xuất
+              <LogOut className="h-3 w-3" /> {t("sidebar.logout")}
             </button>
           </div>
         </div>

@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Save, Bell, Shield, Palette, Globe } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/contexts/I18nContext";
 
 type ThemeMode = "light" | "dark" | "system";
 
@@ -36,6 +37,7 @@ const applyThemeMode = (mode: ThemeMode) => {
 
 export default function SettingsPage() {
   const { toast } = useToast();
+  const { t, setLanguage: setAppLanguage } = useI18n();
   const [themeMode, setThemeMode] = useState<ThemeMode>(defaultUiSettings.themeMode);
   const [language, setLanguage] = useState<UiSettings["language"]>(defaultUiSettings.language);
   const [timezone, setTimezone] = useState<UiSettings["timezone"]>(defaultUiSettings.timezone);
@@ -55,12 +57,13 @@ export default function SettingsPage() {
 
       setThemeMode(nextTheme);
       setLanguage(nextLang);
+      setAppLanguage(nextLang);
       setTimezone(nextTimezone);
       applyThemeMode(nextTheme);
     } catch {
       applyThemeMode(defaultUiSettings.themeMode);
     }
-  }, []);
+  }, [setAppLanguage]);
 
   useEffect(() => {
     applyThemeMode(themeMode);
@@ -75,22 +78,23 @@ export default function SettingsPage() {
   const handleSaveAppearance = () => {
     const settings: UiSettings = { themeMode, language, timezone };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-    toast({ title: "Đã lưu", description: "Cài đặt giao diện đã được cập nhật." });
+    setAppLanguage(language);
+    toast({ title: t("settings.saved"), description: t("settings.savedAppearance") });
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-display font-bold text-foreground">Cài đặt</h1>
-        <p className="text-sm text-muted-foreground mt-1">Quản lý cài đặt hệ thống</p>
+        <h1 className="text-2xl font-display font-bold text-foreground">{t("settings.title")}</h1>
+        <p className="text-sm text-muted-foreground mt-1">{t("settings.subtitle")}</p>
       </div>
 
       <Tabs defaultValue="general" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="general"><Globe className="h-4 w-4 mr-1.5" />Chung</TabsTrigger>
-          <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-1.5" />Thông báo</TabsTrigger>
-          <TabsTrigger value="appearance"><Palette className="h-4 w-4 mr-1.5" />Giao diện</TabsTrigger>
-          <TabsTrigger value="security"><Shield className="h-4 w-4 mr-1.5" />Bảo mật</TabsTrigger>
+          <TabsTrigger value="general"><Globe className="h-4 w-4 mr-1.5" />{t("settings.tabs.general")}</TabsTrigger>
+          <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-1.5" />{t("settings.tabs.notifications")}</TabsTrigger>
+          <TabsTrigger value="appearance"><Palette className="h-4 w-4 mr-1.5" />{t("settings.tabs.appearance")}</TabsTrigger>
+          <TabsTrigger value="security"><Shield className="h-4 w-4 mr-1.5" />{t("settings.tabs.security")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="space-y-6">
@@ -148,7 +152,7 @@ export default function SettingsPage() {
                 { label: "Thông báo phê duyệt", desc: "Thông báo khi cuộc họp được duyệt/từ chối", on: true },
                 { label: "Thông báo nhiệm vụ", desc: "Nhắc nhở deadline nhiệm vụ", on: false },
                 { label: "Báo cáo tuần", desc: "Gửi báo cáo tổng hợp cuối tuần", on: false },
-              ].map((item) => (
+              ].map(item => (
                 <div key={item.label} className="flex items-center justify-between">
                   <div><Label>{item.label}</Label><p className="text-sm text-muted-foreground">{item.desc}</p></div>
                   <Switch defaultChecked={item.on} />

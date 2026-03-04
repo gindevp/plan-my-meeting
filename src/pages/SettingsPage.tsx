@@ -18,13 +18,11 @@ const SETTINGS_KEY = "app-ui-settings";
 interface UiSettings {
   themeMode: ThemeMode;
   language: "vi" | "en";
-  timezone: "asia_hcm" | "asia_hn";
 }
 
 const defaultUiSettings: UiSettings = {
   themeMode: "light",
   language: "vi",
-  timezone: "asia_hcm",
 };
 
 const getSystemIsDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -40,7 +38,6 @@ export default function SettingsPage() {
   const { t, setLanguage: setAppLanguage } = useI18n();
   const [themeMode, setThemeMode] = useState<ThemeMode>(defaultUiSettings.themeMode);
   const [language, setLanguage] = useState<UiSettings["language"]>(defaultUiSettings.language);
-  const [timezone, setTimezone] = useState<UiSettings["timezone"]>(defaultUiSettings.timezone);
 
   useEffect(() => {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -53,12 +50,10 @@ export default function SettingsPage() {
       const parsed = JSON.parse(raw) as Partial<UiSettings>;
       const nextTheme = parsed.themeMode ?? defaultUiSettings.themeMode;
       const nextLang = parsed.language ?? defaultUiSettings.language;
-      const nextTimezone = parsed.timezone ?? defaultUiSettings.timezone;
 
       setThemeMode(nextTheme);
       setLanguage(nextLang);
       setAppLanguage(nextLang);
-      setTimezone(nextTimezone);
       applyThemeMode(nextTheme);
     } catch {
       applyThemeMode(defaultUiSettings.themeMode);
@@ -76,7 +71,7 @@ export default function SettingsPage() {
   }, [themeMode]);
 
   const handleSaveAppearance = () => {
-    const settings: UiSettings = { themeMode, language, timezone };
+    const settings: UiSettings = { themeMode, language };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     setAppLanguage(language);
     toast({ title: t("settings.saved"), description: t("settings.savedAppearance") });
@@ -187,16 +182,6 @@ export default function SettingsPage() {
                   <SelectContent>
                     <SelectItem value="vi">Tiếng Việt</SelectItem>
                     <SelectItem value="en">English</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Múi giờ</Label>
-                <Select value={timezone} onValueChange={(value) => setTimezone(value as UiSettings["timezone"])}>
-                  <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="asia_hcm">UTC+7 (Hồ Chí Minh)</SelectItem>
-                    <SelectItem value="asia_hn">UTC+7 (Hà Nội)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,8 +8,76 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Save, Bell, Shield, Palette, Globe } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+
+type ThemeMode = "light" | "dark" | "system";
+
+const SETTINGS_KEY = "app-ui-settings";
+
+interface UiSettings {
+  themeMode: ThemeMode;
+  language: "vi" | "en";
+  timezone: "asia_hcm" | "asia_hn";
+}
+
+const defaultUiSettings: UiSettings = {
+  themeMode: "light",
+  language: "vi",
+  timezone: "asia_hcm",
+};
+
+const getSystemIsDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+const applyThemeMode = (mode: ThemeMode) => {
+  const root = document.documentElement;
+  const shouldUseDark = mode === "dark" || (mode === "system" && getSystemIsDark());
+  root.classList.toggle("dark", shouldUseDark);
+};
 
 export default function SettingsPage() {
+  const { toast } = useToast();
+  const [themeMode, setThemeMode] = useState<ThemeMode>(defaultUiSettings.themeMode);
+  const [language, setLanguage] = useState<UiSettings["language"]>(defaultUiSettings.language);
+  const [timezone, setTimezone] = useState<UiSettings["timezone"]>(defaultUiSettings.timezone);
+
+  useEffect(() => {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) {
+      applyThemeMode(defaultUiSettings.themeMode);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<UiSettings>;
+      const nextTheme = parsed.themeMode ?? defaultUiSettings.themeMode;
+      const nextLang = parsed.language ?? defaultUiSettings.language;
+      const nextTimezone = parsed.timezone ?? defaultUiSettings.timezone;
+
+      setThemeMode(nextTheme);
+      setLanguage(nextLang);
+      setTimezone(nextTimezone);
+      applyThemeMode(nextTheme);
+    } catch {
+      applyThemeMode(defaultUiSettings.themeMode);
+    }
+  }, []);
+
+  useEffect(() => {
+    applyThemeMode(themeMode);
+
+    if (themeMode !== "system") return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => applyThemeMode("system");
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, [themeMode]);
+
+  const handleSaveAppearance = () => {
+    const settings: UiSettings = { themeMode, language, timezone };
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    toast({ title: "Đã lưu", description: "Cài đặt giao diện đã được cập nhật." });
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -24,7 +93,6 @@ export default function SettingsPage() {
           <TabsTrigger value="security"><Shield className="h-4 w-4 mr-1.5" />Bảo mật</TabsTrigger>
         </TabsList>
 
-        {/* General */}
         <TabsContent value="general" className="space-y-6">
           <Card>
             <CardHeader>
@@ -67,7 +135,6 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Notifications */}
         <TabsContent value="notifications" className="space-y-6">
           <Card>
             <CardHeader>
@@ -91,7 +158,6 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Appearance */}
         <TabsContent value="appearance" className="space-y-6">
           <Card>
             <CardHeader>
@@ -101,7 +167,7 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Chế độ hiển thị</Label>
-                <Select defaultValue="light">
+                <Select value={themeMode} onValueChange={(value) => setThemeMode(value as ThemeMode)}>
                   <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="light">Sáng</SelectItem>
@@ -112,7 +178,7 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label>Ngôn ngữ</Label>
-                <Select defaultValue="vi">
+                <Select value={language} onValueChange={(value) => setLanguage(value as UiSettings["language"])}>
                   <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="vi">Tiếng Việt</SelectItem>
@@ -122,7 +188,7 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label>Múi giờ</Label>
-                <Select defaultValue="asia_hcm">
+                <Select value={timezone} onValueChange={(value) => setTimezone(value as UiSettings["timezone"])}>
                   <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="asia_hcm">UTC+7 (Hồ Chí Minh)</SelectItem>
@@ -130,12 +196,11 @@ export default function SettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button><Save className="h-4 w-4 mr-2" />Lưu thay đổi</Button>
+              <Button onClick={handleSaveAppearance}><Save className="h-4 w-4 mr-2" />Lưu thay đổi</Button>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Security */}
         <TabsContent value="security" className="space-y-6">
           <Card>
             <CardHeader>

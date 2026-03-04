@@ -14,7 +14,7 @@ import { useRooms } from "@/hooks/useRooms";
 import { useUsers } from "@/hooks/useUsers";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useAuth } from "@/contexts/AuthContext";
-import { createMeetingFromForm, submitMeeting, updateMeeting } from "@/services/api/meetings";
+import { createMeetingFromForm, updateMeeting } from "@/services/api/meetings";
 import { getUsersByDepartment } from "@/services/api/users";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft, Building2, Users } from "lucide-react";
@@ -29,6 +29,17 @@ interface AgendaForm {
 
 interface ValidationErrors {
   [key: string]: string;
+}
+
+interface TaskAssignmentForm {
+  attendee: string;
+  taskType: string;
+  title: string;
+  description: string;
+  dueAt: string;
+  status: string;
+  remindBeforeMinutes: string;
+  documentRef: string;
 }
 
 export default function CreateMeetingPage() {
@@ -70,6 +81,7 @@ export default function CreateMeetingPage() {
   const [conflicts, setConflicts] = useState<string[]>([]);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [attendeeSearch, setAttendeeSearch] = useState("");
+  const [taskAssignments, setTaskAssignments] = useState<TaskAssignmentForm[]>([]);
   const queryClient = useQueryClient();
 
   // Get meetings from cache/useMeetings hook
@@ -142,7 +154,7 @@ export default function CreateMeetingPage() {
 
   const steps = [
     { num: 1, label: "Thông tin chung" },
-    { num: 2, label: "Thành phần tham dự" },
+    { num: 2, label: "Thành phần tham dự và tài liệu" },
     { num: 3, label: "Chương trình họp" },
   ];
 
@@ -247,6 +259,40 @@ export default function CreateMeetingPage() {
     }
   };
 
+  useEffect(() => {
+    setTaskAssignments((prev) => {
+      const filtered = prev.filter((assignment) => selectedAttendees.includes(assignment.attendee));
+      const selectedWithoutTask = selectedAttendees.filter(
+        (attendee) => !filtered.some((assignment) => assignment.attendee === attendee)
+      );
+
+      const appended = selectedWithoutTask.map((attendee) => ({
+        attendee,
+        taskType: "PRE_MEETING",
+        title: "",
+        description: "",
+        dueAt: "",
+        status: "TODO",
+        remindBeforeMinutes: "",
+        documentRef: "",
+      }));
+
+      return [...filtered, ...appended];
+    });
+  }, [selectedAttendees]);
+
+  const updateTaskAssignment = (
+    attendee: string,
+    field: "taskType" | "title" | "description" | "dueAt" | "status" | "remindBeforeMinutes" | "documentRef",
+    value: string
+  ) => {
+    setTaskAssignments((prev) =>
+      prev.map((assignment) =>
+        assignment.attendee === attendee ? { ...assignment, [field]: value } : assignment
+      )
+    );
+  };
+
   const toggleDepartment = (deptName: string) => {
     setSelectedDepartments((prev) =>
       prev.includes(deptName) ? prev.filter((d) => d !== deptName) : [...prev, deptName]
@@ -293,6 +339,7 @@ export default function CreateMeetingPage() {
     setSelectedDepartment(userDepartment);
     setSelectedAttendees([]);
     setSelectedDepartments([]);
+    setTaskAssignments([]);
     setAgendaItems([]);
     setConflicts([]);
     setErrors({});
@@ -312,6 +359,8 @@ export default function CreateMeetingPage() {
     }
 
     try {
+      const { tasks, documents } = buildTaskAndDocumentPayload();
+
       await createMeetingFromForm({
         title,
         description,
@@ -333,7 +382,10 @@ export default function CreateMeetingPage() {
           title: item.title,
           presenter: item.presenter,
           duration: parseInt(item.duration) || 15
-        }))
+        })),
+        tasks,
+        documents,
+        submitAfterCreate: false,
       });
       toast({ title: "Đã lưu nháp", description: "Cuộc họp đã được lưu ở trạng thái nháp." });
       navigate("/plans");
@@ -389,6 +441,8 @@ export default function CreateMeetingPage() {
           },
         });
       } else {
+        const { tasks, documents } = buildTaskAndDocumentPayload();
+
         const created = await createMeetingFromForm({
           title,
           description,
@@ -410,14 +464,16 @@ export default function CreateMeetingPage() {
             title: item.title,
             presenter: item.presenter,
             duration: parseInt(item.duration) || 15
-          }))
+          })),
+          tasks,
+          documents,
+          submitAfterCreate: meetingLevel !== "company",
         });
         if (created?.id != null) {
           if (meetingLevel === "company") {
             // Company level - no approval needed, just create
             toast({ title: "Tạo phòng thành công", description: "Phòng họp đã được tạo." });
           } else {
-            await submitMeeting(created.id);
             toast({ title: "Đã gửi duyệt", description: "Cuộc họp đã được tạo và gửi phê duyệt." });
           }
         }
@@ -433,6 +489,41 @@ export default function CreateMeetingPage() {
   );
 
   const errorClass = (field: string) => (errors[field] ? "border-destructive" : "");
+
+  const buildTaskAndDocumentPayload = () => {
+    const tasks = taskAssignments
+      .map((assignment) => {
+        const assignee = users.find((u: any) => (u.name || u.login) === assignment.attendee);
+        if (!assignee?.id || !assignment.title.trim()) return null;
+
+        return {
+          clientKey: `task-${assignee.id}`,
+          type: (assignment.taskType === "POST_MEETING" ? "POST_MEETING" : "PRE_MEETING") as "PRE_MEETING" | "POST_MEETING",
+          title: assignment.title.trim(),
+          description: assignment.description?.trim() || undefined,
+          dueAt: assignment.dueAt ? new Date(assignment.dueAt).toISOString() : undefined,
+          status: (assignment.status || "TODO") as "TODO" | "IN_PROGRESS" | "DONE" | "OVERDUE",
+          remindBeforeMinutes: assignment.remindBeforeMinutes ? Number(assignment.remindBeforeMinutes) : undefined,
+          assigneeId: Number(assignee.id),
+          assignedById: Number(account?.id),
+        };
+      })
+      .filter(Boolean) as any[];
+
+    const documents = taskAssignments
+      .filter((assignment) => assignment.documentRef.trim())
+      .map((assignment) => {
+        const assignee = users.find((u: any) => (u.name || u.login) === assignment.attendee);
+        return {
+          docType: "ATTACHMENT",
+          fileName: assignment.documentRef.trim(),
+          uploadedById: Number(account?.id),
+          taskClientKey: assignee?.id ? `task-${assignee.id}` : undefined,
+        };
+      });
+
+    return { tasks, documents };
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -759,6 +850,7 @@ export default function CreateMeetingPage() {
             </div>
 
             {selectedAttendees.length > 0 && (
+              <>
               <div>
                 <Label>Đã chọn ({selectedAttendees.length})</Label>
                 <div className="flex flex-wrap gap-1.5 mt-2">
@@ -769,6 +861,107 @@ export default function CreateMeetingPage() {
                   ))}
                 </div>
               </div>
+
+                <div className="border rounded-lg p-4 space-y-3 bg-secondary/20">
+                  <div>
+                    <Label className="text-sm font-semibold">Giao task theo cấu trúc hệ thống</Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Mỗi người tham dự có thể có task gồm: type, title, description, due_at, status, remind_before_minutes.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                    {taskAssignments.map((assignment) => (
+                      <div key={assignment.attendee} className="rounded-md border bg-background p-3 space-y-2">
+                        <p className="text-sm font-medium">{assignment.attendee}</p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          <div>
+                            <Label className="text-xs">Loại task</Label>
+                            <Select
+                              value={assignment.taskType}
+                              onValueChange={(value) => updateTaskAssignment(assignment.attendee, "taskType", value)}
+                            >
+                              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="PRE_MEETING">PRE_MEETING</SelectItem>
+                                <SelectItem value="POST_MEETING">POST_MEETING</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Trạng thái</Label>
+                            <Select
+                              value={assignment.status}
+                              onValueChange={(value) => updateTaskAssignment(assignment.attendee, "status", value)}
+                            >
+                              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="TODO">TODO</SelectItem>
+                                <SelectItem value="IN_PROGRESS">IN_PROGRESS</SelectItem>
+                                <SelectItem value="DONE">DONE</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Nhắc trước (phút)</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              placeholder="VD: 30"
+                              value={assignment.remindBeforeMinutes}
+                              onChange={(e) => updateTaskAssignment(assignment.attendee, "remindBeforeMinutes", e.target.value)}
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label className="text-xs">Tiêu đề task</Label>
+                          <Input
+                            placeholder="Nhập tiêu đề task"
+                            value={assignment.title}
+                            onChange={(e) => updateTaskAssignment(assignment.attendee, "title", e.target.value)}
+                            className="mt-1"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs">Hạn xử lý (due_at)</Label>
+                            <Input
+                              type="datetime-local"
+                              value={assignment.dueAt}
+                              onChange={(e) => updateTaskAssignment(assignment.attendee, "dueAt", e.target.value)}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Tài liệu liên quan</Label>
+                            <Input
+                              placeholder="Tên file hoặc mã tài liệu"
+                              value={assignment.documentRef}
+                              onChange={(e) => updateTaskAssignment(assignment.attendee, "documentRef", e.target.value)}
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label className="text-xs">Mô tả</Label>
+                          <Textarea
+                            placeholder="Mô tả chi tiết task"
+                            value={assignment.description}
+                            onChange={(e) => updateTaskAssignment(assignment.attendee, "description", e.target.value)}
+                            rows={2}
+                            className="mt-1"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
                 )}
               </>
             )}

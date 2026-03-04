@@ -44,13 +44,11 @@ export async function getMeetings(params?: { page?: number; size?: number }) {
   if (params?.size != null) sp.set("size", String(params.size ?? 100));
   const q = sp.toString();
 
-  // Fetch both meetings and approvals in parallel
   const [meetings, approvals] = await Promise.all([
     fetchApi<unknown[]>(`/api/meetings${q ? "?" + q : ""}`),
     fetchApi<unknown[]>("/api/meeting-approvals"),
   ]);
 
-  // Build a map of meetingId -> rejection reason from approvals
   const rejectionReasons: Record<string, string> = {};
   (approvals as any[]).forEach((a: any) => {
     if (a.decision === "REJECTED" && a.meeting?.id) {
@@ -75,9 +73,7 @@ export async function getMeetings(params?: { page?: number; size?: number }) {
     chairperson: m.host?.login ?? m.requester?.login ?? "",
     department: m.organizerDepartment?.name ?? "",
     description: m.objectives ?? m.note ?? "",
-    // Get rejection reason from approvals map
     rejectionReason: rejectionReasons[m.id] ?? "",
-    // Requester info
     requesterId: m.requester?.id,
     hostId: m.host?.id,
     attendees: [] as string[],
@@ -100,6 +96,29 @@ export interface CreateMeetingFormPayload {
   hostId: number | string;
   participants?: { userId: number; role?: string; isRequired?: boolean }[];
   agendaItems?: { title: string; presenter: string; duration: number }[];
+  tasks?: {
+    clientKey: string;
+    type: "PRE_MEETING" | "POST_MEETING";
+    title: string;
+    description?: string;
+    dueAt?: string;
+    status: "TODO" | "IN_PROGRESS" | "DONE" | "OVERDUE";
+    remindBeforeMinutes?: number;
+    assigneeId: number;
+    assignedById?: number;
+  }[];
+  documents?: {
+    docType: string;
+    fileName: string;
+    contentType?: string;
+    file?: string;
+    fileContentType?: string;
+    uploadedAt?: string;
+    uploadedById?: number;
+    taskId?: number;
+    taskClientKey?: string;
+  }[];
+  submitAfterCreate?: boolean;
 }
 
 export async function createMeetingFromForm(payload: CreateMeetingFormPayload) {
@@ -122,16 +141,16 @@ export async function createMeetingFromForm(payload: CreateMeetingFormPayload) {
       : "HYBRID";
 
   const typeRef = types[0] ? { id: types[0].id } : null;
-  
-  // Find the correct level based on meetingLevel
+
   const levelMap: Record<string, string> = {
-    "company": "CORPORATE",
-    "department": "DEPARTMENT",
-    "team": "DEPARTMENT"
+    company: "CORPORATE",
+    department: "DEPARTMENT",
+    team: "DEPARTMENT",
   };
   const targetLevelName = levelMap[payload.meetingLevel] || "DEPARTMENT";
-  const levelRef = levels.find((l: any) => l.name === targetLevelName) ? { id: levels.find((l: any) => l.name === targetLevelName).id } : (levels[0] ? { id: levels[0].id } : null);
-  
+  const matchedLevel = levels.find((l: any) => l.name === targetLevelName);
+  const levelRef = matchedLevel ? { id: matchedLevel.id } : levels[0] ? { id: levels[0].id } : null;
+
   const deptRef = departments[0] ? { id: departments[0].id } : null;
 
   const body: any = {
@@ -156,27 +175,63 @@ export async function createMeetingFromForm(payload: CreateMeetingFormPayload) {
     body.room = { id: Number(payload.selectedRoomId) };
   }
 
-  // If there are participants or agenda items, use the new API
-  if ((payload.participants && payload.participants.length > 0) || (payload.agendaItems && payload.agendaItems.length > 0)) {
-    const participants = payload.participants?.map((p: any) => ({
-      userId: Number(p.userId),
-      role: p.role || "ATTENDEE",
-      isRequired: p.isRequired !== false
-    })) || [];
-    
-    const agendaItems = payload.agendaItems?.map((a: any, index: number) => ({
-      topic: a.title,
-      presenterName: a.presenter,
-      durationMinutes: parseInt(a.duration) || 15,
-      itemOrder: index + 1
-    })) || [];
+  const hasDetails =
+    (payload.participants && payload.participants.length > 0) ||
+    (payload.agendaItems && payload.agendaItems.length > 0) ||
+    (payload.tasks && payload.tasks.length > 0) ||
+    (payload.documents && payload.documents.length > 0);
+
+  if (hasDetails) {
+    const participants =
+      payload.participants?.map((p: any) => ({
+        userId: Number(p.userId),
+        role: p.role || "ATTENDEE",
+        isRequired: p.isRequired !== false,
+      })) || [];
+
+    const agendaItems =
+      payload.agendaItems?.map((a: any, index: number) => ({
+        topic: a.title,
+        presenterName: a.presenter,
+        durationMinutes: parseInt(a.duration) || 15,
+        itemOrder: index + 1,
+      })) || [];
+
+    const tasks =
+      payload.tasks?.map((t) => ({
+        clientKey: t.clientKey,
+        type: t.type,
+        title: t.title,
+        description: t.description || null,
+        dueAt: t.dueAt || null,
+        status: t.status,
+        remindBeforeMinutes: t.remindBeforeMinutes ?? null,
+        assigneeId: Number(t.assigneeId),
+        assignedById: t.assignedById != null ? Number(t.assignedById) : Number(payload.requesterId),
+      })) || [];
+
+    const documents =
+      payload.documents?.map((d) => ({
+        docType: d.docType,
+        fileName: d.fileName,
+        contentType: d.contentType || null,
+        file: d.file || null,
+        fileContentType: d.fileContentType || null,
+        uploadedAt: d.uploadedAt || nowIso,
+        uploadedById: d.uploadedById ?? Number(payload.requesterId),
+        taskId: d.taskId ?? null,
+        taskClientKey: d.taskClientKey || null,
+      })) || [];
 
     return fetchApi<any>("/api/meetings/with-details", {
       method: "POST",
       body: JSON.stringify({
         meeting: body,
         participants,
-        agendaItems
+        agendaItems,
+        tasks,
+        documents,
+        submitAfterCreate: payload.submitAfterCreate === true,
       }),
     });
   }
@@ -233,7 +288,7 @@ export async function softDeleteMeeting(id: number | string) {
 
 export async function updateMeeting(id: number | string, payload: Partial<CreateMeetingFormPayload>) {
   const body: any = { id: Number(id), statusRecord: "ACTIVE" };
-  
+
   if (payload.title !== undefined) body.title = payload.title;
   if (payload.description !== undefined) body.objectives = payload.description;
   if (payload.startDate !== undefined && payload.startTime !== undefined) {

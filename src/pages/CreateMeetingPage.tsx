@@ -18,6 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   createMeetingFromForm,
   updateMeeting,
+  getAgendaItemsByMeeting,
   getParticipantsByMeeting,
   getMeetingTasksByMeeting,
   getMeetingDocumentsByMeeting,
@@ -57,19 +58,19 @@ export default function CreateMeetingPage() {
   const { data: rooms = [] } = useRooms();
   const { data: users = [] } = useUsers();
   const { data: departments = [] } = useDepartments();
-  
-  // Check if user is secretary (can create company level meetings)
+
   const isSecretary = account?.authorities?.includes("ROLE_SECRETARY") || false;
-  
+
   const meetingTypes = mockTypes;
-  const meetingLevels = mockLevels.filter((l) => {
+  const meetingLevels = mockLevels.filter(l => {
     if (l.value === "company" && !isSecretary) return false;
     return l.value === "company" || l.value === "department";
   });
+
   const [step, setStep] = useState(1);
   const [meetingType, setMeetingType] = useState<MeetingType>("offline");
   const [meetingLevel, setMeetingLevel] = useState<MeetingLevel>("department");
-  const [selectedDepartment, setSelectedDepartment] = useState<string>(""); // For company level
+  const [selectedDepartment, setSelectedDepartment] = useState<string>("");
   const [selectedRoom, setSelectedRoom] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -81,7 +82,7 @@ export default function CreateMeetingPage() {
   const [chairpersonId, setChairpersonId] = useState("");
   const [meetingLink, setMeetingLink] = useState("");
   const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
-  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]); // For company level
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [agendaItems, setAgendaItems] = useState<AgendaForm[]>([]);
   const [conflicts, setConflicts] = useState<string[]>([]);
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -89,13 +90,17 @@ export default function CreateMeetingPage() {
   const [taskAssignments, setTaskAssignments] = useState<TaskAssignmentForm[]>([]);
   const [taskModalAttendee, setTaskModalAttendee] = useState<string | null>(null);
   const [taskModalErrors, setTaskModalErrors] = useState<Record<string, string>>({});
+  const [taskAssignmentsSnapshot, setTaskAssignmentsSnapshot] = useState<TaskAssignmentForm[] | null>(null);
   const queryClient = useQueryClient();
 
-  // Get meetings from cache/useMeetings hook
-  const { data: meetings = [], isLoading: isFetchingMeeting } = useMeetings();
-
-  // Find existing meeting from cache for edit mode
+  const { data: meetings = [] } = useMeetings();
   const existingMeeting = isEditMode ? meetings.find((m: any) => m.id === meetingId) : null;
+
+  const { data: existingAgendaItems = [] } = useQuery({
+    queryKey: ["edit-meeting-agenda", meetingId],
+    queryFn: () => getAgendaItemsByMeeting(meetingId!),
+    enabled: isEditMode && !!meetingId,
+  });
 
   const { data: existingParticipants = [] } = useQuery({
     queryKey: ["edit-meeting-participants", meetingId],
@@ -115,11 +120,8 @@ export default function CreateMeetingPage() {
     enabled: isEditMode && !!meetingId,
   });
 
-  // Get user's department (creator's department)
-  const userDepartmentId = account?.departmentId || "";
   const userDepartment = account?.department || "";
 
-  // Filter users by department when meeting level is "department"
   const usersByDepartment = useMemo(() => {
     if (meetingLevel === "department") {
       return users.filter((u: any) => u.departmentId === account?.departmentId);
@@ -127,37 +129,50 @@ export default function CreateMeetingPage() {
     return users;
   }, [users, meetingLevel, account?.departmentId]);
 
-  // Populate basic form when existingMeeting data is available
   useEffect(() => {
-    if (existingMeeting) {
-      setTitle(existingMeeting.title || "");
-      setDescription(existingMeeting.description);
+    if (!existingMeeting) return;
 
-      const start = new Date(existingMeeting.startTime);
-      const end = new Date(existingMeeting.endTime);
+    setTitle(existingMeeting.title || "");
+    setDescription(existingMeeting.description || "");
 
-      setStartDate(start.toISOString().split("T")[0]);
-      setStartTime(start.toTimeString().slice(0, 5));
-      setEndTime(end.toTimeString().slice(0, 5));
+    const start = new Date(existingMeeting.startTime);
+    const end = new Date(existingMeeting.endTime);
 
-      // Check if it's an overnight meeting
-      const startDateStr = start.toISOString().split("T")[0];
-      const endDateStr = end.toISOString().split("T")[0];
-      if (endDateStr !== startDateStr) {
-        setIsOvernight(true);
-        setEndDate(endDateStr);
-      }
+    setStartDate(start.toISOString().split("T")[0]);
+    setStartTime(start.toTimeString().slice(0, 5));
+    setEndTime(end.toTimeString().slice(0, 5));
 
-      setMeetingType(existingMeeting.type || "offline");
-      const levelValue = existingMeeting.level?.toLowerCase() || "department";
-      setMeetingLevel(["company", "department", "team"].includes(levelValue) ? (levelValue as MeetingLevel) : "department");
-      setSelectedRoom(existingMeeting.roomId || "");
-      setMeetingLink(existingMeeting.meetingLink || "");
-      setChairpersonId(existingMeeting.host?.id?.toString() || "");
+    const startDateStr = start.toISOString().split("T")[0];
+    const endDateStr = end.toISOString().split("T")[0];
+    if (endDateStr !== startDateStr) {
+      setIsOvernight(true);
+      setEndDate(endDateStr);
     }
+
+    setMeetingType(existingMeeting.type || "offline");
+    const levelValue = existingMeeting.level?.toLowerCase() || "department";
+    setMeetingLevel(["company", "department", "team"].includes(levelValue) ? (levelValue as MeetingLevel) : "department");
+    setSelectedRoom(existingMeeting.roomId || "");
+    setMeetingLink(existingMeeting.meetingLink || "");
+    setChairpersonId(existingMeeting.host?.id?.toString() || existingMeeting.hostId?.toString() || "");
   }, [existingMeeting]);
 
-  // Reset department selection when meeting level changes (skip reset while editing loaded meeting)
+  useEffect(() => {
+    if (!isEditMode) return;
+
+    const mappedAgenda = existingAgendaItems.map((item: any) => ({
+      title: item.title || "",
+      presenter: item.presenter || "",
+      duration: String(item.duration ?? 15),
+    }));
+
+    setAgendaItems(prev => {
+      const prevStr = JSON.stringify(prev);
+      const nextStr = JSON.stringify(mappedAgenda);
+      return prevStr === nextStr ? prev : mappedAgenda;
+    });
+  }, [isEditMode, existingAgendaItems]);
+
   useEffect(() => {
     if (meetingLevel === "department") {
       setSelectedDepartment(userDepartment);
@@ -185,7 +200,10 @@ export default function CreateMeetingPage() {
     const taskAssignmentsFromApi = existingTasks.map((task: any) => {
       const assigneeUser = users.find((u: any) => String(u.id) === String(task.assigneeId));
       const attendeeName = assigneeUser?.name || assigneeUser?.login || task.assignee;
-      const docs = existingDocuments.filter((doc: any) => String(doc.taskId) === String(task.id)).map((d: any) => d.fileName).filter(Boolean);
+      const docs = existingDocuments
+        .filter((doc: any) => String(doc.taskId) === String(task.id))
+        .map((d: any) => d.fileName)
+        .filter(Boolean);
 
       return {
         key: `task-${task.id}`,
@@ -195,7 +213,7 @@ export default function CreateMeetingPage() {
         dueAt: task.dueAt ? new Date(task.dueAt).toISOString().slice(0, 16) : "",
         remindBeforeMinutes: task.remindBeforeMinutes != null ? String(task.remindBeforeMinutes) : "",
         documentRefs: docs.length > 0 ? docs : [""],
-      };
+      } as TaskAssignmentForm;
     });
 
     const taskAttendees = taskAssignmentsFromApi.map(task => task.attendee).filter(Boolean);
@@ -205,6 +223,7 @@ export default function CreateMeetingPage() {
       const same = prev.length === mergedAttendees.length && prev.every((v, i) => v === mergedAttendees[i]);
       return same ? prev : mergedAttendees;
     });
+
     setTaskAssignments(prev => {
       const prevStr = JSON.stringify(prev);
       const nextStr = JSON.stringify(taskAssignmentsFromApi);
@@ -225,15 +244,13 @@ export default function CreateMeetingPage() {
     if (!startTime) newErrors.startTime = "Vui lòng chọn giờ bắt đầu";
     if (!endTime) newErrors.endTime = "Vui lòng chọn giờ kết thúc";
     if (!chairpersonId) newErrors.chairperson = "Vui lòng chọn người chủ trì";
-    if ((meetingType === "offline" || meetingType === "hybrid") && !selectedRoom)
-      newErrors.room = "Vui lòng chọn phòng họp";
-    if ((meetingType === "online" || meetingType === "hybrid") && !meetingLink.trim())
-      newErrors.meetingLink = "Vui lòng nhập link họp";
+    if ((meetingType === "offline" || meetingType === "hybrid") && !selectedRoom) newErrors.room = "Vui lòng chọn phòng họp";
+    if ((meetingType === "online" || meetingType === "hybrid") && !meetingLink.trim()) newErrors.meetingLink = "Vui lòng nhập link họp";
 
     if (startDate && startTime && endTime) {
       const start = new Date(`${startDate}T${startTime}:00`);
       let end: Date;
-      
+
       if (isOvernight && endDate) {
         end = new Date(`${endDate}T${endTime}:00`);
       } else if (!isOvernight) {
@@ -253,13 +270,9 @@ export default function CreateMeetingPage() {
   const validateStep2 = (): boolean => {
     const newErrors: ValidationErrors = {};
     if (meetingLevel === "company") {
-      // Company level: must select at least one department
-      if (selectedDepartments.length === 0)
-        newErrors.attendees = "Vui lòng chọn ít nhất 1 phòng ban";
+      if (selectedDepartments.length === 0) newErrors.attendees = "Vui lòng chọn ít nhất 1 phòng ban";
     } else {
-      // Department level: must select at least one participant
-    if (selectedAttendees.length === 0)
-      newErrors.attendees = "Vui lòng chọn ít nhất 1 người tham dự";
+      if (selectedAttendees.length === 0) newErrors.attendees = "Vui lòng chọn ít nhất 1 người tham dự";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -267,8 +280,7 @@ export default function CreateMeetingPage() {
 
   const validateStep3 = (): boolean => {
     const newErrors: ValidationErrors = {};
-    if (agendaItems.length === 0)
-      newErrors.agenda = "Vui lòng tạo ít nhất 1 mục chương trình họp";
+    if (agendaItems.length === 0) newErrors.agenda = "Vui lòng tạo ít nhất 1 mục chương trình họp";
     agendaItems.forEach((item, i) => {
       if (!item.title.trim()) newErrors[`agenda_title_${i}`] = "Nhập tên nội dung";
       if (!item.presenter) newErrors[`agenda_presenter_${i}`] = "Chọn người trình bày";
@@ -280,19 +292,18 @@ export default function CreateMeetingPage() {
   const checkConflicts = () => {
     const found: string[] = [];
     if (selectedRoom) {
-      const room = rooms.find((r) => r.id === selectedRoom);
+      const room = rooms.find((r: any) => r.id === selectedRoom);
       if (room?.status === "occupied") found.push(`Phòng ${room.name} đang được sử dụng`);
       if (room?.status === "maintenance") found.push(`Phòng ${room.name} đang bảo trì`);
-      
-      // Calculate total participants
+
       let totalParticipants = selectedAttendees.length;
       if (meetingLevel === "company") {
-        // For company level, count users from selected departments
         totalParticipants = users.filter((u: any) => selectedDepartments.includes(u.department)).length;
       }
-      
-      if (room && totalParticipants > room.capacity)
+
+      if (room && totalParticipants > room.capacity) {
         found.push(`Số người tham dự (${totalParticipants}) vượt sức chứa phòng (${room.capacity})`);
+      }
     }
     setConflicts(found);
   };
@@ -308,11 +319,9 @@ export default function CreateMeetingPage() {
   };
 
   const toggleAttendee = (name: string) => {
-    setSelectedAttendees((prev) =>
-      prev.includes(name) ? prev.filter((a) => a !== name) : [...prev, name]
-    );
+    setSelectedAttendees(prev => (prev.includes(name) ? prev.filter(a => a !== name) : [...prev, name]));
     if (errors.attendees) {
-      setErrors((prev) => {
+      setErrors(prev => {
         const { attendees, ...rest } = prev;
         return rest;
       });
@@ -320,8 +329,8 @@ export default function CreateMeetingPage() {
   };
 
   useEffect(() => {
-    setTaskAssignments((prev) => prev.filter((assignment) => selectedAttendees.includes(assignment.attendee)));
-    setTaskModalAttendee((prev) => (prev && selectedAttendees.includes(prev) ? prev : null));
+    setTaskAssignments(prev => prev.filter(assignment => selectedAttendees.includes(assignment.attendee)));
+    setTaskModalAttendee(prev => (prev && selectedAttendees.includes(prev) ? prev : null));
   }, [selectedAttendees]);
 
   const updateTaskAssignment = (
@@ -329,15 +338,11 @@ export default function CreateMeetingPage() {
     field: "title" | "description" | "dueAt" | "remindBeforeMinutes",
     value: string
   ) => {
-    setTaskAssignments((prev) =>
-      prev.map((assignment) =>
-        assignment.key === assignmentKey ? { ...assignment, [field]: value } : assignment
-      )
-    );
+    setTaskAssignments(prev => prev.map(assignment => (assignment.key === assignmentKey ? { ...assignment, [field]: value } : assignment)));
   };
 
   const addTaskForAttendee = (attendee: string) => {
-    setTaskAssignments((prev) => [
+    setTaskAssignments(prev => [
       ...prev,
       {
         key: `${attendee}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -352,12 +357,12 @@ export default function CreateMeetingPage() {
   };
 
   const removeTaskAssignment = (assignmentKey: string) => {
-    setTaskAssignments((prev) => prev.filter((assignment) => assignment.key !== assignmentKey));
+    setTaskAssignments(prev => prev.filter(assignment => assignment.key !== assignmentKey));
   };
 
   const updateDocumentRef = (assignmentKey: string, docIndex: number, value: string) => {
-    setTaskAssignments((prev) =>
-      prev.map((assignment) => {
+    setTaskAssignments(prev =>
+      prev.map(assignment => {
         if (assignment.key !== assignmentKey) return assignment;
         const nextDocs = [...assignment.documentRefs];
         nextDocs[docIndex] = value;
@@ -367,16 +372,16 @@ export default function CreateMeetingPage() {
   };
 
   const addDocumentRef = (assignmentKey: string) => {
-    setTaskAssignments((prev) =>
-      prev.map((assignment) =>
+    setTaskAssignments(prev =>
+      prev.map(assignment =>
         assignment.key === assignmentKey ? { ...assignment, documentRefs: [...assignment.documentRefs, ""] } : assignment
       )
     );
   };
 
   const removeDocumentRef = (assignmentKey: string, docIndex: number) => {
-    setTaskAssignments((prev) =>
-      prev.map((assignment) => {
+    setTaskAssignments(prev =>
+      prev.map(assignment => {
         if (assignment.key !== assignmentKey) return assignment;
         const nextDocs = assignment.documentRefs.filter((_, index) => index !== docIndex);
         return { ...assignment, documentRefs: nextDocs.length > 0 ? nextDocs : [""] };
@@ -384,14 +389,13 @@ export default function CreateMeetingPage() {
     );
   };
 
-  const getTaskCountByAttendee = (attendee: string) =>
-    taskAssignments.filter((assignment) => assignment.attendee === attendee).length;
+  const getTaskCountByAttendee = (attendee: string) => taskAssignments.filter(assignment => assignment.attendee === attendee).length;
 
   const validateTasksForAttendee = (attendee: string) => {
-    const attendeeTasks = taskAssignments.filter((assignment) => assignment.attendee === attendee);
+    const attendeeTasks = taskAssignments.filter(assignment => assignment.attendee === attendee);
     const nextErrors: Record<string, string> = {};
 
-    attendeeTasks.forEach((assignment) => {
+    attendeeTasks.forEach(assignment => {
       if (!assignment.title.trim()) nextErrors[`${assignment.key}-title`] = "Vui lòng nhập tiêu đề task";
       if (!assignment.dueAt) nextErrors[`${assignment.key}-dueAt`] = "Vui lòng chọn hạn xử lý";
       if (!String(assignment.remindBeforeMinutes).trim()) nextErrors[`${assignment.key}-remind`] = "Vui lòng nhập nhắc trước";
@@ -401,30 +405,34 @@ export default function CreateMeetingPage() {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const closeTaskModal = () => {
-    if (!taskModalAttendee) {
-      setTaskModalAttendee(null);
-      setTaskModalErrors({});
-      return;
-    }
-
+  const completeTaskModal = () => {
+    if (!taskModalAttendee) return;
     if (validateTasksForAttendee(taskModalAttendee)) {
       setTaskModalAttendee(null);
       setTaskModalErrors({});
+      setTaskAssignmentsSnapshot(null);
     }
+  };
+
+  const cancelTaskModal = () => {
+    if (taskAssignmentsSnapshot) {
+      setTaskAssignments(taskAssignmentsSnapshot);
+    }
+    setTaskModalAttendee(null);
+    setTaskModalErrors({});
+    setTaskAssignmentsSnapshot(null);
   };
 
   const openTaskModal = (attendee: string) => {
     setTaskModalErrors({});
+    setTaskAssignmentsSnapshot(JSON.parse(JSON.stringify(taskAssignments)));
     setTaskModalAttendee(attendee);
   };
 
   const toggleDepartment = (deptName: string) => {
-    setSelectedDepartments((prev) =>
-      prev.includes(deptName) ? prev.filter((d) => d !== deptName) : [...prev, deptName]
-    );
+    setSelectedDepartments(prev => (prev.includes(deptName) ? prev.filter(d => d !== deptName) : [...prev, deptName]));
     if (errors.attendees) {
-      setErrors((prev) => {
+      setErrors(prev => {
         const { attendees, ...rest } = prev;
         return rest;
       });
@@ -432,9 +440,9 @@ export default function CreateMeetingPage() {
   };
 
   const addAgendaItem = () => {
-    setAgendaItems((prev) => [...prev, { title: "", presenter: "", duration: "15" }]);
+    setAgendaItems(prev => [...prev, { title: "", presenter: "", duration: "15" }]);
     if (errors.agenda) {
-      setErrors((prev) => {
+      setErrors(prev => {
         const { agenda, ...rest } = prev;
         return rest;
       });
@@ -442,11 +450,11 @@ export default function CreateMeetingPage() {
   };
 
   const removeAgendaItem = (index: number) => {
-    setAgendaItems((prev) => prev.filter((_, i) => i !== index));
+    setAgendaItems(prev => prev.filter((_, i) => i !== index));
   };
 
   const updateAgendaItem = (index: number, field: keyof AgendaForm, value: string) => {
-    setAgendaItems((prev) => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)));
+    setAgendaItems(prev => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)));
   };
 
   const handleClearForm = () => {
@@ -471,6 +479,56 @@ export default function CreateMeetingPage() {
     setErrors({});
     setStep(1);
     toast({ title: "Đã xóa", description: "Tất cả dữ liệu đã được xóa." });
+  };
+
+  const buildParticipantsPayload = () =>
+    selectedAttendees
+      .map((login: string) => {
+        const user = users.find((u: any) => (u.name || u.login) === login);
+        if (user?.id == null) return null;
+        return { userId: Number(user.id), isRequired: true };
+      })
+      .filter(Boolean) as { userId: number; isRequired: boolean }[];
+
+  const buildAgendaPayload = () =>
+    agendaItems.map(item => ({
+      title: item.title,
+      presenter: item.presenter,
+      duration: parseInt(item.duration) || 15,
+    }));
+
+  const buildTaskAndDocumentPayload = () => {
+    const tasks = taskAssignments
+      .map(assignment => {
+        const assignee = users.find((u: any) => (u.name || u.login) === assignment.attendee);
+        if (!assignee?.id || !assignment.title.trim()) return null;
+
+        return {
+          clientKey: assignment.key,
+          type: "PRE_MEETING" as const,
+          title: assignment.title.trim(),
+          description: assignment.description?.trim() || undefined,
+          dueAt: assignment.dueAt ? new Date(assignment.dueAt).toISOString() : undefined,
+          status: "TODO" as const,
+          remindBeforeMinutes: assignment.remindBeforeMinutes ? Number(assignment.remindBeforeMinutes) : undefined,
+          assigneeId: Number(assignee.id),
+          assignedById: Number(account?.id),
+        };
+      })
+      .filter(Boolean) as any[];
+
+    const documents = taskAssignments.flatMap(assignment => {
+      const validDocs = assignment.documentRefs.map(doc => doc.trim()).filter(Boolean);
+
+      return validDocs.map(fileName => ({
+        docType: "ATTACHMENT",
+        fileName,
+        uploadedById: Number(account?.id),
+        taskClientKey: assignment.key,
+      }));
+    });
+
+    return { tasks, documents };
   };
 
   const handleSaveDraft = async () => {
@@ -500,15 +558,8 @@ export default function CreateMeetingPage() {
         meetingLink,
         requesterId: account.id,
         hostId: chairpersonId,
-        participants: selectedAttendees.map((login: string) => {
-          const user = users.find((u: any) => (u.name || u.login) === login);
-          return { userId: user?.id, isRequired: true };
-        }),
-        agendaItems: agendaItems.map((item) => ({
-          title: item.title,
-          presenter: item.presenter,
-          duration: parseInt(item.duration) || 15
-        })),
+        participants: buildParticipantsPayload(),
+        agendaItems: buildAgendaPayload(),
         tasks,
         documents,
         submitAfterCreate: false,
@@ -531,7 +582,7 @@ export default function CreateMeetingPage() {
       toast({ title: "Đã cập nhật", description: "Cuộc họp đã được cập nhật thành công." });
       navigate("/plans");
     },
-    onError: (err) => {
+    onError: err => {
       toast({ variant: "destructive", title: "Lỗi cập nhật", description: err instanceof Error ? err.message : "Lỗi không xác định" });
     },
   });
@@ -549,6 +600,10 @@ export default function CreateMeetingPage() {
     }
 
     try {
+      const { tasks, documents } = buildTaskAndDocumentPayload();
+      const participants = buildParticipantsPayload();
+      const agendaPayload = buildAgendaPayload();
+
       if (isEditMode && meetingId) {
         await updateMutation.mutateAsync({
           id: meetingId,
@@ -563,12 +618,15 @@ export default function CreateMeetingPage() {
             meetingLevel,
             selectedRoomId: selectedRoom || undefined,
             meetingLink,
+            requesterId: account.id,
             hostId: chairpersonId,
+            participants,
+            agendaItems: agendaPayload,
+            tasks,
+            documents,
           },
         });
       } else {
-        const { tasks, documents } = buildTaskAndDocumentPayload();
-
         const created = await createMeetingFromForm({
           title,
           description,
@@ -582,22 +640,14 @@ export default function CreateMeetingPage() {
           meetingLink,
           requesterId: account.id,
           hostId: chairpersonId,
-          participants: selectedAttendees.map((login: string) => {
-            const user = users.find((u: any) => (u.name || u.login) === login);
-            return { userId: user?.id, isRequired: true };
-          }),
-          agendaItems: agendaItems.map((item) => ({
-            title: item.title,
-            presenter: item.presenter,
-            duration: parseInt(item.duration) || 15
-          })),
+          participants,
+          agendaItems: agendaPayload,
           tasks,
           documents,
           submitAfterCreate: meetingLevel !== "company",
         });
         if (created?.id != null) {
           if (meetingLevel === "company") {
-            // Company level - no approval needed, just create
             toast({ title: "Tạo phòng thành công", description: "Phòng họp đã được tạo." });
           } else {
             toast({ title: "Đã gửi duyệt", description: "Cuộc họp đã được tạo và gửi phê duyệt." });
@@ -606,51 +656,16 @@ export default function CreateMeetingPage() {
         navigate("/plans");
       }
     } catch (err) {
-      toast({ variant: "destructive", title: isEditMode ? "Lỗi cập nhật" : "Lỗi tạo cuộc họp", description: err instanceof Error ? err.message : "Lỗi không xác định" });
+      toast({
+        variant: "destructive",
+        title: isEditMode ? "Lỗi cập nhật" : "Lỗi tạo cuộc họp",
+        description: err instanceof Error ? err.message : "Lỗi không xác định",
+      });
     }
   };
 
-  const filteredUsers = usersByDepartment.filter((u: any) =>
-    u.name.toLowerCase().includes(attendeeSearch.toLowerCase())
-  );
-
+  const filteredUsers = usersByDepartment.filter((u: any) => u.name.toLowerCase().includes(attendeeSearch.toLowerCase()));
   const errorClass = (field: string) => (errors[field] ? "border-destructive" : "");
-
-  const buildTaskAndDocumentPayload = () => {
-    const tasks = taskAssignments
-      .map((assignment) => {
-        const assignee = users.find((u: any) => (u.name || u.login) === assignment.attendee);
-        if (!assignee?.id || !assignment.title.trim()) return null;
-
-        return {
-          clientKey: assignment.key,
-          type: "PRE_MEETING" as const,
-          title: assignment.title.trim(),
-          description: assignment.description?.trim() || undefined,
-          dueAt: assignment.dueAt ? new Date(assignment.dueAt).toISOString() : undefined,
-          status: "TODO" as const,
-          remindBeforeMinutes: assignment.remindBeforeMinutes ? Number(assignment.remindBeforeMinutes) : undefined,
-          assigneeId: Number(assignee.id),
-          assignedById: Number(account?.id),
-        };
-      })
-      .filter(Boolean) as any[];
-
-    const documents = taskAssignments.flatMap((assignment) => {
-      const validDocs = assignment.documentRefs
-        .map((doc) => doc.trim())
-        .filter(Boolean);
-
-      return validDocs.map((fileName) => ({
-        docType: "ATTACHMENT",
-        fileName,
-        uploadedById: Number(account?.id),
-        taskClientKey: assignment.key,
-      }));
-    });
-
-    return { tasks, documents };
-  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -673,23 +688,16 @@ export default function CreateMeetingPage() {
         )}
       </div>
 
-      {/* Steps */}
       <div className="flex items-center gap-2">
         {steps.map((s, i) => (
           <div key={s.num} className="flex items-center gap-2">
             <button
               onClick={() => goToStep(s.num)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                step === s.num
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : step > s.num
-                  ? "bg-success/15 text-success"
-                  : "bg-secondary text-muted-foreground"
+                step === s.num ? "bg-primary text-primary-foreground shadow-sm" : step > s.num ? "bg-success/15 text-success" : "bg-secondary text-muted-foreground"
               }`}
             >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground/20 text-xs font-bold">
-                {step > s.num ? "✓" : s.num}
-              </span>
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground/20 text-xs font-bold">{step > s.num ? "✓" : s.num}</span>
               {s.label}
             </button>
             {i < steps.length - 1 && <div className="h-px w-8 bg-border" />}
@@ -697,7 +705,6 @@ export default function CreateMeetingPage() {
         ))}
       </div>
 
-      {/* Conflicts */}
       {conflicts.length > 0 && (
         <Card className="border-destructive/30 bg-destructive/5">
           <CardContent className="p-4">
@@ -716,7 +723,6 @@ export default function CreateMeetingPage() {
         </Card>
       )}
 
-      {/* Step 1 */}
       {step === 1 && (
         <Card className="shadow-card animate-slide-up">
           <CardHeader>
@@ -725,26 +731,26 @@ export default function CreateMeetingPage() {
           <CardContent className="space-y-4">
             <div>
               <Label>Tiêu đề cuộc họp *</Label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nhập tiêu đề cuộc họp" className={`mt-1.5 ${errorClass("title")}`} />
+              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Nhập tiêu đề cuộc họp" className={`mt-1.5 ${errorClass("title")}`} />
               {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Hình thức họp *</Label>
-                <Select value={meetingType} onValueChange={(v) => setMeetingType(v as MeetingType)}>
+                <Select value={meetingType} onValueChange={v => setMeetingType(v as MeetingType)}>
                   <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {meetingTypes.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    {meetingTypes.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label>Cấp họp *</Label>
-                <Select value={meetingLevel} onValueChange={(v) => setMeetingLevel(v as MeetingLevel)}>
+                <Select value={meetingLevel} onValueChange={v => setMeetingLevel(v as MeetingLevel)}>
                   <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {meetingLevels.map((l) => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
+                    {meetingLevels.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -753,41 +759,40 @@ export default function CreateMeetingPage() {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Ngày *</Label>
-                <Input 
-                  type="date" 
-                  value={startDate} 
-                  onChange={(e) => {
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={e => {
                     setStartDate(e.target.value);
                     if (isOvernight && e.target.value) {
                       const nextDay = new Date(e.target.value);
                       nextDay.setDate(nextDay.getDate() + 1);
                       setEndDate(nextDay.toISOString().split("T")[0]);
                     }
-                  }} 
-                  className={`mt-1.5 ${errorClass("startDate")}`} 
+                  }}
+                  className={`mt-1.5 ${errorClass("startDate")}`}
                 />
                 {errors.startDate && <p className="text-xs text-destructive mt-1">{errors.startDate}</p>}
               </div>
               <div>
                 <Label>Bắt đầu *</Label>
-                <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={`mt-1.5 ${errorClass("startTime")}`} />
+                <Input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={`mt-1.5 ${errorClass("startTime")}`} />
                 {errors.startTime && <p className="text-xs text-destructive mt-1">{errors.startTime}</p>}
               </div>
               <div>
                 <Label>Kết thúc *</Label>
-                <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={`mt-1.5 ${errorClass("endTime")}`} />
+                <Input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className={`mt-1.5 ${errorClass("endTime")}`} />
                 {errors.endTime && <p className="text-xs text-destructive mt-1">{errors.endTime}</p>}
                 {errors.timeRange && <p className="text-xs text-destructive mt-1">{errors.timeRange}</p>}
               </div>
             </div>
 
-            {/* Overnight meeting option */}
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
                 id="isOvernight"
                 checked={isOvernight}
-                onChange={(e) => {
+                onChange={e => {
                   const checked = e.target.checked;
                   setIsOvernight(checked);
                   if (checked && startDate) {
@@ -830,7 +835,7 @@ export default function CreateMeetingPage() {
             {(meetingType === "online" || meetingType === "hybrid") && (
               <div>
                 <Label>Link họp trực tuyến *</Label>
-                <Input value={meetingLink} onChange={(e) => setMeetingLink(e.target.value)} placeholder="https://meet.example.com/..." className={`mt-1.5 ${errorClass("meetingLink")}`} />
+                <Input value={meetingLink} onChange={e => setMeetingLink(e.target.value)} placeholder="https://meet.example.com/..." className={`mt-1.5 ${errorClass("meetingLink")}`} />
                 {errors.meetingLink && <p className="text-xs text-destructive mt-1">{errors.meetingLink}</p>}
               </div>
             )}
@@ -840,7 +845,7 @@ export default function CreateMeetingPage() {
               <Select value={chairpersonId} onValueChange={setChairpersonId}>
                 <SelectTrigger className={`mt-1.5 ${errorClass("chairperson")}`}><SelectValue placeholder="Chọn người chủ trì" /></SelectTrigger>
                 <SelectContent>
-                  {users.map((u) => (
+                  {users.map((u: any) => (
                     <SelectItem key={u.id} value={String(u.id)}>
                       {(u.name || u.login) + (u.position ? ` - ${u.position}` : "")}
                     </SelectItem>
@@ -852,13 +857,12 @@ export default function CreateMeetingPage() {
 
             <div>
               <Label>Nội dung, mục tiêu</Label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Mô tả nội dung và mục tiêu cuộc họp" className="mt-1.5" rows={3} />
+              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Mô tả nội dung và mục tiêu cuộc họp" className="mt-1.5" rows={3} />
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Step 2 - Attendees */}
       {step === 2 && (
         <Card className="shadow-card animate-slide-up">
           <CardHeader>
@@ -879,49 +883,36 @@ export default function CreateMeetingPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {errors.attendees && (
-              <p className="text-sm text-destructive font-medium">{errors.attendees}</p>
-            )}
+            {errors.attendees && <p className="text-sm text-destructive font-medium">{errors.attendees}</p>}
 
             {meetingLevel === "company" ? (
-              // Company level - show departments
               <>
-                <div className="text-sm text-muted-foreground mb-2">
-                  Chọn các phòng ban tham gia cuộc họp:
-                </div>
+                <div className="text-sm text-muted-foreground mb-2">Chọn các phòng ban tham gia cuộc họp:</div>
                 <div className="grid grid-cols-2 gap-2 max-h-[400px] overflow-y-auto">
                   {departments.map((d: any) => (
                     <button
                       key={d.id}
                       onClick={() => toggleDepartment(d.name)}
                       className={`flex items-center gap-3 p-3 rounded-lg border text-left text-sm transition-all ${
-                        selectedDepartments.includes(d.name)
-                          ? "border-primary bg-primary/5 shadow-sm"
-                          : "border-border hover:border-primary/30"
+                        selectedDepartments.includes(d.name) ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/30"
                       }`}
                     >
                       <Checkbox checked={selectedDepartments.includes(d.name)} />
                       <div>
                         <p className="font-medium text-xs">{d.name}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {users.filter((u: any) => u.department === d.name).length} nhân viên
-                        </p>
+                        <p className="text-[10px] text-muted-foreground">{users.filter((u: any) => u.department === d.name).length} nhân viên</p>
                       </div>
-                      {selectedDepartments.includes(d.name) && (
-                        <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
-                      )}
+                      {selectedDepartments.includes(d.name) && <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />}
                     </button>
                   ))}
-                  {departments.length === 0 && (
-                    <p className="col-span-2 text-center text-sm text-muted-foreground py-4">Không có phòng ban nào</p>
-                  )}
+                  {departments.length === 0 && <p className="col-span-2 text-center text-sm text-muted-foreground py-4">Không có phòng ban nào</p>}
                 </div>
 
                 {selectedDepartments.length > 0 && (
                   <div>
                     <Label>Đã chọn ({selectedDepartments.length} phòng ban)</Label>
                     <div className="flex flex-wrap gap-1.5 mt-2">
-                      {selectedDepartments.map((d) => (
+                      {selectedDepartments.map(d => (
                         <Badge key={d} variant="secondary" className="cursor-pointer" onClick={() => toggleDepartment(d)}>
                           {d} ×
                         </Badge>
@@ -934,170 +925,164 @@ export default function CreateMeetingPage() {
                 )}
               </>
             ) : (
-              // Department level - show users from creator's department
               <>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Tìm kiếm người tham dự theo tên..."
-                value={attendeeSearch}
-                onChange={(e) => setAttendeeSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Tìm kiếm người tham dự theo tên..."
+                    value={attendeeSearch}
+                    onChange={e => setAttendeeSearch(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
 
-            <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto">
                   {filteredUsers.map((u: any) => (
-                <button
-                  key={u.id}
-                  onClick={() => toggleAttendee(u.name || u.login)}
-                  className={`flex items-center gap-3 p-3 rounded-lg border text-left text-sm transition-all ${
-                    selectedAttendees.includes(u.name || u.login)
-                      ? "border-primary bg-primary/5 shadow-sm"
-                      : "border-border hover:border-primary/30"
-                  }`}
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold">
+                    <button
+                      key={u.id}
+                      onClick={() => toggleAttendee(u.name || u.login)}
+                      className={`flex items-center gap-3 p-3 rounded-lg border text-left text-sm transition-all ${
+                        selectedAttendees.includes(u.name || u.login) ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/30"
+                      }`}
+                    >
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold">
                         {u.name?.split(" ")?.[0]?.[0] || "?"}
-                  </div>
-                  <div>
-                    <p className="font-medium text-xs">{u.name || u.login}</p>
-                    <p className="text-[10px] text-muted-foreground">{[u.position, u.department].filter(Boolean).join(" • ") || "—"}</p>
-                  </div>
-                  {selectedAttendees.includes(u.name || u.login) && (
-                    <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
-                  )}
-                </button>
-              ))}
-              {filteredUsers.length === 0 && (
+                      </div>
+                      <div>
+                        <p className="font-medium text-xs">{u.name || u.login}</p>
+                        <p className="text-[10px] text-muted-foreground">{[u.position, u.department].filter(Boolean).join(" • ") || "—"}</p>
+                      </div>
+                      {selectedAttendees.includes(u.name || u.login) && <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />}
+                    </button>
+                  ))}
+                  {filteredUsers.length === 0 && (
                     <p className="col-span-2 text-center text-sm text-muted-foreground py-4">
                       {userDepartment ? `Không có nhân viên nào trong phòng ban ${userDepartment}` : "Vui lòng chọn phòng ban của bạn trong hồ sơ"}
                     </p>
-              )}
-            </div>
-
-            {selectedAttendees.length > 0 && (
-              <>
-                <div>
-                  <Label>Đã chọn ({selectedAttendees.length})</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
-                    {selectedAttendees.map((a) => {
-                      const count = getTaskCountByAttendee(a);
-                      return (
-                        <div key={a} className="rounded-xl border bg-secondary/20 px-4 py-3 flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold">{a}</p>
-                            <p className="text-xs text-muted-foreground">{count > 0 ? `Đã giao ${count} task` : "Chưa giao task"}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {count > 0 && <Badge variant="outline">{count}</Badge>}
-                            <Button size="sm" onClick={() => openTaskModal(a)}>
-                              <Plus className="h-4 w-4 mr-1" /> Giao task
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleAttendee(a)}>
-                              ×
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  )}
                 </div>
 
-                <Dialog open={!!taskModalAttendee} onOpenChange={(open) => !open && closeTaskModal()}>
-                  <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>
-                        Giao task theo cấu trúc hệ thống {taskModalAttendee ? `- ${taskModalAttendee}` : ""}
-                      </DialogTitle>
-                    </DialogHeader>
-
-                    {taskModalAttendee && (
-                      <div className="space-y-3">
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Mỗi người có thể có nhiều task và mỗi task có thể có nhiều tài liệu. Trạng thái task sẽ tự động là TODO khi tạo.
-                        </p>
-                        <div className="flex justify-end">
-                          <Button variant="outline" size="sm" onClick={() => addTaskForAttendee(taskModalAttendee)}>
-                            <Plus className="h-3 w-3 mr-1" /> Thêm task
-                          </Button>
-                        </div>
-
-                        <div className="space-y-3">
-                          {taskAssignments
-                            .filter((assignment) => assignment.attendee === taskModalAttendee)
-                            .map((assignment, taskIndex, list) => (
-                              <div key={assignment.key} className="rounded-md border bg-card p-3 space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <p className="text-xs font-medium text-muted-foreground">Task #{taskIndex + 1}</p>
-                                  {list.length > 1 && (
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeTaskAssignment(assignment.key)}>
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                  <div>
-                                    <Label className="text-xs">Tiêu đề task</Label>
-                                    <Input placeholder="Nhập tiêu đề task" value={assignment.title} onChange={(e) => updateTaskAssignment(assignment.key, "title", e.target.value)} className="mt-1" />
-                                    {taskModalErrors[`${assignment.key}-title`] && <p className="text-xs text-destructive mt-1">{taskModalErrors[`${assignment.key}-title`]}</p>}
-                                  </div>
-
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                  <div>
-                                    <Label className="text-xs">Hạn xử lý (due_at)</Label>
-                                    <Input type="datetime-local" value={assignment.dueAt} onChange={(e) => updateTaskAssignment(assignment.key, "dueAt", e.target.value)} className="mt-1" />
-                                    {taskModalErrors[`${assignment.key}-dueAt`] && <p className="text-xs text-destructive mt-1">{taskModalErrors[`${assignment.key}-dueAt`]}</p>}
-                                  </div>
-                                  <div>
-                                    <Label className="text-xs">Nhắc trước (phút)</Label>
-                                    <Input type="number" min={0} placeholder="VD: 30" value={assignment.remindBeforeMinutes} onChange={(e) => updateTaskAssignment(assignment.key, "remindBeforeMinutes", e.target.value)} className="mt-1" />
-                                    {taskModalErrors[`${assignment.key}-remind`] && <p className="text-xs text-destructive mt-1">{taskModalErrors[`${assignment.key}-remind`]}</p>}
-                                  </div>
-                                </div>
-
-                                <div>
-                                  <Label className="text-xs">Tài liệu liên quan</Label>
-                                  <div className="space-y-2 mt-1">
-                                    {assignment.documentRefs.map((doc, docIndex) => (
-                                      <div key={`${assignment.key}-doc-${docIndex}`} className="flex items-center gap-2">
-                                        <Input placeholder={`Tài liệu ${docIndex + 1}`} value={doc} onChange={(e) => updateDocumentRef(assignment.key, docIndex, e.target.value)} />
-                                        {assignment.documentRefs.length > 1 && (
-                                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeDocumentRef(assignment.key, docIndex)}>
-                                            <Trash2 className="h-4 w-4" />
-                                          </Button>
-                                        )}
-                                      </div>
-                                    ))}
-                                    <Button variant="outline" size="sm" onClick={() => addDocumentRef(assignment.key)}>
-                                      <Plus className="h-3 w-3 mr-1" /> Thêm tài liệu
-                                    </Button>
-                                  </div>
-                                </div>
-
-                                <div>
-                                  <Label className="text-xs">Mô tả</Label>
-                                  <Textarea placeholder="Mô tả chi tiết task" value={assignment.description} onChange={(e) => updateTaskAssignment(assignment.key, "description", e.target.value)} rows={2} className="mt-1" />
-                                </div>
+                {selectedAttendees.length > 0 && (
+                  <>
+                    <div>
+                      <Label>Đã chọn ({selectedAttendees.length})</Label>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {selectedAttendees.map(a => {
+                          const count = getTaskCountByAttendee(a);
+                          return (
+                            <div key={a} className="rounded-xl border bg-secondary/20 px-4 py-3 flex items-center justify-between gap-3 w-full">
+                              <div>
+                                <p className="text-sm font-semibold">{a}</p>
+                                <p className="text-xs text-muted-foreground">{count > 0 ? `Đã giao ${count} task` : "Chưa giao task"}</p>
                               </div>
-                            ))}
-                        </div>
+                              <div className="flex items-center gap-2">
+                                {count > 0 && <Badge variant="outline">{count}</Badge>}
+                                <Button size="sm" onClick={() => openTaskModal(a)}>
+                                  <Plus className="h-4 w-4 mr-1" /> Giao task
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleAttendee(a)}>
+                                  ×
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    )}
-                  </DialogContent>
-                </Dialog>
-              </>
-            )}
+                    </div>
+
+                    <Dialog open={!!taskModalAttendee} onOpenChange={open => !open && cancelTaskModal()}>
+                      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>Giao task theo cấu trúc hệ thống {taskModalAttendee ? `- ${taskModalAttendee}` : ""}</DialogTitle>
+                        </DialogHeader>
+
+                        {taskModalAttendee && (
+                          <div className="space-y-3">
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Mỗi người có thể có nhiều task và mỗi task có thể có nhiều tài liệu. Trạng thái task sẽ tự động là TODO khi tạo.
+                            </p>
+                            <div className="flex justify-end">
+                              <Button variant="outline" size="sm" onClick={() => addTaskForAttendee(taskModalAttendee)}>
+                                <Plus className="h-3 w-3 mr-1" /> Thêm task
+                              </Button>
+                            </div>
+
+                            <div className="space-y-3">
+                              {taskAssignments
+                                .filter(assignment => assignment.attendee === taskModalAttendee)
+                                .map((assignment, taskIndex, list) => (
+                                  <div key={assignment.key} className="rounded-md border bg-card p-3 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <p className="text-xs font-medium text-muted-foreground">Task #{taskIndex + 1}</p>
+                                      {list.length > 1 && (
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeTaskAssignment(assignment.key)}>
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      )}
+                                    </div>
+
+                                    <div>
+                                      <Label className="text-xs">Tiêu đề task</Label>
+                                      <Input placeholder="Nhập tiêu đề task" value={assignment.title} onChange={e => updateTaskAssignment(assignment.key, "title", e.target.value)} className="mt-1" />
+                                      {taskModalErrors[`${assignment.key}-title`] && <p className="text-xs text-destructive mt-1">{taskModalErrors[`${assignment.key}-title`]}</p>}
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                      <div>
+                                        <Label className="text-xs">Hạn xử lý (due_at)</Label>
+                                        <Input type="datetime-local" value={assignment.dueAt} onChange={e => updateTaskAssignment(assignment.key, "dueAt", e.target.value)} className="mt-1" />
+                                        {taskModalErrors[`${assignment.key}-dueAt`] && <p className="text-xs text-destructive mt-1">{taskModalErrors[`${assignment.key}-dueAt`]}</p>}
+                                      </div>
+                                      <div>
+                                        <Label className="text-xs">Nhắc trước (phút)</Label>
+                                        <Input type="number" min={0} placeholder="VD: 30" value={assignment.remindBeforeMinutes} onChange={e => updateTaskAssignment(assignment.key, "remindBeforeMinutes", e.target.value)} className="mt-1" />
+                                        {taskModalErrors[`${assignment.key}-remind`] && <p className="text-xs text-destructive mt-1">{taskModalErrors[`${assignment.key}-remind`]}</p>}
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <Label className="text-xs">Tài liệu liên quan</Label>
+                                      <div className="space-y-2 mt-1">
+                                        {assignment.documentRefs.map((doc, docIndex) => (
+                                          <div key={`${assignment.key}-doc-${docIndex}`} className="flex items-center gap-2">
+                                            <Input placeholder={`Tài liệu ${docIndex + 1}`} value={doc} onChange={e => updateDocumentRef(assignment.key, docIndex, e.target.value)} />
+                                            {assignment.documentRefs.length > 1 && (
+                                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeDocumentRef(assignment.key, docIndex)}>
+                                                <Trash2 className="h-4 w-4" />
+                                              </Button>
+                                            )}
+                                          </div>
+                                        ))}
+                                        <Button variant="outline" size="sm" onClick={() => addDocumentRef(assignment.key)}>
+                                          <Plus className="h-3 w-3 mr-1" /> Thêm tài liệu
+                                        </Button>
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <Label className="text-xs">Mô tả</Label>
+                                      <Textarea placeholder="Mô tả chi tiết task" value={assignment.description} onChange={e => updateTaskAssignment(assignment.key, "description", e.target.value)} rows={2} className="mt-1" />
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-2">
+                              <Button variant="outline" onClick={cancelTaskModal}>Thoát</Button>
+                              <Button onClick={completeTaskModal}>Xong</Button>
+                            </div>
+                          </div>
+                        )}
+                      </DialogContent>
+                    </Dialog>
+                  </>
+                )}
               </>
             )}
           </CardContent>
         </Card>
       )}
 
-      {/* Step 3 */}
       {step === 3 && (
         <Card className="shadow-card animate-slide-up">
           <CardHeader className="flex flex-row items-center justify-between">
@@ -1107,45 +1092,27 @@ export default function CreateMeetingPage() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-3">
-            {errors.agenda && (
-              <p className="text-sm text-destructive font-medium">{errors.agenda}</p>
-            )}
-            {agendaItems.length === 0 && (
-              <div className="text-center py-8 text-sm text-muted-foreground">
-                Chưa có mục nào. Nhấn "Thêm mục" để bắt đầu.
-              </div>
-            )}
+            {errors.agenda && <p className="text-sm text-destructive font-medium">{errors.agenda}</p>}
+            {agendaItems.length === 0 && <div className="text-center py-8 text-sm text-muted-foreground">Chưa có mục nào. Nhấn "Thêm mục" để bắt đầu.</div>}
             {agendaItems.map((item, i) => (
               <div key={i} className="flex items-start gap-3 p-4 rounded-lg border border-border bg-secondary/20">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold mt-1">
-                  {i + 1}
-                </span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold mt-1">{i + 1}</span>
                 <div className="flex-1 space-y-2">
                   <div>
-                    <Input
-                      placeholder="Tên nội dung"
-                      value={item.title}
-                      onChange={(e) => updateAgendaItem(i, "title", e.target.value)}
-                      className={errorClass(`agenda_title_${i}`)}
-                    />
+                    <Input placeholder="Tên nội dung" value={item.title} onChange={e => updateAgendaItem(i, "title", e.target.value)} className={errorClass(`agenda_title_${i}`)} />
                     {errors[`agenda_title_${i}`] && <p className="text-xs text-destructive mt-1">{errors[`agenda_title_${i}`]}</p>}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <Select value={item.presenter} onValueChange={(v) => updateAgendaItem(i, "presenter", v)}>
+                      <Select value={item.presenter} onValueChange={v => updateAgendaItem(i, "presenter", v)}>
                         <SelectTrigger className={errorClass(`agenda_presenter_${i}`)}><SelectValue placeholder="Người trình bày" /></SelectTrigger>
                         <SelectContent>
-                          {users.map((u) => <SelectItem key={u.id} value={u.name || u.login}>{u.name || u.login}</SelectItem>)}
+                          {users.map((u: any) => <SelectItem key={u.id} value={u.name || u.login}>{u.name || u.login}</SelectItem>)}
                         </SelectContent>
                       </Select>
                       {errors[`agenda_presenter_${i}`] && <p className="text-xs text-destructive mt-1">{errors[`agenda_presenter_${i}`]}</p>}
                     </div>
-                    <Input
-                      type="number"
-                      placeholder="Thời lượng (phút)"
-                      value={item.duration}
-                      onChange={(e) => updateAgendaItem(i, "duration", e.target.value)}
-                    />
+                    <Input type="number" placeholder="Thời lượng (phút)" value={item.duration} onChange={e => updateAgendaItem(i, "duration", e.target.value)} />
                   </div>
                 </div>
                 <Button variant="ghost" size="icon" className="text-destructive h-8 w-8" onClick={() => removeAgendaItem(i)}>
@@ -1157,15 +1124,14 @@ export default function CreateMeetingPage() {
         </Card>
       )}
 
-      {/* Actions */}
       <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={() => setStep(Math.max(1, step - 1))} disabled={step === 1}>
-          Quay lại
-        </Button>
+        <Button variant="outline" onClick={() => setStep(Math.max(1, step - 1))} disabled={step === 1}>Quay lại</Button>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleSaveDraft}>
-            <Save className="h-4 w-4 mr-1.5" /> Lưu nháp
-          </Button>
+          {!isEditMode && (
+            <Button variant="outline" onClick={handleSaveDraft}>
+              <Save className="h-4 w-4 mr-1.5" /> Lưu nháp
+            </Button>
+          )}
           {step < 3 ? (
             <Button onClick={() => goToStep(step + 1)}>Tiếp theo</Button>
           ) : (
@@ -1174,13 +1140,9 @@ export default function CreateMeetingPage() {
                 <>
                   <Send className="h-4 w-4 mr-1.5" /> Tạo phòng
                 </>
-              ) : isEditMode ? (
-                <>
-                  <Save className="h-4 w-4 mr-1.5" /> Cập nhật
-                </>
               ) : (
                 <>
-                  {isEditMode ? <><Save className="h-4 w-4 mr-1.5" /> Cập nhật</> : <><Send className="h-4 w-4 mr-1.5" /> Gửi duyệt</>}
+                  <Send className="h-4 w-4 mr-1.5" /> Gửi duyệt
                 </>
               )}
             </Button>

@@ -289,29 +289,105 @@ export async function softDeleteMeeting(id: number | string) {
 }
 
 export async function updateMeeting(id: number | string, payload: Partial<CreateMeetingFormPayload>) {
-  const body: any = { id: Number(id), statusRecord: "ACTIVE" };
+  const [types, levels, departments] = await Promise.all([
+    getMeetingTypes(),
+    getMeetingLevels(),
+    getDepartments({ size: 200 }),
+  ]);
 
-  if (payload.title !== undefined) body.title = payload.title;
-  if (payload.description !== undefined) body.objectives = payload.description;
-  if (payload.startDate !== undefined && payload.startTime !== undefined) {
-    body.startTime = new Date(`${payload.startDate}T${payload.startTime}:00`).toISOString();
-  }
-  if (payload.startDate !== undefined && payload.endTime !== undefined) {
-    const endDateStr = payload.endDate || payload.startDate;
-    body.endTime = new Date(`${endDateStr}T${payload.endTime}:00`).toISOString();
-  }
-  if (payload.meetingType !== undefined) {
-    body.mode = payload.meetingType === "offline" ? "IN_PERSON" : payload.meetingType === "online" ? "ONLINE" : "HYBRID";
-  }
-  if (payload.meetingLink !== undefined) body.onlineLink = payload.meetingLink || null;
+  const startDate = payload.startDate ?? new Date().toISOString().slice(0, 10);
+  const startTime = payload.startTime ?? "08:00";
+  const endTime = payload.endTime ?? "09:00";
+  const endDateStr = payload.endDate || startDate;
+  const nowIso = new Date().toISOString();
+
+  const mode =
+    payload.meetingType === "offline"
+      ? "IN_PERSON"
+      : payload.meetingType === "online"
+      ? "ONLINE"
+      : "HYBRID";
+
+  const levelMap: Record<string, string> = {
+    company: "CORPORATE",
+    department: "DEPARTMENT",
+    team: "DEPARTMENT",
+  };
+  const targetLevelName = levelMap[payload.meetingLevel || "department"] || "DEPARTMENT";
+  const matchedLevel = levels.find((l: any) => l.name === targetLevelName);
+
+  const body: any = {
+    id: Number(id),
+    title: payload.title,
+    startTime: new Date(`${startDate}T${startTime}:00`).toISOString(),
+    endTime: new Date(`${endDateStr}T${endTime}:00`).toISOString(),
+    mode,
+    onlineLink: payload.meetingLink || null,
+    objectives: payload.description || null,
+    statusRecord: "ACTIVE",
+    updatedAt: nowIso,
+    type: types[0] ? { id: types[0].id } : null,
+    level: matchedLevel ? { id: matchedLevel.id } : levels[0] ? { id: levels[0].id } : null,
+    organizerDepartment: departments[0] ? { id: departments[0].id } : null,
+    requester: { id: Number(payload.requesterId) },
+    host: { id: Number(payload.hostId) },
+  };
+
   if (payload.selectedRoomId !== undefined) {
     body.room = payload.selectedRoomId ? { id: Number(payload.selectedRoomId) } : null;
   }
-  if (payload.hostId !== undefined) body.host = { id: Number(payload.hostId) };
 
-  return fetchApi<any>(`/api/meetings/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
+  const participants =
+    payload.participants?.map((p: any) => ({
+      userId: Number(p.userId),
+      role: p.role || "ATTENDEE",
+      isRequired: p.isRequired !== false,
+    })) || [];
+
+  const agendaItems =
+    payload.agendaItems?.map((a: any, index: number) => ({
+      topic: a.title,
+      presenterName: a.presenter,
+      durationMinutes: parseInt(a.duration) || 15,
+      itemOrder: index + 1,
+    })) || [];
+
+  const tasks =
+    payload.tasks?.map((t) => ({
+      clientKey: t.clientKey,
+      type: t.type,
+      title: t.title,
+      description: t.description || null,
+      dueAt: t.dueAt || null,
+      status: t.status ?? "TODO",
+      remindBeforeMinutes: t.remindBeforeMinutes ?? null,
+      assigneeId: Number(t.assigneeId),
+      assignedById: t.assignedById != null ? Number(t.assignedById) : Number(payload.requesterId),
+    })) || [];
+
+  const documents =
+    payload.documents?.map((d) => ({
+      docType: d.docType,
+      fileName: d.fileName,
+      contentType: d.contentType || null,
+      file: d.file || null,
+      fileContentType: d.fileContentType || null,
+      uploadedAt: d.uploadedAt || nowIso,
+      uploadedById: d.uploadedById ?? Number(payload.requesterId),
+      taskId: d.taskId ?? null,
+      taskClientKey: d.taskClientKey || null,
+    })) || [];
+
+  return fetchApi<any>(`/api/meetings/${id}/with-details`, {
+    method: "PUT",
+    body: JSON.stringify({
+      meeting: body,
+      participants,
+      agendaItems,
+      tasks,
+      documents,
+      submitAfterCreate: false,
+    }),
   });
 }
 

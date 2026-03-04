@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { MeetingType, MeetingLevel } from "@/data/mockData";
 import { meetingTypes as mockTypes, meetingLevels as mockLevels } from "@/data/mockData";
 import { useMeetings } from "@/hooks/useMeetings";
@@ -14,12 +15,17 @@ import { useRooms } from "@/hooks/useRooms";
 import { useUsers } from "@/hooks/useUsers";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useAuth } from "@/contexts/AuthContext";
-import { createMeetingFromForm, updateMeeting } from "@/services/api/meetings";
-import { getUsersByDepartment } from "@/services/api/users";
+import {
+  createMeetingFromForm,
+  updateMeeting,
+  getParticipantsByMeeting,
+  getMeetingTasksByMeeting,
+  getMeetingDocumentsByMeeting,
+} from "@/services/api/meetings";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft, Building2, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface AgendaForm {
   title: string;
@@ -32,14 +38,13 @@ interface ValidationErrors {
 }
 
 interface TaskAssignmentForm {
+  key: string;
   attendee: string;
-  taskType: string;
   title: string;
   description: string;
   dueAt: string;
-  status: string;
   remindBeforeMinutes: string;
-  documentRef: string;
+  documentRefs: string[];
 }
 
 export default function CreateMeetingPage() {
@@ -82,6 +87,8 @@ export default function CreateMeetingPage() {
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [attendeeSearch, setAttendeeSearch] = useState("");
   const [taskAssignments, setTaskAssignments] = useState<TaskAssignmentForm[]>([]);
+  const [taskModalAttendee, setTaskModalAttendee] = useState<string | null>(null);
+  const [taskModalErrors, setTaskModalErrors] = useState<Record<string, string>>({});
   const queryClient = useQueryClient();
 
   // Get meetings from cache/useMeetings hook
@@ -89,6 +96,24 @@ export default function CreateMeetingPage() {
 
   // Find existing meeting from cache for edit mode
   const existingMeeting = isEditMode ? meetings.find((m: any) => m.id === meetingId) : null;
+
+  const { data: existingParticipants = [] } = useQuery({
+    queryKey: ["edit-meeting-participants", meetingId],
+    queryFn: () => getParticipantsByMeeting(meetingId!),
+    enabled: isEditMode && !!meetingId,
+  });
+
+  const { data: existingTasks = [] } = useQuery({
+    queryKey: ["edit-meeting-tasks", meetingId],
+    queryFn: () => getMeetingTasksByMeeting(meetingId!),
+    enabled: isEditMode && !!meetingId,
+  });
+
+  const { data: existingDocuments = [] } = useQuery({
+    queryKey: ["edit-meeting-documents", meetingId],
+    queryFn: () => getMeetingDocumentsByMeeting(meetingId!),
+    enabled: isEditMode && !!meetingId,
+  });
 
   // Get user's department (creator's department)
   const userDepartmentId = account?.departmentId || "";
@@ -102,11 +127,11 @@ export default function CreateMeetingPage() {
     return users;
   }, [users, meetingLevel, account?.departmentId]);
 
-  // Populate form when existingMeeting data is available
+  // Populate basic form when existingMeeting data is available
   useEffect(() => {
     if (existingMeeting) {
       setTitle(existingMeeting.title || "");
-      setDescription(existingMeeting.description );
+      setDescription(existingMeeting.description);
 
       const start = new Date(existingMeeting.startTime);
       const end = new Date(existingMeeting.endTime);
@@ -125,32 +150,67 @@ export default function CreateMeetingPage() {
 
       setMeetingType(existingMeeting.type || "offline");
       const levelValue = existingMeeting.level?.toLowerCase() || "department";
-      setMeetingLevel(["company", "department", "team"].includes(levelValue) ? levelValue as MeetingLevel : "department");
+      setMeetingLevel(["company", "department", "team"].includes(levelValue) ? (levelValue as MeetingLevel) : "department");
       setSelectedRoom(existingMeeting.roomId || "");
       setMeetingLink(existingMeeting.meetingLink || "");
       setChairpersonId(existingMeeting.host?.id?.toString() || "");
     }
   }, [existingMeeting]);
 
-  // Reset department selection when meeting level changes
+  // Reset department selection when meeting level changes (skip reset while editing loaded meeting)
   useEffect(() => {
     if (meetingLevel === "department") {
       setSelectedDepartment(userDepartment);
     } else {
       setSelectedDepartment("");
     }
-    setSelectedAttendees([]);
-    setSelectedDepartments([]);
-  }, [meetingLevel, userDepartment]);
 
-  // Loading state
-  if (isEditMode && isFetchingMeeting) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-muted-foreground">Đang tải thông tin cuộc họp...</div>
-      </div>
-    );
-  }
+    if (!isEditMode) {
+      setSelectedAttendees([]);
+      setSelectedDepartments([]);
+      setTaskAssignments([]);
+    }
+  }, [meetingLevel, userDepartment, isEditMode]);
+
+  useEffect(() => {
+    if (!isEditMode || !meetingId || users.length === 0) return;
+
+    const participantAttendees = existingParticipants
+      .map((p: any) => {
+        const user = users.find((u: any) => String(u.id) === String(p.userId));
+        return user?.name || user?.login || p.name;
+      })
+      .filter(Boolean);
+
+    const taskAssignmentsFromApi = existingTasks.map((task: any) => {
+      const assigneeUser = users.find((u: any) => String(u.id) === String(task.assigneeId));
+      const attendeeName = assigneeUser?.name || assigneeUser?.login || task.assignee;
+      const docs = existingDocuments.filter((doc: any) => String(doc.taskId) === String(task.id)).map((d: any) => d.fileName).filter(Boolean);
+
+      return {
+        key: `task-${task.id}`,
+        attendee: attendeeName,
+        title: task.title || "",
+        description: task.description || "",
+        dueAt: task.dueAt ? new Date(task.dueAt).toISOString().slice(0, 16) : "",
+        remindBeforeMinutes: task.remindBeforeMinutes != null ? String(task.remindBeforeMinutes) : "",
+        documentRefs: docs.length > 0 ? docs : [""],
+      };
+    });
+
+    const taskAttendees = taskAssignmentsFromApi.map(task => task.attendee).filter(Boolean);
+    const mergedAttendees = Array.from(new Set([...participantAttendees, ...taskAttendees]));
+
+    setSelectedAttendees(prev => {
+      const same = prev.length === mergedAttendees.length && prev.every((v, i) => v === mergedAttendees[i]);
+      return same ? prev : mergedAttendees;
+    });
+    setTaskAssignments(prev => {
+      const prevStr = JSON.stringify(prev);
+      const nextStr = JSON.stringify(taskAssignmentsFromApi);
+      return prevStr === nextStr ? prev : taskAssignmentsFromApi;
+    });
+  }, [isEditMode, meetingId, users, existingParticipants, existingTasks, existingDocuments]);
 
   const steps = [
     { num: 1, label: "Thông tin chung" },
@@ -260,37 +320,103 @@ export default function CreateMeetingPage() {
   };
 
   useEffect(() => {
-    setTaskAssignments((prev) => {
-      const filtered = prev.filter((assignment) => selectedAttendees.includes(assignment.attendee));
-      const selectedWithoutTask = selectedAttendees.filter(
-        (attendee) => !filtered.some((assignment) => assignment.attendee === attendee)
-      );
-
-      const appended = selectedWithoutTask.map((attendee) => ({
-        attendee,
-        taskType: "PRE_MEETING",
-        title: "",
-        description: "",
-        dueAt: "",
-        status: "TODO",
-        remindBeforeMinutes: "",
-        documentRef: "",
-      }));
-
-      return [...filtered, ...appended];
-    });
+    setTaskAssignments((prev) => prev.filter((assignment) => selectedAttendees.includes(assignment.attendee)));
+    setTaskModalAttendee((prev) => (prev && selectedAttendees.includes(prev) ? prev : null));
   }, [selectedAttendees]);
 
   const updateTaskAssignment = (
-    attendee: string,
-    field: "taskType" | "title" | "description" | "dueAt" | "status" | "remindBeforeMinutes" | "documentRef",
+    assignmentKey: string,
+    field: "title" | "description" | "dueAt" | "remindBeforeMinutes",
     value: string
   ) => {
     setTaskAssignments((prev) =>
       prev.map((assignment) =>
-        assignment.attendee === attendee ? { ...assignment, [field]: value } : assignment
+        assignment.key === assignmentKey ? { ...assignment, [field]: value } : assignment
       )
     );
+  };
+
+  const addTaskForAttendee = (attendee: string) => {
+    setTaskAssignments((prev) => [
+      ...prev,
+      {
+        key: `${attendee}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        attendee,
+        title: "",
+        description: "",
+        dueAt: "",
+        remindBeforeMinutes: "",
+        documentRefs: [""],
+      },
+    ]);
+  };
+
+  const removeTaskAssignment = (assignmentKey: string) => {
+    setTaskAssignments((prev) => prev.filter((assignment) => assignment.key !== assignmentKey));
+  };
+
+  const updateDocumentRef = (assignmentKey: string, docIndex: number, value: string) => {
+    setTaskAssignments((prev) =>
+      prev.map((assignment) => {
+        if (assignment.key !== assignmentKey) return assignment;
+        const nextDocs = [...assignment.documentRefs];
+        nextDocs[docIndex] = value;
+        return { ...assignment, documentRefs: nextDocs };
+      })
+    );
+  };
+
+  const addDocumentRef = (assignmentKey: string) => {
+    setTaskAssignments((prev) =>
+      prev.map((assignment) =>
+        assignment.key === assignmentKey ? { ...assignment, documentRefs: [...assignment.documentRefs, ""] } : assignment
+      )
+    );
+  };
+
+  const removeDocumentRef = (assignmentKey: string, docIndex: number) => {
+    setTaskAssignments((prev) =>
+      prev.map((assignment) => {
+        if (assignment.key !== assignmentKey) return assignment;
+        const nextDocs = assignment.documentRefs.filter((_, index) => index !== docIndex);
+        return { ...assignment, documentRefs: nextDocs.length > 0 ? nextDocs : [""] };
+      })
+    );
+  };
+
+  const getTaskCountByAttendee = (attendee: string) =>
+    taskAssignments.filter((assignment) => assignment.attendee === attendee).length;
+
+  const validateTasksForAttendee = (attendee: string) => {
+    const attendeeTasks = taskAssignments.filter((assignment) => assignment.attendee === attendee);
+    const nextErrors: Record<string, string> = {};
+
+    attendeeTasks.forEach((assignment) => {
+      if (!assignment.title.trim()) nextErrors[`${assignment.key}-title`] = "Vui lòng nhập tiêu đề task";
+      if (!assignment.dueAt) nextErrors[`${assignment.key}-dueAt`] = "Vui lòng chọn hạn xử lý";
+      if (!String(assignment.remindBeforeMinutes).trim()) nextErrors[`${assignment.key}-remind`] = "Vui lòng nhập nhắc trước";
+    });
+
+    setTaskModalErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const closeTaskModal = () => {
+    if (!taskModalAttendee) {
+      setTaskModalAttendee(null);
+      setTaskModalErrors({});
+      return;
+    }
+
+    if (validateTasksForAttendee(taskModalAttendee)) {
+      setTaskModalAttendee(null);
+      setTaskModalErrors({});
+    }
+  };
+
+  const openTaskModal = (attendee: string) => {
+    setTaskModalErrors({});
+    setTaskModalAttendee(attendee);
   };
 
   const toggleDepartment = (deptName: string) => {
@@ -497,12 +623,12 @@ export default function CreateMeetingPage() {
         if (!assignee?.id || !assignment.title.trim()) return null;
 
         return {
-          clientKey: `task-${assignee.id}`,
-          type: (assignment.taskType === "POST_MEETING" ? "POST_MEETING" : "PRE_MEETING") as "PRE_MEETING" | "POST_MEETING",
+          clientKey: assignment.key,
+          type: "PRE_MEETING" as const,
           title: assignment.title.trim(),
           description: assignment.description?.trim() || undefined,
           dueAt: assignment.dueAt ? new Date(assignment.dueAt).toISOString() : undefined,
-          status: (assignment.status || "TODO") as "TODO" | "IN_PROGRESS" | "DONE" | "OVERDUE",
+          status: "TODO" as const,
           remindBeforeMinutes: assignment.remindBeforeMinutes ? Number(assignment.remindBeforeMinutes) : undefined,
           assigneeId: Number(assignee.id),
           assignedById: Number(account?.id),
@@ -510,17 +636,18 @@ export default function CreateMeetingPage() {
       })
       .filter(Boolean) as any[];
 
-    const documents = taskAssignments
-      .filter((assignment) => assignment.documentRef.trim())
-      .map((assignment) => {
-        const assignee = users.find((u: any) => (u.name || u.login) === assignment.attendee);
-        return {
-          docType: "ATTACHMENT",
-          fileName: assignment.documentRef.trim(),
-          uploadedById: Number(account?.id),
-          taskClientKey: assignee?.id ? `task-${assignee.id}` : undefined,
-        };
-      });
+    const documents = taskAssignments.flatMap((assignment) => {
+      const validDocs = assignment.documentRefs
+        .map((doc) => doc.trim())
+        .filter(Boolean);
+
+      return validDocs.map((fileName) => ({
+        docType: "ATTACHMENT",
+        fileName,
+        uploadedById: Number(account?.id),
+        taskClientKey: assignment.key,
+      }));
+    });
 
     return { tasks, documents };
   };
@@ -851,118 +978,119 @@ export default function CreateMeetingPage() {
 
             {selectedAttendees.length > 0 && (
               <>
-              <div>
-                <Label>Đã chọn ({selectedAttendees.length})</Label>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {selectedAttendees.map((a) => (
-                    <Badge key={a} variant="secondary" className="cursor-pointer" onClick={() => toggleAttendee(a)}>
-                      {a} ×
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-                <div className="border rounded-lg p-4 space-y-3 bg-secondary/20">
-                  <div>
-                    <Label className="text-sm font-semibold">Giao task theo cấu trúc hệ thống</Label>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Mỗi người tham dự có thể có task gồm: type, title, description, due_at, status, remind_before_minutes.
-                    </p>
+                <div>
+                  <Label>Đã chọn ({selectedAttendees.length})</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                    {selectedAttendees.map((a) => {
+                      const count = getTaskCountByAttendee(a);
+                      return (
+                        <div key={a} className="rounded-xl border bg-secondary/20 px-4 py-3 flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold">{a}</p>
+                            <p className="text-xs text-muted-foreground">{count > 0 ? `Đã giao ${count} task` : "Chưa giao task"}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {count > 0 && <Badge variant="outline">{count}</Badge>}
+                            <Button size="sm" onClick={() => openTaskModal(a)}>
+                              <Plus className="h-4 w-4 mr-1" /> Giao task
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleAttendee(a)}>
+                              ×
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
+                </div>
 
-                  <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
-                    {taskAssignments.map((assignment) => (
-                      <div key={assignment.attendee} className="rounded-md border bg-background p-3 space-y-2">
-                        <p className="text-sm font-medium">{assignment.attendee}</p>
+                <Dialog open={!!taskModalAttendee} onOpenChange={(open) => !open && closeTaskModal()}>
+                  <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>
+                        Giao task theo cấu trúc hệ thống {taskModalAttendee ? `- ${taskModalAttendee}` : ""}
+                      </DialogTitle>
+                    </DialogHeader>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                          <div>
-                            <Label className="text-xs">Loại task</Label>
-                            <Select
-                              value={assignment.taskType}
-                              onValueChange={(value) => updateTaskAssignment(assignment.attendee, "taskType", value)}
-                            >
-                              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="PRE_MEETING">PRE_MEETING</SelectItem>
-                                <SelectItem value="POST_MEETING">POST_MEETING</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label className="text-xs">Trạng thái</Label>
-                            <Select
-                              value={assignment.status}
-                              onValueChange={(value) => updateTaskAssignment(assignment.attendee, "status", value)}
-                            >
-                              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="TODO">TODO</SelectItem>
-                                <SelectItem value="IN_PROGRESS">IN_PROGRESS</SelectItem>
-                                <SelectItem value="DONE">DONE</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label className="text-xs">Nhắc trước (phút)</Label>
-                            <Input
-                              type="number"
-                              min={0}
-                              placeholder="VD: 30"
-                              value={assignment.remindBeforeMinutes}
-                              onChange={(e) => updateTaskAssignment(assignment.attendee, "remindBeforeMinutes", e.target.value)}
-                              className="mt-1"
-                            />
-                          </div>
+                    {taskModalAttendee && (
+                      <div className="space-y-3">
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Mỗi người có thể có nhiều task và mỗi task có thể có nhiều tài liệu. Trạng thái task sẽ tự động là TODO khi tạo.
+                        </p>
+                        <div className="flex justify-end">
+                          <Button variant="outline" size="sm" onClick={() => addTaskForAttendee(taskModalAttendee)}>
+                            <Plus className="h-3 w-3 mr-1" /> Thêm task
+                          </Button>
                         </div>
 
-                        <div>
-                          <Label className="text-xs">Tiêu đề task</Label>
-                          <Input
-                            placeholder="Nhập tiêu đề task"
-                            value={assignment.title}
-                            onChange={(e) => updateTaskAssignment(assignment.attendee, "title", e.target.value)}
-                            className="mt-1"
-                          />
-                        </div>
+                        <div className="space-y-3">
+                          {taskAssignments
+                            .filter((assignment) => assignment.attendee === taskModalAttendee)
+                            .map((assignment, taskIndex, list) => (
+                              <div key={assignment.key} className="rounded-md border bg-card p-3 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-xs font-medium text-muted-foreground">Task #{taskIndex + 1}</p>
+                                  {list.length > 1 && (
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeTaskAssignment(assignment.key)}>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          <div>
-                            <Label className="text-xs">Hạn xử lý (due_at)</Label>
-                            <Input
-                              type="datetime-local"
-                              value={assignment.dueAt}
-                              onChange={(e) => updateTaskAssignment(assignment.attendee, "dueAt", e.target.value)}
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Tài liệu liên quan</Label>
-                            <Input
-                              placeholder="Tên file hoặc mã tài liệu"
-                              value={assignment.documentRef}
-                              onChange={(e) => updateTaskAssignment(assignment.attendee, "documentRef", e.target.value)}
-                              className="mt-1"
-                            />
-                          </div>
-                        </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  <div>
+                                    <Label className="text-xs">Tiêu đề task</Label>
+                                    <Input placeholder="Nhập tiêu đề task" value={assignment.title} onChange={(e) => updateTaskAssignment(assignment.key, "title", e.target.value)} className="mt-1" />
+                                    {taskModalErrors[`${assignment.key}-title`] && <p className="text-xs text-destructive mt-1">{taskModalErrors[`${assignment.key}-title`]}</p>}
+                                  </div>
 
-                        <div>
-                          <Label className="text-xs">Mô tả</Label>
-                          <Textarea
-                            placeholder="Mô tả chi tiết task"
-                            value={assignment.description}
-                            onChange={(e) => updateTaskAssignment(assignment.attendee, "description", e.target.value)}
-                            rows={2}
-                            className="mt-1"
-                          />
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  <div>
+                                    <Label className="text-xs">Hạn xử lý (due_at)</Label>
+                                    <Input type="datetime-local" value={assignment.dueAt} onChange={(e) => updateTaskAssignment(assignment.key, "dueAt", e.target.value)} className="mt-1" />
+                                    {taskModalErrors[`${assignment.key}-dueAt`] && <p className="text-xs text-destructive mt-1">{taskModalErrors[`${assignment.key}-dueAt`]}</p>}
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Nhắc trước (phút)</Label>
+                                    <Input type="number" min={0} placeholder="VD: 30" value={assignment.remindBeforeMinutes} onChange={(e) => updateTaskAssignment(assignment.key, "remindBeforeMinutes", e.target.value)} className="mt-1" />
+                                    {taskModalErrors[`${assignment.key}-remind`] && <p className="text-xs text-destructive mt-1">{taskModalErrors[`${assignment.key}-remind`]}</p>}
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <Label className="text-xs">Tài liệu liên quan</Label>
+                                  <div className="space-y-2 mt-1">
+                                    {assignment.documentRefs.map((doc, docIndex) => (
+                                      <div key={`${assignment.key}-doc-${docIndex}`} className="flex items-center gap-2">
+                                        <Input placeholder={`Tài liệu ${docIndex + 1}`} value={doc} onChange={(e) => updateDocumentRef(assignment.key, docIndex, e.target.value)} />
+                                        {assignment.documentRefs.length > 1 && (
+                                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeDocumentRef(assignment.key, docIndex)}>
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        )}
+                                      </div>
+                                    ))}
+                                    <Button variant="outline" size="sm" onClick={() => addDocumentRef(assignment.key)}>
+                                      <Plus className="h-3 w-3 mr-1" /> Thêm tài liệu
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <Label className="text-xs">Mô tả</Label>
+                                  <Textarea placeholder="Mô tả chi tiết task" value={assignment.description} onChange={(e) => updateTaskAssignment(assignment.key, "description", e.target.value)} rows={2} className="mt-1" />
+                                </div>
+                              </div>
+                            ))}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    )}
+                  </DialogContent>
+                </Dialog>
               </>
-                )}
+            )}
               </>
             )}
           </CardContent>
@@ -1046,9 +1174,13 @@ export default function CreateMeetingPage() {
                 <>
                   <Send className="h-4 w-4 mr-1.5" /> Tạo phòng
                 </>
+              ) : isEditMode ? (
+                <>
+                  <Save className="h-4 w-4 mr-1.5" /> Cập nhật
+                </>
               ) : (
                 <>
-                  <Send className="h-4 w-4 mr-1.5" /> Gửi duyệt
+                  {isEditMode ? <><Save className="h-4 w-4 mr-1.5" /> Cập nhật</> : <><Send className="h-4 w-4 mr-1.5" /> Gửi duyệt</>}
                 </>
               )}
             </Button>

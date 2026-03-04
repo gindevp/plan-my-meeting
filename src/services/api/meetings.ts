@@ -181,7 +181,9 @@ export async function createMeetingFromForm(payload: CreateMeetingFormPayload) {
     (payload.tasks && payload.tasks.length > 0) ||
     (payload.documents && payload.documents.length > 0);
 
-  if (hasDetails) {
+  // Nếu cần submit ngay sau khi tạo, luôn đi qua endpoint with-details
+  // để backend xử lý create + submit trong 1 transaction (fail thì rollback toàn bộ)
+  if (hasDetails || payload.submitAfterCreate === true) {
     const participants =
       payload.participants?.map((p: any) => ({
         userId: Number(p.userId),
@@ -332,10 +334,41 @@ export async function getParticipantsByMeeting(meetingId: number | string) {
     .filter((p: any) => p.meeting?.id === Number(meetingId))
     .map((p: any) => ({
       id: p.id,
+      userId: p.user?.id != null ? String(p.user.id) : "",
       name: p.user?.login ?? "",
       role: p.role,
       required: p.isRequired,
       attendance: p.attendance,
+    }));
+}
+
+export async function getMeetingTasksByMeeting(meetingId: number | string) {
+  const list = await fetchApi<unknown[]>("/api/meeting-tasks");
+  return (list as any[])
+    .filter((t: any) => t.meeting?.id === Number(meetingId))
+    .map((t: any) => ({
+      id: String(t.id),
+      title: t.title ?? "",
+      type: t.type ?? "",
+      assigneeId: t.assignee?.id != null ? String(t.assignee.id) : "",
+      assignee: t.assignee?.login ?? "",
+      dueAt: t.dueAt ?? "",
+      status: t.status ?? "TODO",
+      remindBeforeMinutes: t.remindBeforeMinutes,
+      description: t.description ?? "",
+    }));
+}
+
+export async function getMeetingDocumentsByMeeting(meetingId: number | string) {
+  const list = await fetchApi<unknown[]>("/api/meeting-documents");
+  return (list as any[])
+    .filter((d: any) => d.meeting?.id === Number(meetingId))
+    .map((d: any) => ({
+      id: String(d.id),
+      fileName: d.fileName ?? "",
+      docType: d.docType ?? "",
+      uploadedBy: d.uploadedBy?.login ?? "",
+      taskId: d.task?.id != null ? String(d.task.id) : "",
     }));
 }
 

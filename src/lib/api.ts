@@ -162,7 +162,24 @@ export async function fetchApi<T>(
     }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || res.statusText || "Lỗi yêu cầu");
+      const rawMessage = err?.message || err?.detail || err?.title || "";
+      const combined = `${rawMessage} ${JSON.stringify(err)}`.toLowerCase();
+
+      if (
+        res.status === 409 ||
+        combined.includes("conflict") ||
+        combined.includes("xung đột") ||
+        combined.includes("room") ||
+        combined.includes("phòng") ||
+        combined.includes("trùng")
+      ) {
+        throw new Error(
+          "Không thể gửi duyệt do xung đột lịch/phòng. Vui lòng kiểm tra lại: thời gian họp, phòng họp, người tham dự hoặc thiết bị đang bị trùng." +
+            (rawMessage ? ` Chi tiết: ${rawMessage}` : "")
+        );
+      }
+
+      throw new Error(rawMessage || res.statusText || "Lỗi yêu cầu");
     }
     if (res.status === 204) return undefined as T;
     return res.json();

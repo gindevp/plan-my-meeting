@@ -18,6 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   createMeetingFromForm,
   updateMeeting,
+  submitMeeting,
   getAgendaItemsByMeeting,
   getParticipantsByMeeting,
   getMeetingTasksByMeeting,
@@ -587,7 +588,7 @@ export default function CreateMeetingPage() {
     },
   });
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (submitAfterUpdate = false) => {
     if (!validateStep3()) return;
     checkConflicts();
     if (!account?.id) {
@@ -626,6 +627,13 @@ export default function CreateMeetingPage() {
             documents,
           },
         });
+
+        if (submitAfterUpdate) {
+          await submitMeeting(meetingId);
+          queryClient.invalidateQueries({ queryKey: ["meetings"] });
+          toast({ title: "Đã gửi duyệt", description: "Cuộc họp đã được cập nhật và gửi phê duyệt." });
+          navigate("/plans");
+        }
       } else {
         const created = await createMeetingFromForm({
           title,
@@ -1134,8 +1142,17 @@ export default function CreateMeetingPage() {
           )}
           {step < 3 ? (
             <Button onClick={() => goToStep(step + 1)}>Tiếp theo</Button>
+          ) : isEditMode ? (
+            <>
+              <Button variant="outline" onClick={() => handleSubmit(false)}>
+                <Save className="h-4 w-4 mr-1.5" /> Cập nhật
+              </Button>
+              <Button onClick={() => handleSubmit(true)}>
+                <Send className="h-4 w-4 mr-1.5" /> Gửi duyệt
+              </Button>
+            </>
           ) : (
-            <Button onClick={handleSubmit}>
+            <Button onClick={() => handleSubmit(false)}>
               {meetingLevel === "company" ? (
                 <>
                   <Send className="h-4 w-4 mr-1.5" /> Tạo phòng

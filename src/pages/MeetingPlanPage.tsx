@@ -124,7 +124,16 @@ export default function MeetingPlanPage() {
     mutationFn: (id: string) => submitMeeting(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      toast({ title: "Đã gửi duyệt", description: "Cuộc họp nháp đã được gửi phê duyệt." });
       setSelectedMeeting(null);
+      setActiveTab("pending");
+    },
+    onError: (err: unknown) => {
+      toast({
+        variant: "destructive",
+        title: "Lỗi gửi duyệt",
+        description: err instanceof Error ? err.message : "Không thể gửi duyệt cuộc họp.",
+      });
     },
   });
 
@@ -175,6 +184,37 @@ export default function MeetingPlanPage() {
     queryFn: () => getMeetingDocumentsByMeeting(selectedMeeting!.id),
     enabled: !!selectedMeeting,
   });
+
+  const draftValidation = (() => {
+    if (!selectedMeeting || selectedMeeting.status !== "draft") {
+      return { isComplete: false, missing: [] as string[] };
+    }
+
+    const missing: string[] = [];
+
+    const step1Valid =
+      !!selectedMeeting.title?.trim() &&
+      !!selectedMeeting.startTime &&
+      !!selectedMeeting.endTime &&
+      !!selectedMeeting.chairperson?.trim() &&
+      ((selectedMeeting.type === "offline" && !!selectedMeeting.roomName) ||
+        (selectedMeeting.type === "online" && !!selectedMeeting.meetingLink) ||
+        (selectedMeeting.type === "hybrid" && !!selectedMeeting.roomName && !!selectedMeeting.meetingLink));
+
+    if (!step1Valid) {
+      missing.push("Thiếu thông tin bước 1 (thông tin chung)");
+    }
+
+    if (participants.length === 0) {
+      missing.push("Thiếu thông tin bước 2 (chưa có thành phần tham dự)");
+    }
+
+    if (agendaItems.length === 0) {
+      missing.push("Thiếu thông tin bước 3 (chưa có chương trình họp)");
+    }
+
+    return { isComplete: missing.length === 0, missing };
+  })();
 
   return (
     <div className="space-y-6">
@@ -440,6 +480,38 @@ export default function MeetingPlanPage() {
                     </div>
                   )}
                 </div>
+
+                {selectedMeeting.status === "draft" && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <div className={`rounded-lg border p-3 ${draftValidation.isComplete ? "bg-success/5 border-success/30" : "bg-warning/5 border-warning/30"}`}>
+                        <p className="font-medium text-sm mb-1">Kiểm tra thông tin 3 bước</p>
+                        {draftValidation.isComplete ? (
+                          <p className="text-xs text-success">Đã đủ thông tin cả 3 bước. Bạn có thể gửi duyệt.</p>
+                        ) : (
+                          <ul className="text-xs text-warning space-y-1 list-disc pl-4">
+                            {draftValidation.missing.map((item) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      <div className="flex justify-end gap-2">
+                        {draftValidation.isComplete && (
+                          <Button onClick={() => submitMutation.mutate(selectedMeeting.id)} disabled={submitMutation.isPending}>
+                            {submitMutation.isPending
+                              ? "Đang xử lý..."
+                              : ["company", "corporate"].includes(String(selectedMeeting.level).toLowerCase())
+                              ? "Tạo cuộc họp"
+                              : "Gửi duyệt"}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {(canApproveRoom || canApproveUnit) && selectedMeeting.status === "pending" && (
                   <>

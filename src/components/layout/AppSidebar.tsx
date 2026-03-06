@@ -40,6 +40,10 @@ export default function AppSidebar() {
   const location = useLocation();
   const { user, signOut } = useAuth();
   const { t } = useI18n();
+  const isAdmin = user?.authorities?.includes("ROLE_ADMIN") ?? false;
+
+  const visibleNavigation = navigation.filter(item => item.href !== "/" || isAdmin);
+  const visibleManagement = management.filter(item => item.href !== "/reports" || isAdmin);
 
   return (
     <aside className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-gradient-sidebar border-r border-sidebar-border">
@@ -59,7 +63,7 @@ export default function AppSidebar() {
             {t("sidebar.main")}
           </p>
           <ul className="space-y-0.5">
-            {navigation.map(item => (
+            {visibleNavigation.map(item => (
               <li key={item.key}>
                 <NavLink
                   to={item.href}
@@ -86,7 +90,7 @@ export default function AppSidebar() {
             {t("sidebar.management")}
           </p>
           <ul className="space-y-0.5">
-            {management.map(item => (
+            {visibleManagement.map(item => (
               <li key={item.key}>
                 <NavLink
                   to={item.href}

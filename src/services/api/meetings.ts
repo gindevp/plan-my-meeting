@@ -17,6 +17,23 @@ export const meetingStatusMap: Record<string, string> = {
   COMPLETED: "completed",
 };
 
+const normalizeMeetingLevel = (raw?: string) => {
+  const value = String(raw ?? "").trim().toUpperCase();
+  if (["CORPORATE", "COMPANY", "TONG_CONG_TY", "TỔNG CÔNG TY", "CAP_TONG_CONG_TY"].includes(value)) return "company";
+  if (["DEPARTMENT", "PHONG_BAN", "PHÒNG BAN", "TEAM"].includes(value)) return "department";
+  return "department";
+};
+
+const resolveLevelRef = (levels: any[], meetingLevel: "company" | "department" | "team") => {
+  const corporateAliases = ["CORPORATE", "COMPANY", "TONG_CONG_TY", "CAP_TONG_CONG_TY"];
+  const departmentAliases = ["DEPARTMENT", "PHONG_BAN", "TEAM"];
+
+  const aliases = meetingLevel === "company" ? corporateAliases : departmentAliases;
+
+  const matched = levels.find((l: any) => aliases.includes(String(l.name ?? "").trim().toUpperCase()));
+  return matched ? { id: matched.id } : levels[0] ? { id: levels[0].id } : null;
+};
+
 export interface MeetingListItem {
   id: string;
   title: string;
@@ -60,7 +77,7 @@ export async function getMeetings(params?: { page?: number; size?: number }) {
     id: String(m.id),
     title: m.title ?? "",
     type: meetingModeMap[m.mode] ?? "offline",
-    level: m.level?.name ?? "",
+    level: normalizeMeetingLevel(m.level?.name),
     status: meetingStatusMap[m.status] ?? "draft",
     statusRecord: m.statusRecord ?? "ACTIVE",
     startTime: m.startTime,
@@ -94,7 +111,8 @@ export interface CreateMeetingFormPayload {
   meetingLink?: string;
   requesterId: number | string;
   hostId: number | string;
-  participants?: { userId: number; role?: string; isRequired?: boolean }[];
+  organizerDepartmentId?: number | string;
+  participants?: { userId?: number; departmentId?: number; role?: string; isRequired?: boolean }[];
   agendaItems?: { title: string; presenter: string; duration: number }[];
   tasks?: {
     clientKey: string;
@@ -104,8 +122,9 @@ export interface CreateMeetingFormPayload {
     dueAt?: string;
     status: "TODO" | "IN_PROGRESS" | "DONE" | "OVERDUE";
     remindBeforeMinutes?: number;
-    assigneeId: number;
+    assigneeId?: number;
     assignedById?: number;
+    departmentId?: number;
   }[];
   documents?: {
     docType: string;
@@ -142,16 +161,11 @@ export async function createMeetingFromForm(payload: CreateMeetingFormPayload) {
 
   const typeRef = types[0] ? { id: types[0].id } : null;
 
-  const levelMap: Record<string, string> = {
-    company: "CORPORATE",
-    department: "DEPARTMENT",
-    team: "DEPARTMENT",
-  };
-  const targetLevelName = levelMap[payload.meetingLevel] || "DEPARTMENT";
-  const matchedLevel = levels.find((l: any) => l.name === targetLevelName);
-  const levelRef = matchedLevel ? { id: matchedLevel.id } : levels[0] ? { id: levels[0].id } : null;
+  const levelRef = resolveLevelRef(levels as any[], payload.meetingLevel);
 
-  const deptRef = departments[0] ? { id: departments[0].id } : null;
+  const fallbackDepartmentId = departments[0]?.id;
+  const resolvedOrganizerDepartmentId = payload.organizerDepartmentId != null ? Number(payload.organizerDepartmentId) : fallbackDepartmentId;
+  const deptRef = resolvedOrganizerDepartmentId != null ? { id: resolvedOrganizerDepartmentId } : null;
 
   const body: any = {
     title: payload.title,
@@ -186,7 +200,8 @@ export async function createMeetingFromForm(payload: CreateMeetingFormPayload) {
   if (hasDetails || payload.submitAfterCreate === true) {
     const participants =
       payload.participants?.map((p: any) => ({
-        userId: Number(p.userId),
+        userId: p.userId != null ? Number(p.userId) : null,
+        departmentId: p.departmentId != null ? Number(p.departmentId) : null,
         role: p.role || "ATTENDEE",
         isRequired: p.isRequired !== false,
       })) || [];
@@ -210,6 +225,7 @@ export async function createMeetingFromForm(payload: CreateMeetingFormPayload) {
         remindBeforeMinutes: t.remindBeforeMinutes ?? null,
         assigneeId: Number(t.assigneeId),
         assignedById: t.assignedById != null ? Number(t.assignedById) : Number(payload.requesterId),
+        departmentId: t.departmentId != null ? Number(t.departmentId) : null,
       })) || [];
 
     const documents =
@@ -308,13 +324,11 @@ export async function updateMeeting(id: number | string, payload: Partial<Create
       ? "ONLINE"
       : "HYBRID";
 
-  const levelMap: Record<string, string> = {
-    company: "CORPORATE",
-    department: "DEPARTMENT",
-    team: "DEPARTMENT",
-  };
-  const targetLevelName = levelMap[payload.meetingLevel || "department"] || "DEPARTMENT";
-  const matchedLevel = levels.find((l: any) => l.name === targetLevelName);
+  const normalizedMeetingLevel = (payload.meetingLevel || "department") as "company" | "department" | "team";
+  const levelRef = resolveLevelRef(levels as any[], normalizedMeetingLevel);
+
+  const fallbackDepartmentId = departments[0]?.id;
+  const resolvedOrganizerDepartmentId = payload.organizerDepartmentId != null ? Number(payload.organizerDepartmentId) : fallbackDepartmentId;
 
   const body: any = {
     id: Number(id),
@@ -327,8 +341,8 @@ export async function updateMeeting(id: number | string, payload: Partial<Create
     statusRecord: "ACTIVE",
     updatedAt: nowIso,
     type: types[0] ? { id: types[0].id } : null,
-    level: matchedLevel ? { id: matchedLevel.id } : levels[0] ? { id: levels[0].id } : null,
-    organizerDepartment: departments[0] ? { id: departments[0].id } : null,
+    level: levelRef,
+    organizerDepartment: resolvedOrganizerDepartmentId != null ? { id: resolvedOrganizerDepartmentId } : null,
     requester: { id: Number(payload.requesterId) },
     host: { id: Number(payload.hostId) },
   };
@@ -339,7 +353,8 @@ export async function updateMeeting(id: number | string, payload: Partial<Create
 
   const participants =
     payload.participants?.map((p: any) => ({
-      userId: Number(p.userId),
+      userId: p.userId != null ? Number(p.userId) : null,
+      departmentId: p.departmentId != null ? Number(p.departmentId) : null,
       role: p.role || "ATTENDEE",
       isRequired: p.isRequired !== false,
     })) || [];
@@ -363,6 +378,7 @@ export async function updateMeeting(id: number | string, payload: Partial<Create
       remindBeforeMinutes: t.remindBeforeMinutes ?? null,
       assigneeId: Number(t.assigneeId),
       assignedById: t.assignedById != null ? Number(t.assignedById) : Number(payload.requesterId),
+      departmentId: t.departmentId != null ? Number(t.departmentId) : null,
     })) || [];
 
   const documents =
@@ -411,7 +427,8 @@ export async function getParticipantsByMeeting(meetingId: number | string) {
     .map((p: any) => ({
       id: p.id,
       userId: p.user?.id != null ? String(p.user.id) : "",
-      name: p.user?.login ?? "",
+      departmentId: p.department?.id != null ? String(p.department.id) : "",
+      name: p.user?.login ?? p.department?.name ?? "",
       role: p.role,
       required: p.isRequired,
       attendance: p.attendance,
@@ -428,6 +445,8 @@ export async function getMeetingTasksByMeeting(meetingId: number | string) {
       type: t.type ?? "",
       assigneeId: t.assignee?.id != null ? String(t.assignee.id) : "",
       assignee: t.assignee?.login ?? "",
+      departmentId: t.department?.id != null ? String(t.department.id) : "",
+      departmentName: t.department?.name ?? "",
       dueAt: t.dueAt ?? "",
       status: t.status ?? "TODO",
       remindBeforeMinutes: t.remindBeforeMinutes,

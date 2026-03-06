@@ -2,7 +2,12 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
 
-export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  requiredRoles?: string[];
+}
+
+export default function ProtectedRoute({ children, requiredRoles }: ProtectedRouteProps) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -15,6 +20,13 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (requiredRoles && requiredRoles.length > 0) {
+    const hasRole = requiredRoles.some(role => user.authorities?.includes(role));
+    if (!hasRole) {
+      return <Navigate to="/plans" replace />;
+    }
   }
 
   return <>{children}</>;

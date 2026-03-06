@@ -3,11 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { statusLabels, typeLabels } from "@/data/mockData";
 import { useMeetings } from "@/hooks/useMeetings";
-import { ChevronLeft, ChevronRight, Filter, X } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
+import { ChevronLeft, ChevronRight, Filter } from "lucide-react";
 
-type ViewMode = "day" | "week" | "month";
+type ViewMode = "day" | "week" | "month" | "year";
 
 const typeBorderColor: Record<string, string> = {
   offline: "border-l-green-500",
@@ -38,14 +36,13 @@ const dayNames = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 export default function CalendarPage() {
   const { data: meetings = [] } = useMeetings();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>("day");
+  const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [weekIndex, setWeekIndex] = useState(0);
-  const [modalDate, setModalDate] = useState<Date | null>(null);
 
   const today = new Date();
 
   const getMeetingsForDay = (date: Date) => {
-    return meetings.filter((m) => {
+    return meetings.filter(m => {
       const d = new Date(m.startTime);
       return d.toDateString() === date.toDateString() && m.status !== "cancelled";
     });
@@ -74,12 +71,96 @@ export default function CalendarPage() {
     return w;
   }, [monthDays]);
 
-  const capitalizedMonth = "Tháng " + (currentDate.getMonth() + 1) + " " + currentDate.getFullYear();
+  const capitalizedMonth = `Tháng ${currentDate.getMonth() + 1} ${currentDate.getFullYear()}`;
 
-  // Navigation handlers
+  const dayMeetingsSorted = useMemo(
+    () =>
+      getMeetingsForDay(currentDate).sort(
+        (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+      ),
+    [meetings, currentDate]
+  );
+
+  const timelineHours = Array.from({ length: 24 }, (_, i) => i);
+  const minutesPerDay = 24 * 60;
+  const dayPixelHeight = 24 * 64;
+
+  const dayLayoutMeetings = useMemo(() => {
+    const toMinutes = (iso: string) => {
+      const d = new Date(iso);
+      return d.getHours() * 60 + d.getMinutes();
+    };
+
+    type LayoutMeeting = {
+      meeting: (typeof meetings)[0];
+      start: number;
+      end: number;
+      column: number;
+      columnsInGroup: number;
+    };
+
+    const normalized = dayMeetingsSorted.map(meeting => {
+      const start = toMinutes(meeting.startTime);
+      let end = toMinutes(meeting.endTime);
+      if (end <= start) end = Math.min(start + 30, minutesPerDay);
+      return { meeting, start, end, column: 0, columnsInGroup: 1 } as LayoutMeeting;
+    });
+
+    const result: LayoutMeeting[] = [];
+    let group: LayoutMeeting[] = [];
+    let groupEnd = -1;
+
+    const finalizeGroup = () => {
+      if (group.length === 0) return;
+
+      const activeByColumn = new Map<number, number>();
+      group
+        .sort((a, b) => a.start - b.start || a.end - b.end)
+        .forEach(item => {
+          for (const [col, endMinute] of Array.from(activeByColumn.entries())) {
+            if (endMinute <= item.start) activeByColumn.delete(col);
+          }
+
+          let col = 0;
+          while (activeByColumn.has(col)) col++;
+          item.column = col;
+          activeByColumn.set(col, item.end);
+        });
+
+      const columnsInGroup = Math.max(...group.map(g => g.column)) + 1;
+      group.forEach(item => {
+        item.columnsInGroup = columnsInGroup;
+        result.push(item);
+      });
+
+      group = [];
+      groupEnd = -1;
+    };
+
+    normalized.forEach(item => {
+      if (group.length === 0) {
+        group = [item];
+        groupEnd = item.end;
+        return;
+      }
+
+      if (item.start < groupEnd) {
+        group.push(item);
+        groupEnd = Math.max(groupEnd, item.end);
+      } else {
+        finalizeGroup();
+        group = [item];
+        groupEnd = item.end;
+      }
+    });
+
+    finalizeGroup();
+    return result;
+  }, [dayMeetingsSorted, meetings]);
+
   const navigateDay = (dir: number) => {
     const d = new Date(currentDate);
-    d.setMonth(d.getMonth() + dir);
+    d.setDate(d.getDate() + dir);
     setCurrentDate(d);
   };
 
@@ -92,20 +173,30 @@ export default function CalendarPage() {
 
   const navigateMonth = (dir: number) => {
     const d = new Date(currentDate);
+    d.setMonth(d.getMonth() + dir);
+    setCurrentDate(d);
+  };
+
+  const navigateYear = (dir: number) => {
+    const d = new Date(currentDate);
     d.setFullYear(d.getFullYear() + dir);
     setCurrentDate(d);
   };
 
-  // Reset week index when switching to week mode or changing month
   const handleViewChange = (mode: ViewMode) => {
     setViewMode(mode);
     if (mode === "week") setWeekIndex(0);
   };
 
+  const handleDayClick = (date: Date) => {
+    setCurrentDate(date);
+    setViewMode("day");
+  };
+
   const handleMonthClick = (monthIdx: number) => {
     const d = new Date(currentDate.getFullYear(), monthIdx, 1);
     setCurrentDate(d);
-    setViewMode("day");
+    setViewMode("month");
   };
 
   const renderMeetingCard = (m: (typeof meetings)[0]) => (
@@ -123,13 +214,23 @@ export default function CalendarPage() {
     </div>
   );
 
-  const modalMeetings = modalDate ? getMeetingsForDay(modalDate) : [];
-
-  // Mini calendar for month overview
   const renderMiniMonth = (monthIdx: number) => {
     const year = currentDate.getFullYear();
     const miniDays = getMonthDays(new Date(year, monthIdx, 1));
-    const monthNames = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"];
+    const monthNames = [
+      "Tháng 1",
+      "Tháng 2",
+      "Tháng 3",
+      "Tháng 4",
+      "Tháng 5",
+      "Tháng 6",
+      "Tháng 7",
+      "Tháng 8",
+      "Tháng 9",
+      "Tháng 10",
+      "Tháng 11",
+      "Tháng 12",
+    ];
 
     return (
       <div
@@ -139,8 +240,10 @@ export default function CalendarPage() {
       >
         <p className="text-sm font-semibold mb-2 text-center">{monthNames[monthIdx]}</p>
         <div className="grid grid-cols-7 gap-0.5">
-          {["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((d) => (
-            <div key={d} className="text-[8px] text-muted-foreground text-center">{d}</div>
+          {dayNames.map(d => (
+            <div key={d} className="text-[8px] text-muted-foreground text-center">
+              {d}
+            </div>
           ))}
           {miniDays.map((day, i) => {
             const hasMeetings = day ? getMeetingsForDay(day).length > 0 : false;
@@ -149,7 +252,13 @@ export default function CalendarPage() {
               <div
                 key={i}
                 className={`text-[9px] text-center h-4 flex items-center justify-center rounded-sm ${
-                  !day ? "" : isToday ? "bg-primary text-primary-foreground font-bold" : hasMeetings ? "bg-primary/20 text-primary font-medium" : "text-muted-foreground"
+                  !day
+                    ? ""
+                    : isToday
+                    ? "bg-primary text-primary-foreground font-bold"
+                    : hasMeetings
+                    ? "bg-primary/20 text-primary font-medium"
+                    : "text-muted-foreground"
                 }`}
               >
                 {day?.getDate() || ""}
@@ -163,11 +272,10 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-display font-bold">Lịch họp</h1>
-          <p className="text-sm text-muted-foreground mt-1">Xem lịch các cuộc họp theo ngày, tuần, tháng</p>
+          <p className="text-sm text-muted-foreground mt-1">Xem lịch các cuộc họp theo ngày, tuần, tháng, năm</p>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-4 text-sm">
@@ -187,9 +295,7 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Calendar Card */}
       <div className="bg-card rounded-xl border border-border shadow-sm">
-        {/* Nav bar */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             {viewMode === "day" && (
@@ -200,7 +306,14 @@ export default function CalendarPage() {
                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateDay(1)}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
-                <h2 className="text-base font-semibold ml-2">{capitalizedMonth}</h2>
+                <h2 className="text-base font-semibold ml-2">
+                  {currentDate.toLocaleDateString("vi-VN", {
+                    weekday: "long",
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                  })}
+                </h2>
               </>
             )}
             {viewMode === "week" && (
@@ -236,12 +349,23 @@ export default function CalendarPage() {
                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateMonth(1)}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
+                <h2 className="text-base font-semibold ml-2">{capitalizedMonth}</h2>
+              </>
+            )}
+            {viewMode === "year" && (
+              <>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateYear(-1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateYear(1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
                 <h2 className="text-base font-semibold ml-2">Năm {currentDate.getFullYear()}</h2>
               </>
             )}
           </div>
           <div className="flex bg-secondary rounded-lg p-0.5">
-            {(["day", "week", "month"] as ViewMode[]).map((mode) => (
+            {(["day", "week", "month", "year"] as ViewMode[]).map(mode => (
               <Button
                 key={mode}
                 variant={viewMode === mode ? "default" : "ghost"}
@@ -249,18 +373,73 @@ export default function CalendarPage() {
                 onClick={() => handleViewChange(mode)}
                 className="text-xs h-7 px-3"
               >
-                {mode === "day" ? "Ngày" : mode === "week" ? "Tuần" : "Tháng"}
+                {mode === "day" ? "Ngày" : mode === "week" ? "Tuần" : mode === "month" ? "Tháng" : "Năm"}
               </Button>
             ))}
           </div>
         </div>
 
-        {/* Day View (monthly calendar grid) */}
         {viewMode === "day" && (
+          <div className="relative">
+            <div className="absolute inset-0 pointer-events-none divide-y divide-border">
+              {timelineHours.map(hour => (
+                <div key={hour} className="grid grid-cols-[72px_1fr] h-16">
+                  <div className="px-3 py-3 text-xs text-muted-foreground border-r border-border bg-muted/10 pointer-events-auto">
+                    {String(hour).padStart(2, "0")}:00
+                  </div>
+                  <div className="border-r-0" />
+                </div>
+              ))}
+            </div>
+
+            <div className="relative grid grid-cols-[72px_1fr]" style={{ height: `${dayPixelHeight}px` }}>
+              <div className="border-r border-border bg-muted/10" />
+              <div className="relative">
+                {dayLayoutMeetings.map(item => {
+                  const top = (item.start / minutesPerDay) * dayPixelHeight;
+                  const height = Math.max(((item.end - item.start) / minutesPerDay) * dayPixelHeight, 28);
+                  const widthPercent = 100 / item.columnsInGroup;
+                  const leftPercent = item.column * widthPercent;
+
+                  return (
+                    <div
+                      key={item.meeting.id}
+                      className={`absolute border-l-[4px] ${typeBorderColor[item.meeting.type]} bg-secondary/70 rounded-r-md p-2 overflow-hidden`}
+                      style={{
+                        top: `${top}px`,
+                        height: `${height}px`,
+                        left: `calc(${leftPercent}% + 4px)`,
+                        width: `calc(${widthPercent}% - 8px)`,
+                      }}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold truncate">{item.meeting.title}</p>
+                        <Badge variant="outline" className="text-[9px] shrink-0">
+                          {statusLabels[item.meeting.status]}
+                        </Badge>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                        {formatTime(item.meeting.startTime)} - {formatTime(item.meeting.endTime)} • {typeLabels[item.meeting.type]}
+                      </p>
+                      {item.meeting.roomName && (
+                        <p className="text-[10px] text-muted-foreground truncate">{item.meeting.roomName}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {viewMode === "month" && (
           <>
             <div className="grid grid-cols-7 border-b border-border">
-              {dayNames.map((name) => (
-                <div key={name} className="px-3 py-2 text-center text-sm font-medium text-muted-foreground border-r border-border last:border-r-0">
+              {dayNames.map(name => (
+                <div
+                  key={name}
+                  className="px-3 py-2 text-center text-sm font-medium text-muted-foreground border-r border-border last:border-r-0"
+                >
                   {name}
                 </div>
               ))}
@@ -276,8 +455,10 @@ export default function CalendarPage() {
                     return (
                       <div
                         key={di}
-                        className={`border-r border-border last:border-r-0 p-1.5 cursor-pointer hover:bg-accent/20 transition-colors ${!day ? "bg-muted/20" : ""}`}
-                        onClick={() => day && setModalDate(day)}
+                        className={`border-r border-border last:border-r-0 p-1.5 cursor-pointer hover:bg-accent/20 transition-colors ${
+                          !day ? "bg-muted/20" : ""
+                        }`}
+                        onClick={() => day && handleDayClick(day)}
                       >
                         {day && (
                           <>
@@ -288,7 +469,10 @@ export default function CalendarPage() {
                               {dayMeetings.slice(0, maxShow).map(renderMeetingCard)}
                               {remaining > 0 && (
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); setModalDate(day); }}
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    handleDayClick(day);
+                                  }}
                                   className="text-[10px] text-primary font-medium px-1 hover:underline"
                                 >
                                   +{remaining} cuộc họp nữa
@@ -306,12 +490,14 @@ export default function CalendarPage() {
           </>
         )}
 
-        {/* Week View */}
         {viewMode === "week" && weeks[weekIndex] && (
           <>
             <div className="grid grid-cols-7 border-b border-border">
-              {dayNames.map((name) => (
-                <div key={name} className="px-3 py-2 text-center text-sm font-medium text-muted-foreground border-r border-border last:border-r-0">
+              {dayNames.map(name => (
+                <div
+                  key={name}
+                  className="px-3 py-2 text-center text-sm font-medium text-muted-foreground border-r border-border last:border-r-0"
+                >
                   {name}
                 </div>
               ))}
@@ -325,8 +511,10 @@ export default function CalendarPage() {
                 return (
                   <div
                     key={di}
-                    className={`border-r border-border last:border-r-0 p-2 cursor-pointer hover:bg-accent/20 transition-colors ${!day ? "bg-muted/20" : ""}`}
-                    onClick={() => day && setModalDate(day)}
+                    className={`border-r border-border last:border-r-0 p-2 cursor-pointer hover:bg-accent/20 transition-colors ${
+                      !day ? "bg-muted/20" : ""
+                    }`}
+                    onClick={() => day && handleDayClick(day)}
                   >
                     {day && (
                       <>
@@ -337,7 +525,10 @@ export default function CalendarPage() {
                           {dayMeetings.slice(0, maxShow).map(renderMeetingCard)}
                           {remaining > 0 && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); setModalDate(day); }}
+                              onClick={e => {
+                                e.stopPropagation();
+                                handleDayClick(day);
+                              }}
                               className="text-[10px] text-primary font-medium px-1 hover:underline"
                             >
                               +{remaining} cuộc họp nữa
@@ -353,55 +544,12 @@ export default function CalendarPage() {
           </>
         )}
 
-        {/* Month View (year overview with mini calendars) */}
-        {viewMode === "month" && (
+        {viewMode === "year" && (
           <div className="p-5 grid grid-cols-3 md:grid-cols-4 gap-4">
             {Array.from({ length: 12 }, (_, i) => renderMiniMonth(i))}
           </div>
         )}
       </div>
-
-      {/* Day Meetings Modal */}
-      <Dialog open={!!modalDate} onOpenChange={() => setModalDate(null)}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
-          {modalDate && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="font-display">
-                  Cuộc họp ngày {modalDate.toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3 mt-2">
-                {modalMeetings.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">Không có cuộc họp nào trong ngày này</p>
-                ) : (
-                  modalMeetings.map((m) => (
-                    <div key={m.id} className={`border-l-[3px] ${typeBorderColor[m.type]} rounded-r-lg p-3 bg-secondary/30`}>
-                      <div className="flex items-center justify-between">
-                        <p className="font-semibold text-sm">{m.title}</p>
-                        <Badge variant="outline" className={`text-[10px] ${statusColorMap[m.status] ? "" : ""}`}>
-                          {statusLabels[m.status]}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                        <span>⏱ {formatTime(m.startTime)} - {formatTime(m.endTime)}</span>
-                        <span>{typeLabels[m.type]}</span>
-                        {m.roomName && <span>📍 {m.roomName}</span>}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">{m.description}</p>
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {(m.attendees ?? []).map((a) => (
-                          <Badge key={a} variant="secondary" className="text-[10px]">{a}</Badge>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

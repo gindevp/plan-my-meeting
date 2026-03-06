@@ -12,6 +12,7 @@ import { useRooms, useRoomEquipments } from "@/hooks/useRooms";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Users, Monitor, Wifi, Mic, PenTool, Camera, Plus, Pencil, Trash2, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 const equipmentIcons: Record<string, typeof Monitor> = {
   "Máy chiếu": Monitor, "TV 65\"": Monitor, "TV 55\"": Monitor,
@@ -29,6 +30,8 @@ const emptyRoom: Omit<RoomListItem, "id"> & { equipment?: string[] } = { name: "
 
 export default function RoomManagementPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isRoomManager = user?.authorities?.includes("ROLE_ROOM_MANAGER") ?? false;
   const queryClient = useQueryClient();
   const { data: roomList = [] } = useRooms();
   const { data: roomEquipments = [] } = useRoomEquipments();
@@ -104,18 +107,21 @@ export default function RoomManagementPage() {
   });
 
   const openCreate = () => {
+    if (!isRoomManager) return;
     setEditingRoom(null);
     setForm(emptyRoom);
     setModalOpen(true);
   };
 
   const openEdit = (room: typeof roomsWithEquipment[0]) => {
+    if (!isRoomManager) return;
     setEditingRoom(room);
     setForm({ name: room.name, code: room.code, capacity: room.capacity, floor: room.floor, equipment: room.equipment, status: room.status });
     setModalOpen(true);
   };
 
   const handleSave = () => {
+    if (!isRoomManager) return;
     if (!form.name.trim() || !form.floor.trim()) {
       toast({ variant: "destructive", title: "Lỗi", description: "Vui lòng nhập đầy đủ thông tin" });
       return;
@@ -129,6 +135,7 @@ export default function RoomManagementPage() {
   };
 
   const handleDelete = (id: string) => {
+    if (!isRoomManager) return;
     setDeleteConfirm(null);
     deleteMutation.mutate(id);
   };
@@ -140,9 +147,11 @@ export default function RoomManagementPage() {
           <h1 className="text-2xl font-display font-bold">Quản lý phòng họp</h1>
           <p className="text-sm text-muted-foreground mt-1">Danh sách và trạng thái phòng họp</p>
         </div>
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="h-4 w-4" /> Thêm phòng họp
-        </Button>
+        {isRoomManager && (
+          <Button onClick={openCreate} className="gap-2">
+            <Plus className="h-4 w-4" /> Thêm phòng họp
+          </Button>
+        )}
       </div>
 
       <div className="relative max-w-sm">
@@ -182,14 +191,16 @@ export default function RoomManagementPage() {
                     })}
                   </div>
                 </div>
-                <div className="flex gap-2 pt-2 border-t border-border">
-                  <Button variant="outline" size="sm" className="flex-1 gap-1" onClick={() => openEdit(room)}>
-                    <Pencil className="h-3.5 w-3.5" /> Sửa
-                  </Button>
-                  <Button variant="outline" size="sm" className="flex-1 gap-1 text-destructive hover:text-destructive" onClick={() => setDeleteConfirm(room.id)}>
-                    <Trash2 className="h-3.5 w-3.5" /> Xóa
-                  </Button>
-                </div>
+                {isRoomManager && (
+                  <div className="flex gap-2 pt-2 border-t border-border">
+                    <Button variant="outline" size="sm" className="flex-1 gap-1" onClick={() => openEdit(room)}>
+                      <Pencil className="h-3.5 w-3.5" /> Sửa
+                    </Button>
+                    <Button variant="outline" size="sm" className="flex-1 gap-1 text-destructive hover:text-destructive" onClick={() => setDeleteConfirm(room.id)}>
+                      <Trash2 className="h-3.5 w-3.5" /> Xóa
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           );

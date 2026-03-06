@@ -24,7 +24,7 @@ import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckC
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 
 function formatTime(dateStr: string): string {
@@ -58,6 +58,13 @@ const typeIconMap: Record<string, typeof MapPin> = {
   hybrid: Users,
 };
 
+const normalizeLevel = (level?: string) => {
+  const value = String(level ?? "").trim().toLowerCase();
+  if (["corporate", "company", "tong_cong_ty", "tổng công ty", "cap_tong_cong_ty"].includes(value)) return "company";
+  if (["department", "phong_ban", "phòng ban", "team"].includes(value)) return "department";
+  return value || "department";
+};
+
 export default function MeetingPlanPage() {
   const { toast } = useToast();
   const { data: meetings = [] } = useMeetings();
@@ -65,15 +72,25 @@ export default function MeetingPlanPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabFromUrl = params.get("tab");
+      if (tabFromUrl) return tabFromUrl;
+
       const saved = sessionStorage.getItem("meetingPlanActiveTab");
       if (saved) return saved;
     }
     return "approved";
   });
 
+  const navigate = useNavigate();
+  const location = useLocation();
+
   useEffect(() => {
     sessionStorage.setItem("meetingPlanActiveTab", activeTab);
-  }, [activeTab]);
+    const params = new URLSearchParams(location.search);
+    params.set("tab", activeTab);
+    navigate(`/plans?${params.toString()}`, { replace: true });
+  }, [activeTab, location.search, navigate]);
 
   const [search, setSearch] = useState("");
   const [showFilter, setShowFilter] = useState(false);
@@ -81,7 +98,6 @@ export default function MeetingPlanPage() {
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [taskViewModal, setTaskViewModal] = useState<{ attendee: string; tasks: any[] } | null>(null);
-  const navigate = useNavigate();
 
   const filtered = meetings.filter(m => {
     const matchStatus = m.status === activeTab;
@@ -122,11 +138,20 @@ export default function MeetingPlanPage() {
 
   const submitMutation = useMutation({
     mutationFn: (id: string) => submitMeeting(id),
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
-      toast({ title: "Đã gửi duyệt", description: "Cuộc họp nháp đã được gửi phê duyệt." });
+      const submittedStatus = String(res?.status ?? "").toUpperCase();
+      const isAutoApproved = submittedStatus === "APPROVED";
+
+      if (isAutoApproved) {
+        toast({ title: "Tạo cuộc họp thành công", description: "Cuộc họp cấp tổng công ty đã được tự động duyệt." });
+        setActiveTab("approved");
+      } else {
+        toast({ title: "Đã gửi duyệt", description: "Cuộc họp nháp đã được gửi phê duyệt." });
+        setActiveTab("pending");
+      }
+
       setSelectedMeeting(null);
-      setActiveTab("pending");
     },
     onError: (err: unknown) => {
       toast({
@@ -143,6 +168,7 @@ export default function MeetingPlanPage() {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
       setSelectedMeeting(null);
       toast({ title: "Đã xóa", description: "Cuộc họp đã được chuyển sang danh sách đã xóa." });
+      setActiveTab("cancelled");
     },
     onError: () => {
       toast({ variant: "destructive", title: "Lỗi", description: "Không thể xóa/hủy cuộc họp." });
@@ -155,6 +181,7 @@ export default function MeetingPlanPage() {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
       setSelectedMeeting(null);
       toast({ title: "Hoàn thành", description: "Cuộc họp đã được đánh dấu hoàn thành." });
+      setActiveTab("completed");
     },
     onError: () => {
       toast({ variant: "destructive", title: "Lỗi", description: "Không thể đánh dấu hoàn thành." });
@@ -292,7 +319,7 @@ export default function MeetingPlanPage() {
                       <p className="text-xs text-muted-foreground">{meeting.attendees?.length ?? 0} đơn vị tham gia</p>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm">{levelLabels[meeting.level as keyof typeof levelLabels] ?? meeting.level}</TableCell>
+                  <TableCell className="text-sm">{levelLabels[normalizeLevel(meeting.level) as keyof typeof levelLabels] ?? meeting.level}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5 text-sm">
                       <TypeIcon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -359,7 +386,7 @@ export default function MeetingPlanPage() {
       </div>
 
       <Dialog open={!!selectedMeeting} onOpenChange={() => setSelectedMeeting(null)}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto pr-14">
           {selectedMeeting && (
             <>
               <DialogHeader>
@@ -369,7 +396,7 @@ export default function MeetingPlanPage() {
                 <div className="flex gap-2 flex-wrap">
                   <Badge variant="outline" className={statusColorMap[selectedMeeting.status]}>{statusLabels[selectedMeeting.status]}</Badge>
                   <Badge variant="outline">{typeLabels[selectedMeeting.type]}</Badge>
-                  <Badge variant="outline">{levelLabels[selectedMeeting.level]}</Badge>
+                  <Badge variant="outline">{levelLabels[normalizeLevel(selectedMeeting.level) as keyof typeof levelLabels] ?? selectedMeeting.level}</Badge>
                 </div>
 
                 <Separator />
@@ -425,7 +452,15 @@ export default function MeetingPlanPage() {
                   ) : (
                     <div className="space-y-3">
                       {participants.map((p: any) => {
-                        const participantTasks = meetingTasks.filter((task: any) => task.assigneeId === String(p.userId));
+                        const participantTasks = meetingTasks.filter((task: any) => {
+                          if (p.userId) {
+                            return task.assigneeId === String(p.userId);
+                          }
+                          if (p.departmentId) {
+                            return task.departmentId === String(p.departmentId);
+                          }
+                          return false;
+                        });
                         return (
                           <div key={p.id} className="rounded-lg border p-3 bg-card">
                             <div className="flex items-center justify-between gap-2 mb-2">
@@ -503,7 +538,7 @@ export default function MeetingPlanPage() {
                           <Button onClick={() => submitMutation.mutate(selectedMeeting.id)} disabled={submitMutation.isPending}>
                             {submitMutation.isPending
                               ? "Đang xử lý..."
-                              : ["company", "corporate"].includes(String(selectedMeeting.level).toLowerCase())
+                              : normalizeLevel(selectedMeeting.level) === "company"
                               ? "Tạo cuộc họp"
                               : "Gửi duyệt"}
                           </Button>

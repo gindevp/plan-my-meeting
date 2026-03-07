@@ -6,7 +6,7 @@ export interface RoomListItem {
   code: string;
   capacity: number;
   floor: string;
-  equipment: string[];
+  equipment: { name: string; quantity: number; equipmentType?: string }[];
   status: "available" | "occupied" | "maintenance";
 }
 
@@ -30,21 +30,64 @@ export async function getRooms(params?: { page?: number; size?: number }) {
     code: r.code ?? "",
     capacity: r.capacity ?? 0,
     floor: r.location ?? "",
-    equipment: [] as string[],
+    equipment: [] as { name: string; quantity: number }[],
     status: r.active === false ? "maintenance" : "available",
   }));
 }
 
-export async function getRoomEquipments(): Promise<{ roomId: string; equipmentNames: string[] }[]> {
+export interface RoomEquipmentItem {
+  id: number;
+  roomId: string;
+  equipmentId: string;
+  equipmentName: string;
+  quantity: number;
+}
+
+export interface RoomEquipmentWithQty {
+  name: string;
+  quantity: number;
+  equipmentType?: string;
+}
+
+export async function getRoomEquipments(): Promise<{ roomId: string; equipment: RoomEquipmentWithQty[] }[]> {
   const list = await fetchApi<unknown[]>(`/api/room-equipments`);
-  const byRoom: Record<string, string[]> = {};
+  const byRoom: Record<string, RoomEquipmentWithQty[]> = {};
   for (const re of list as any[]) {
-    const rid = String(re.room?.id ?? 0);
-    const name = re.equipment?.name ?? "";
+    const rid = String(re.room?.id ?? re.roomId ?? "");
+    const name = re.equipment?.name ?? re.equipment?.code ?? "";
+    const qty = re.quantity ?? 1;
+    const equipmentType = re.equipment?.equipmentType;
+    if (!rid) continue;
     if (!byRoom[rid]) byRoom[rid] = [];
-    if (name) byRoom[rid].push(name);
+    if (name) byRoom[rid].push({ name, quantity: qty, equipmentType });
   }
-  return Object.entries(byRoom).map(([roomId, equipmentNames]) => ({ roomId, equipmentNames }));
+  return Object.entries(byRoom).map(([roomId, equipment]) => ({ roomId, equipment }));
+}
+
+export async function getRoomEquipmentsRaw(): Promise<RoomEquipmentItem[]> {
+  const list = await fetchApi<unknown[]>(`/api/room-equipments`);
+  return (list as any[]).map((re) => ({
+    id: re.id,
+    roomId: String(re.room?.id ?? ""),
+    equipmentId: String(re.equipment?.id ?? ""),
+    equipmentName: re.equipment?.name ?? re.equipment?.code ?? "",
+    quantity: re.quantity ?? 1,
+  }));
+}
+
+export async function createRoomEquipment(payload: { roomId: number | string; equipmentId: number | string; quantity?: number }) {
+  return fetchApi("/api/room-equipments", {
+    method: "POST",
+    body: JSON.stringify({
+      roomId: Number(payload.roomId),
+      equipmentId: Number(payload.equipmentId),
+      quantity: payload.quantity ?? 1,
+    }),
+  });
+}
+
+export async function deleteRoomEquipment(id: number | string) {
+  return fetchApi<void>(`/api/room-equipments/${id}`, { method: "DELETE" });
 }
 
 export async function createRoom(data: RoomPayload) {

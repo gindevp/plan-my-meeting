@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,6 @@ import {
   getAgendaItemsByMeeting,
   getParticipantsByMeeting,
   getMeetingTasksByMeeting,
-  getMeetingDocumentsByMeeting,
 } from "@/services/api/meetings";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft, Building2, Users } from "lucide-react";
@@ -48,7 +47,6 @@ interface TaskAssignmentForm {
   description: string;
   dueAt: string;
   remindBeforeMinutes: string;
-  documentRefs: string[];
 }
 
 export default function CreateMeetingPage() {
@@ -84,6 +82,7 @@ export default function CreateMeetingPage() {
   const [endDate, setEndDate] = useState("");
   const [isOvernight, setIsOvernight] = useState(false);
   const [chairpersonId, setChairpersonId] = useState("");
+  const [secretaryId, setSecretaryId] = useState<string>("");
   const [meetingLink, setMeetingLink] = useState("");
   const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
@@ -95,10 +94,11 @@ export default function CreateMeetingPage() {
   const [taskModalAttendee, setTaskModalAttendee] = useState<string | null>(null);
   const [taskModalErrors, setTaskModalErrors] = useState<Record<string, string>>({});
   const [taskAssignmentsSnapshot, setTaskAssignmentsSnapshot] = useState<TaskAssignmentForm[] | null>(null);
+  const skipNextFilterRef = useRef(false);
   const queryClient = useQueryClient();
 
   const { data: meetings = [] } = useMeetings();
-  const existingMeeting = isEditMode ? meetings.find((m: any) => m.id === meetingId) : null;
+  const existingMeeting = isEditMode ? meetings.find((m: any) => String(m.id) === String(meetingId)) : null;
 
   const { data: existingAgendaItems = [] } = useQuery({
     queryKey: ["edit-meeting-agenda", meetingId],
@@ -115,12 +115,6 @@ export default function CreateMeetingPage() {
   const { data: existingTasks = [] } = useQuery({
     queryKey: ["edit-meeting-tasks", meetingId],
     queryFn: () => getMeetingTasksByMeeting(meetingId!),
-    enabled: isEditMode && !!meetingId,
-  });
-
-  const { data: existingDocuments = [] } = useQuery({
-    queryKey: ["edit-meeting-documents", meetingId],
-    queryFn: () => getMeetingDocumentsByMeeting(meetingId!),
     enabled: isEditMode && !!meetingId,
   });
 
@@ -142,15 +136,23 @@ export default function CreateMeetingPage() {
     const start = new Date(existingMeeting.startTime);
     const end = new Date(existingMeeting.endTime);
 
-    setStartDate(start.toISOString().split("T")[0]);
-    setStartTime(start.toTimeString().slice(0, 5));
-    setEndTime(end.toTimeString().slice(0, 5));
+    const toLocalDateStr = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const toLocalTimeStr = (d: Date) =>
+      `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
-    const startDateStr = start.toISOString().split("T")[0];
-    const endDateStr = end.toISOString().split("T")[0];
-    if (endDateStr !== startDateStr) {
+    setStartDate(toLocalDateStr(start));
+    setStartTime(toLocalTimeStr(start));
+    setEndTime(toLocalTimeStr(end));
+
+    const startDateStrLocal = toLocalDateStr(start);
+    const endDateStrLocal = toLocalDateStr(end);
+    if (endDateStrLocal !== startDateStrLocal) {
       setIsOvernight(true);
-      setEndDate(endDateStr);
+      setEndDate(endDateStrLocal);
+    } else {
+      setIsOvernight(false);
+      setEndDate("");
     }
 
     setMeetingType(existingMeeting.type || "offline");
@@ -159,6 +161,7 @@ export default function CreateMeetingPage() {
     setSelectedRoom(existingMeeting.roomId || "");
     setMeetingLink(existingMeeting.meetingLink || "");
     setChairpersonId(existingMeeting.host?.id?.toString() || existingMeeting.hostId?.toString() || "");
+    setSecretaryId(existingMeeting.secretaryId != null ? String(existingMeeting.secretaryId) : "");
   }, [existingMeeting]);
 
   useEffect(() => {
@@ -211,25 +214,29 @@ export default function CreateMeetingPage() {
 
     const taskAssignmentsFromApi = existingTasks.map((task: any) => {
       const assigneeUser = users.find((u: any) => String(u.id) === String(task.assigneeId));
-      const attendeeName = assigneeUser?.name || assigneeUser?.login || task.assignee;
-      const docs = existingDocuments
-        .filter((doc: any) => String(doc.taskId) === String(task.id))
-        .map((d: any) => d.fileName)
-        .filter(Boolean);
+      const dept = departments.find((d: any) => String(d.id) === String(task.departmentId));
+      const attendeeName =
+        assigneeUser?.name || assigneeUser?.login || dept?.name || task.assignee;
+
+      const departmentId = task.departmentId != null ? Number(task.departmentId) : undefined;
+      const assigneeId = task.assigneeId != null ? Number(task.assigneeId) : undefined;
 
       return {
         key: `task-${task.id}`,
-        attendee: attendeeName,
+        attendee: attendeeName ?? "",
+        assigneeId,
+        departmentId,
         title: task.title || "",
         description: task.description || "",
         dueAt: task.dueAt ? new Date(task.dueAt).toISOString().slice(0, 16) : "",
         remindBeforeMinutes: task.remindBeforeMinutes != null ? String(task.remindBeforeMinutes) : "",
-        documentRefs: docs.length > 0 ? docs : [""],
       } as TaskAssignmentForm;
     });
 
     const taskAttendees = taskAssignmentsFromApi.map(task => task.attendee).filter(Boolean);
     const mergedAttendees = Array.from(new Set([...participantAttendees, ...taskAttendees]));
+
+    skipNextFilterRef.current = true;
 
     setSelectedDepartments(prev => {
       const nextDepartments = Array.from(new Set(participantDepartments));
@@ -247,11 +254,11 @@ export default function CreateMeetingPage() {
       const nextStr = JSON.stringify(taskAssignmentsFromApi);
       return prevStr === nextStr ? prev : taskAssignmentsFromApi;
     });
-  }, [isEditMode, meetingId, users, existingParticipants, existingTasks, existingDocuments]);
+  }, [isEditMode, meetingId, users, departments, existingParticipants, existingTasks]);
 
   const steps = [
     { num: 1, label: "Thông tin chung" },
-    { num: 2, label: "Thành phần tham dự và tài liệu" },
+    { num: 2, label: "Thành phần tham dự" },
     { num: 3, label: "Chương trình họp" },
   ];
 
@@ -347,6 +354,12 @@ export default function CreateMeetingPage() {
   };
 
   useEffect(() => {
+    if (skipNextFilterRef.current) {
+      skipNextFilterRef.current = false;
+      setTaskModalAttendee(prev => (prev && (meetingLevel === "company" ? selectedDepartments : selectedAttendees).includes(prev) ? prev : null));
+      return;
+    }
+
     if (meetingLevel === "company") {
       setTaskAssignments(prev => prev.filter(assignment => selectedDepartments.includes(assignment.attendee)));
       setTaskModalAttendee(prev => (prev && selectedDepartments.includes(prev) ? prev : null));
@@ -384,7 +397,6 @@ export default function CreateMeetingPage() {
         description: "",
         dueAt: "",
         remindBeforeMinutes: "",
-        documentRefs: [""],
       },
       ...prev,
     ]);
@@ -392,35 +404,6 @@ export default function CreateMeetingPage() {
 
   const removeTaskAssignment = (assignmentKey: string) => {
     setTaskAssignments(prev => prev.filter(assignment => assignment.key !== assignmentKey));
-  };
-
-  const updateDocumentRef = (assignmentKey: string, docIndex: number, value: string) => {
-    setTaskAssignments(prev =>
-      prev.map(assignment => {
-        if (assignment.key !== assignmentKey) return assignment;
-        const nextDocs = [...assignment.documentRefs];
-        nextDocs[docIndex] = value;
-        return { ...assignment, documentRefs: nextDocs };
-      })
-    );
-  };
-
-  const addDocumentRef = (assignmentKey: string) => {
-    setTaskAssignments(prev =>
-      prev.map(assignment =>
-        assignment.key === assignmentKey ? { ...assignment, documentRefs: [...assignment.documentRefs, ""] } : assignment
-      )
-    );
-  };
-
-  const removeDocumentRef = (assignmentKey: string, docIndex: number) => {
-    setTaskAssignments(prev =>
-      prev.map(assignment => {
-        if (assignment.key !== assignmentKey) return assignment;
-        const nextDocs = assignment.documentRefs.filter((_, index) => index !== docIndex);
-        return { ...assignment, documentRefs: nextDocs.length > 0 ? nextDocs : [""] };
-      })
-    );
   };
 
   const getTaskCountByAttendee = (attendee: string) => taskAssignments.filter(assignment => assignment.attendee === attendee).length;
@@ -482,6 +465,13 @@ export default function CreateMeetingPage() {
       });
     }
   };
+
+  useEffect(() => {
+    if (step !== 3 || agendaItems.length > 0 || isEditMode) return;
+    const presenters = meetingLevel === "company" ? selectedDepartments : selectedAttendees;
+    if (presenters.length === 0) return;
+    setAgendaItems(presenters.map(p => ({ title: "", presenter: p, duration: "15" })));
+  }, [step, meetingLevel, selectedDepartments, selectedAttendees, isEditMode]);
 
   const removeAgendaItem = (index: number) => {
     setAgendaItems(prev => prev.filter((_, i) => i !== index));
@@ -587,17 +577,7 @@ export default function CreateMeetingPage() {
       })
       .filter(Boolean) as any[];
 
-    const documents = taskAssignments.flatMap(assignment => {
-      const validDocs = assignment.documentRefs.map(doc => doc.trim()).filter(Boolean);
-
-      return validDocs.map(fileName => ({
-        docType: "ATTACHMENT",
-        fileName,
-        uploadedById: Number(account?.id),
-        taskClientKey: assignment.key,
-      }));
-    });
-
+    const documents = [];
     return { tasks, documents };
   };
 
@@ -629,6 +609,7 @@ export default function CreateMeetingPage() {
         meetingLink,
         requesterId: account.id,
         hostId: chairpersonId,
+        secretaryId: secretaryId || undefined,
         organizerDepartmentId,
         participants: buildParticipantsPayload(),
         agendaItems: buildAgendaPayload(),
@@ -649,10 +630,11 @@ export default function CreateMeetingPage() {
 
   const updateMutation = useMutation({
     mutationFn: (data: { id: string; payload: any }) => updateMeeting(data.id, data.payload),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
       toast({ title: "Đã cập nhật", description: "Cuộc họp đã được cập nhật thành công." });
-      redirectToPlansTab("draft");
+      const currentStatus = existingMeeting?.status ?? "draft";
+      redirectToPlansTab(currentStatus === "pending" ? "pending" : "draft");
     },
     onError: err => {
       toast({ variant: "destructive", title: "Lỗi cập nhật", description: err instanceof Error ? err.message : "Lỗi không xác định" });
@@ -693,6 +675,7 @@ export default function CreateMeetingPage() {
             meetingLink,
             requesterId: account.id,
             hostId: chairpersonId,
+            secretaryId: secretaryId || undefined,
             organizerDepartmentId,
             participants,
             agendaItems: agendaPayload,
@@ -726,6 +709,7 @@ export default function CreateMeetingPage() {
           meetingLink,
           requesterId: account.id,
           hostId: chairpersonId,
+          secretaryId: secretaryId || undefined,
           organizerDepartmentId,
           participants,
           agendaItems: agendaPayload,
@@ -765,7 +749,7 @@ export default function CreateMeetingPage() {
             </Button>
           )}
           <div>
-            <h1 className="text-2xl font-display font-bold">{isEditMode ? "Chỉnh sửa cuộc họp" : "Tạo cuộc họp mới"}</h1>
+            <h1 className="text-2xl font-display font-bold tracking-tight">{isEditMode ? "Chỉnh sửa cuộc họp" : "Tạo cuộc họp mới"}</h1>
             <p className="text-sm text-muted-foreground mt-1">{isEditMode ? "Cập nhật thông tin cuộc họp" : "Điền thông tin để tạo và gửi phê duyệt cuộc họp"}</p>
           </div>
         </div>
@@ -812,7 +796,7 @@ export default function CreateMeetingPage() {
       )}
 
       {step === 1 && (
-        <Card className="shadow-card animate-slide-up">
+        <Card className="card-elevated animate-slide-up">
           <CardHeader>
             <CardTitle className="text-base font-display">Thông tin chung</CardTitle>
           </CardHeader>
@@ -944,6 +928,21 @@ export default function CreateMeetingPage() {
             </div>
 
             <div>
+              <Label>Thư ký cuộc họp</Label>
+              <Select value={secretaryId || "none"} onValueChange={v => setSecretaryId(v === "none" ? "" : v)}>
+                <SelectTrigger className="mt-1.5"><SelectValue placeholder="Chọn thư ký (tùy chọn)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Không chọn</SelectItem>
+                  {users.filter((u: any) => u.role === "secretary").map((u: any) => (
+                    <SelectItem key={u.id} value={String(u.id)}>
+                      {(u.name || u.login) + (u.position ? ` - ${u.position}` : "")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
               <Label>Nội dung, mục tiêu</Label>
               <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Mô tả nội dung và mục tiêu cuộc họp" className="mt-1.5" rows={3} />
             </div>
@@ -952,7 +951,7 @@ export default function CreateMeetingPage() {
       )}
 
       {step === 2 && (
-        <Card className="shadow-card animate-slide-up">
+        <Card className="card-elevated animate-slide-up">
           <CardHeader>
             <CardTitle className="text-base font-display">
               <div className="flex items-center gap-2">
@@ -988,7 +987,7 @@ export default function CreateMeetingPage() {
                       <Checkbox checked={selectedDepartments.includes(d.name)} />
                       <div>
                         <p className="font-medium text-xs">{d.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{users.filter((u: any) => u.department === d.name).length} nhân viên</p>
+                        <p className="text-[10px] text-muted-foreground">{users.filter((u: any) => u.departmentId != null && String(u.departmentId) === String(d.id)).length} nhân viên</p>
                       </div>
                       {selectedDepartments.includes(d.name) && <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />}
                     </button>
@@ -1008,12 +1007,15 @@ export default function CreateMeetingPage() {
                         ))}
                       </div>
                       <p className="text-xs text-muted-foreground mt-2">
-                        Tổng số người tham dự dự kiến: {users.filter((u: any) => selectedDepartments.includes(u.department)).length}
+                        Tổng số người tham dự dự kiến: {users.filter((u: any) => {
+                          const d = departments.find((dept: any) => String(dept.id) === String(u.departmentId));
+                          return d != null && selectedDepartments.includes(d.name);
+                        }).length}
                       </p>
                     </div>
 
                     <div>
-                      <Label>Giao task/tài liệu theo phòng ban</Label>
+                      <Label>Giao task theo phòng ban</Label>
                       <div className="flex flex-wrap gap-1.5 mt-2">
                         {selectedDepartments.map(d => {
                           const count = getTaskCountByAttendee(d);
@@ -1121,7 +1123,7 @@ export default function CreateMeetingPage() {
           {taskModalAttendee && (
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground mt-1">
-                Mỗi người/phòng ban có thể có nhiều task và mỗi task có thể có nhiều tài liệu. Trạng thái task sẽ tự động là TODO khi tạo.
+                Mỗi người/phòng ban có thể có nhiều task. Trạng thái task sẽ tự động là TODO khi tạo. Tài liệu do người được giao task tải lên sau.
               </p>
               <div className="flex justify-end">
                 <Button variant="outline" size="sm" onClick={() => addTaskForAttendee(taskModalAttendee)}>
@@ -1163,25 +1165,6 @@ export default function CreateMeetingPage() {
                       </div>
 
                       <div>
-                        <Label className="text-xs">Tài liệu liên quan</Label>
-                        <div className="space-y-2 mt-1">
-                          {assignment.documentRefs.map((doc, docIndex) => (
-                            <div key={`${assignment.key}-doc-${docIndex}`} className="flex items-center gap-2">
-                              <Input placeholder={`Tài liệu ${docIndex + 1}`} value={doc} onChange={e => updateDocumentRef(assignment.key, docIndex, e.target.value)} />
-                              {assignment.documentRefs.length > 1 && (
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeDocumentRef(assignment.key, docIndex)}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                          ))}
-                          <Button variant="outline" size="sm" onClick={() => addDocumentRef(assignment.key)}>
-                            <Plus className="h-3 w-3 mr-1" /> Thêm tài liệu
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div>
                         <Label className="text-xs">Mô tả</Label>
                         <Textarea placeholder="Mô tả chi tiết task" value={assignment.description} onChange={e => updateTaskAssignment(assignment.key, "description", e.target.value)} rows={2} className="mt-1" />
                       </div>
@@ -1199,7 +1182,7 @@ export default function CreateMeetingPage() {
       </Dialog>
 
       {step === 3 && (
-        <Card className="shadow-card animate-slide-up">
+        <Card className="card-elevated animate-slide-up">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base font-display">Chương trình họp (Agenda)</CardTitle>
             <Button variant="outline" size="sm" onClick={addAgendaItem}>
@@ -1217,12 +1200,14 @@ export default function CreateMeetingPage() {
                     <Input placeholder="Tên nội dung" value={item.title} onChange={e => updateAgendaItem(i, "title", e.target.value)} className={errorClass(`agenda_title_${i}`)} />
                     {errors[`agenda_title_${i}`] && <p className="text-xs text-destructive mt-1">{errors[`agenda_title_${i}`]}</p>}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                     <div>
                       <Select value={item.presenter} onValueChange={v => updateAgendaItem(i, "presenter", v)}>
-                        <SelectTrigger className={errorClass(`agenda_presenter_${i}`)}><SelectValue placeholder="Người trình bày" /></SelectTrigger>
+                        <SelectTrigger className={errorClass(`agenda_presenter_${i}`)}><SelectValue placeholder={meetingLevel === "company" ? "Đơn vị trình bày" : "Người trình bày"} /></SelectTrigger>
                         <SelectContent>
-                          {users.map((u: any) => <SelectItem key={u.id} value={u.name || u.login}>{u.name || u.login}</SelectItem>)}
+                          {meetingLevel === "company"
+                            ? selectedDepartments.map((d: string) => <SelectItem key={d} value={d}>{d}</SelectItem>)
+                            : selectedAttendees.map((a: string) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
                         </SelectContent>
                       </Select>
                       {errors[`agenda_presenter_${i}`] && <p className="text-xs text-destructive mt-1">{errors[`agenda_presenter_${i}`]}</p>}
@@ -1254,9 +1239,11 @@ export default function CreateMeetingPage() {
               <Button variant="outline" onClick={() => handleSubmit(false)}>
                 <Save className="h-4 w-4 mr-1.5" /> Cập nhật
               </Button>
-              <Button onClick={() => handleSubmit(true)}>
-                <Send className="h-4 w-4 mr-1.5" /> {meetingLevel === "company" ? "Tạo cuộc họp" : "Gửi duyệt"}
-              </Button>
+              {existingMeeting?.status !== "pending" && (
+                <Button onClick={() => handleSubmit(true)}>
+                  <Send className="h-4 w-4 mr-1.5" /> {meetingLevel === "company" ? "Tạo cuộc họp" : "Gửi duyệt"}
+                </Button>
+              )}
             </>
           ) : (
             <Button onClick={() => handleSubmit(false)}>

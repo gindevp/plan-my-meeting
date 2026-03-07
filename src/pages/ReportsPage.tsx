@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { useMeetings } from "@/hooks/useMeetings";
 import { useRooms } from "@/hooks/useRooms";
 import { useMeetingTasks } from "@/hooks/useMeetingTasks";
 import { useDepartments } from "@/hooks/useDepartments";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from "recharts";
-import { Download, FileText, CalendarDays, DoorOpen, CheckCircle2, XCircle, TrendingUp, ClipboardList } from "lucide-react";
+import { Download, FileText, CalendarDays, DoorOpen, CheckCircle2, XCircle } from "lucide-react";
 
 const monthlyTrend = [
   { month: "T1", meetings: 18, completed: 15 },
@@ -41,7 +41,6 @@ export default function ReportsPage() {
   const meetingsByLevel = [
     { name: "Tổng công ty", value: meetings.filter((m) => m.level === "company").length, color: "hsl(222, 60%, 30%)" },
     { name: "Phòng ban", value: meetings.filter((m) => m.level === "department").length, color: "hsl(222, 50%, 50%)" },
-    { name: "Nhóm/Team", value: meetings.filter((m) => m.level === "team").length, color: "hsl(222, 40%, 70%)" },
   ];
 
   const completedTasks = tasks.filter((t) => t.status === "completed").length;
@@ -74,16 +73,14 @@ export default function ReportsPage() {
   const [department, setDepartment] = useState("all");
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-display font-bold">Báo cáo & Thống kê</h1>
-          <p className="text-sm text-muted-foreground mt-1">Tổng hợp dữ liệu hoạt động họp và sử dụng tài nguyên</p>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className="page-content">
+      <PageHeader
+        title="Báo cáo & Thống kê"
+        description="Tổng hợp dữ liệu hoạt động họp và sử dụng tài nguyên"
+      >
+        <div className="flex flex-wrap items-center gap-2">
           <Select value={timePeriod} onValueChange={setTimePeriod}>
-            <SelectTrigger className="w-[130px]">
+            <SelectTrigger className="w-[130px] h-11">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -93,7 +90,7 @@ export default function ReportsPage() {
             </SelectContent>
           </Select>
           <Select value={department} onValueChange={setDepartment}>
-            <SelectTrigger className="w-[150px]">
+            <SelectTrigger className="w-[150px] h-11">
               <SelectValue placeholder="Phòng ban" />
             </SelectTrigger>
             <SelectContent>
@@ -103,29 +100,29 @@ export default function ReportsPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" size="sm" className="gap-2 h-11">
             <Download className="h-4 w-4" />
             Xuất PDF
           </Button>
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" size="sm" className="gap-2 h-11">
             <FileText className="h-4 w-4" />
             Xuất Excel
           </Button>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {summaryStats.map((stat) => (
-          <Card key={stat.label} className="shadow-card">
+          <Card key={stat.label} className="card-elevated overflow-hidden">
             <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{stat.label}</p>
-                  <p className="text-3xl font-display font-bold mt-1">{stat.value}</p>
+                  <p className="text-2xl sm:text-3xl font-display font-bold mt-1 tracking-tight">{stat.value}</p>
                 </div>
-                <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-secondary ${stat.color}`}>
-                  <stat.icon className="h-5 w-5" />
+                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted/60 ${stat.color}`}>
+                  <stat.icon className="h-6 w-6" />
                 </div>
               </div>
             </CardContent>
@@ -135,9 +132,9 @@ export default function ReportsPage() {
 
       {/* Row 1: Monthly Trend + By Type */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 shadow-card">
+        <Card className="lg:col-span-2 card-elevated overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-display">Xu hướng cuộc họp theo tháng</CardTitle>
+            <CardTitle className="text-base font-display font-semibold tracking-tight">Xu hướng cuộc họp theo tháng</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={280}>
@@ -161,9 +158,9 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-card">
+        <Card className="card-elevated overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-display">Theo hình thức họp</CardTitle>
+            <CardTitle className="text-base font-display font-semibold tracking-tight">Theo hình thức họp</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center">
             <ResponsiveContainer width="100%" height={200}>
@@ -176,10 +173,10 @@ export default function ReportsPage() {
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
-            <div className="flex gap-4 mt-2">
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-3">
               {meetingsByType.map((item) => (
                 <div key={item.name} className="flex items-center gap-1.5 text-xs">
-                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                  <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
                   <span className="text-muted-foreground">{item.name} ({item.value})</span>
                 </div>
               ))}
@@ -190,9 +187,9 @@ export default function ReportsPage() {
 
       {/* Row 2: Room Usage + By Level */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 shadow-card">
+        <Card className="lg:col-span-2 card-elevated overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-display">Tần suất sử dụng phòng họp</CardTitle>
+            <CardTitle className="text-base font-display font-semibold tracking-tight">Tần suất sử dụng phòng họp</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
@@ -214,9 +211,9 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-card">
+        <Card className="card-elevated overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-display">Theo cấp họp</CardTitle>
+            <CardTitle className="text-base font-display font-semibold tracking-tight">Theo cấp họp</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center">
             <ResponsiveContainer width="100%" height={200}>
@@ -229,10 +226,10 @@ export default function ReportsPage() {
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
-            <div className="flex gap-4 mt-2">
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-3">
               {meetingsByLevel.map((item) => (
                 <div key={item.name} className="flex items-center gap-1.5 text-xs">
-                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                  <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
                   <span className="text-muted-foreground">{item.name} ({item.value})</span>
                 </div>
               ))}
@@ -243,9 +240,9 @@ export default function ReportsPage() {
 
       {/* Row 3: Task Status */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="shadow-card">
+        <Card className="card-elevated overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-display">Trạng thái nhiệm vụ</CardTitle>
+            <CardTitle className="text-base font-display font-semibold tracking-tight">Trạng thái nhiệm vụ</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center">
             <ResponsiveContainer width="100%" height={220}>
@@ -258,10 +255,10 @@ export default function ReportsPage() {
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
-            <div className="flex flex-wrap justify-center gap-4 mt-2">
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-3">
               {taskStatusData.map((item) => (
                 <div key={item.name} className="flex items-center gap-1.5 text-xs">
-                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                  <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
                   <span className="text-muted-foreground">{item.name} ({item.value})</span>
                 </div>
               ))}
@@ -269,9 +266,9 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-card">
+        <Card className="card-elevated overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-display">Chi tiết nhiệm vụ</CardTitle>
+            <CardTitle className="text-base font-display font-semibold tracking-tight">Chi tiết nhiệm vụ</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {[
@@ -283,9 +280,9 @@ export default function ReportsPage() {
               <div key={item.label} className="space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">{item.label}</span>
-                  <span className="font-medium">{item.value}/{item.total}</span>
+                  <span className="font-medium tabular-nums">{item.value}/{item.total}</span>
                 </div>
-                <div className="h-2 rounded-full bg-secondary">
+                <div className="h-2.5 rounded-full bg-muted/60 overflow-hidden">
                   <div
                     className={`h-full rounded-full ${item.color} transition-all duration-500`}
                     style={{ width: `${item.total > 0 ? (item.value / item.total) * 100 : 0}%` }}

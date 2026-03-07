@@ -15,12 +15,15 @@ import Dashboard from "./pages/Dashboard";
 import CalendarPage from "./pages/CalendarPage";
 import MeetingPlanPage from "./pages/MeetingPlanPage";
 import CreateMeetingPage from "./pages/CreateMeetingPage";
+import InvitationsPage from "./pages/InvitationsPage";
 import RoomManagementPage from "./pages/RoomManagementPage";
 import EquipmentManagementPage from "./pages/EquipmentManagementPage";
 import ReportsPage from "./pages/ReportsPage";
 import StaffPage from "./pages/StaffPage";
+import IncidentsPage from "./pages/IncidentsPage";
 import DepartmentsPage from "./pages/DepartmentsPage";
 import SettingsPage from "./pages/SettingsPage";
+import NotificationsPage from "./pages/NotificationsPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
@@ -68,14 +71,17 @@ const App = () => (
                 <Route path="/" element={<ProtectedRoute requiredRoles={["ROLE_ADMIN"]}><Dashboard /></ProtectedRoute>} />
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/plans" element={<MeetingPlanPage />} />
+                <Route path="/invitations" element={<InvitationsPage />} />
                 <Route path="/meetings/new" element={<CreateMeetingPage key="create" />} />
                 <Route path="/meetings/edit/:id" element={<CreateMeetingPage key="edit" />} />
                 <Route path="/rooms" element={<RoomManagementPage />} />
                 <Route path="/equipment" element={<EquipmentManagementPage />} />
                 <Route path="/reports" element={<ProtectedRoute requiredRoles={["ROLE_ADMIN"]}><ReportsPage /></ProtectedRoute>} />
+                <Route path="/incidents" element={<ProtectedRoute requiredRoles={["ROLE_ADMIN"]}><IncidentsPage /></ProtectedRoute>} />
                 <Route path="/staff" element={<StaffPage />} />
                 <Route path="/departments" element={<DepartmentsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/notifications" element={<NotificationsPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

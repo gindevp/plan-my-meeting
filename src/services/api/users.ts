@@ -56,7 +56,7 @@ export async function getUsers(params?: { page?: number; size?: number }) {
       email: u.email,
       departmentId: u.departmentId,
       department: undefined,
-      position: undefined,
+      position: u.position ?? undefined,
       role: fromAuthorities(u.authorities),
       activated: u.activated,
     };
@@ -76,7 +76,7 @@ export async function getUsersByDepartment(departmentId: number | string) {
       email: u.email,
       departmentId: u.department?.id,
       department: u.department?.name,
-      position: undefined,
+      position: u.position ?? undefined,
       role: undefined,
       activated: u.activated,
     };
@@ -90,6 +90,7 @@ export async function createUser(data: {
   email: string;
   role?: string;
   departmentId?: number;
+  position?: string;
 }) {
   const payload: any = {
     login: data.login,
@@ -103,6 +104,9 @@ export async function createUser(data: {
   
   if (data.departmentId) {
     payload.departmentId = data.departmentId;
+  }
+  if (data.position != null && data.position !== "") {
+    payload.position = data.position;
   }
   
   return fetchApi("/api/admin/users", {
@@ -121,6 +125,7 @@ export async function updateUser(
     role?: string;
     activated?: boolean;
     departmentId?: number;
+    position?: string;
   }
 ) {
   const payload: any = {
@@ -136,6 +141,9 @@ export async function updateUser(
   
   if (data.departmentId) {
     payload.departmentId = data.departmentId;
+  }
+  if (data.position != null) {
+    payload.position = data.position;
   }
   
   return fetchApi(`/api/admin/users/${data.login}`, {

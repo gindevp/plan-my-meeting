@@ -1,8 +1,13 @@
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { statusLabels, typeLabels } from "@/data/mockData";
 import { useMeetings } from "@/hooks/useMeetings";
+import { useAuth } from "@/contexts/AuthContext";
+import { getAllParticipants } from "@/services/api/meetings";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Filter } from "lucide-react";
 
 type ViewMode = "day" | "week" | "month" | "year";
@@ -33,16 +38,119 @@ const statusDisplayLabels: Record<string, string> = {
 
 const dayNames = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 
+const normalizeLevel = (level?: string) => {
+  const value = String(level ?? "").trim().toLowerCase();
+  if (["corporate", "company", "tong_cong_ty", "tổng công ty", "cap_tong_cong_ty"].includes(value)) return "company";
+  if (["department", "phong_ban", "phòng ban", "team"].includes(value)) return "department";
+  return value || "department";
+};
+
 export default function CalendarPage() {
   const { data: meetings = [] } = useMeetings();
+  const { user } = useAuth();
+  const isAdmin = user?.authorities?.includes("ROLE_ADMIN") ?? false;
+
+  const { data: allParticipantsForPlan = [] } = useQuery({
+    queryKey: ["all-participants"],
+    queryFn: getAllParticipants,
+  });
+
+  const participantMeetingIds = useMemo(() => {
+    const ids = new Set<string>();
+    (allParticipantsForPlan as any[]).forEach((p: any) => {
+      if (p.userId != null && String(p.userId) === String(user?.id) && String(p.meeting?.status ?? "").toUpperCase() === "APPROVED" && p.meeting?.id != null) {
+        ids.add(String(p.meeting.id));
+      }
+    });
+    return ids;
+  }, [allParticipantsForPlan, user?.id]);
+
+  const participantMeetingsAsList = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
+    (allParticipantsForPlan as any[]).forEach((p: any) => {
+      if (p.userId == null || String(p.userId) !== String(user?.id) || String(p.meeting?.status ?? "").toUpperCase() !== "APPROVED" || !p.meeting?.id) return;
+      const id = String(p.meeting.id);
+      if (seen.has(id)) return;
+      seen.add(id);
+      const m = p.meeting;
+      list.push({
+        id,
+        title: m.title ?? "",
+        type: "offline",
+        level: "department",
+        status: "approved",
+        startTime: m.startTime,
+        endTime: m.endTime,
+        roomName: undefined,
+        meetingLink: undefined,
+        organizer: m.chairperson ?? "",
+        chairperson: m.chairperson ?? "",
+        host: undefined,
+        hostId: undefined,
+        secretaryId: undefined,
+        department: m.department ?? "",
+        description: "",
+        requesterId: undefined,
+        attendees: [],
+        agenda: [],
+      });
+    });
+    return list;
+  }, [allParticipantsForPlan, user?.id]);
+
+  const meetingsForTabs = useMemo(() => {
+    const fromApi = meetings as any[];
+    if (isAdmin) {
+      const filteredApi = fromApi.filter((m: any) => m.status !== "draft" && m.status !== "cancelled");
+      const existingIds = new Set(filteredApi.map((m: any) => String(m.id)));
+      const onlyFromParticipant = participantMeetingsAsList.filter((m: any) => !existingIds.has(m.id) && m.status !== "draft" && m.status !== "cancelled");
+      return [...filteredApi, ...onlyFromParticipant];
+    }
+    const filteredApi = fromApi.filter(
+      (m: any) =>
+        m.status !== "cancelled" &&
+        (m.requesterId === user?.id || m.hostId === user?.id || participantMeetingIds.has(String(m.id)))
+    );
+    const existingIds = new Set(filteredApi.map((m: any) => String(m.id)));
+    const onlyFromParticipant = participantMeetingsAsList.filter((m: any) => !existingIds.has(m.id));
+    return [...filteredApi, ...onlyFromParticipant];
+  }, [meetings, participantMeetingsAsList, isAdmin, user?.id, participantMeetingIds]);
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [weekIndex, setWeekIndex] = useState(0);
+  const [showFilter, setShowFilter] = useState(false);
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterStartTime, setFilterStartTime] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [filterEndTime, setFilterEndTime] = useState("");
+  const [filterLevel, setFilterLevel] = useState<string>("");
+  const [filterType, setFilterType] = useState<string>("");
+
+  const filteredMeetings = useMemo(() => {
+    return meetingsForTabs.filter((m: any) => {
+      if (filterStartDate && filterStartTime) {
+        const filterStart = new Date(`${filterStartDate}T${filterStartTime}`).getTime();
+        if (new Date(m.endTime).getTime() < filterStart) return false;
+      }
+      if (filterEndDate && filterEndTime) {
+        const filterEnd = new Date(`${filterEndDate}T${filterEndTime}`).getTime();
+        if (new Date(m.startTime).getTime() > filterEnd) return false;
+      }
+      if (filterLevel) {
+        const mLevel = normalizeLevel(m.level);
+        if (mLevel !== filterLevel) return false;
+      }
+      if (filterType && m.type !== filterType) return false;
+      return true;
+    });
+  }, [meetingsForTabs, filterStartDate, filterStartTime, filterEndDate, filterEndTime, filterLevel, filterType]);
 
   const today = new Date();
 
   const getMeetingsForDay = (date: Date) => {
-    return meetings.filter(m => {
+    return filteredMeetings.filter((m: any) => {
       const d = new Date(m.startTime);
       return d.toDateString() === date.toDateString() && m.status !== "cancelled";
     });
@@ -78,7 +186,7 @@ export default function CalendarPage() {
       getMeetingsForDay(currentDate).sort(
         (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
       ),
-    [meetings, currentDate]
+    [filteredMeetings, currentDate]
   );
 
   const timelineHours = Array.from({ length: 24 }, (_, i) => i);
@@ -271,10 +379,10 @@ export default function CalendarPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="page-content">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-display font-bold">Lịch họp</h1>
+          <h1 className="text-2xl font-display font-bold tracking-tight">Lịch họp</h1>
           <p className="text-sm text-muted-foreground mt-1">Xem lịch các cuộc họp theo ngày, tuần, tháng, năm</p>
         </div>
         <div className="flex items-center gap-4">
@@ -289,15 +397,74 @@ export default function CalendarPage() {
               <span className="w-4 h-0.5 bg-orange-500 inline-block rounded" /> Kết hợp
             </span>
           </div>
-          <Button variant="outline" size="sm" className="gap-1.5">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowFilter(!showFilter)}>
             <Filter className="h-3.5 w-3.5" /> Bộ lọc
           </Button>
         </div>
       </div>
 
+      {showFilter && (
+        <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4">
+          <p className="text-sm font-medium">Lọc theo thời gian và điều kiện</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-1">
+              <Label className="text-xs">Từ ngày</Label>
+              <Input type="date" value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)} className="text-sm" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Từ giờ</Label>
+              <Input type="time" value={filterStartTime} onChange={e => setFilterStartTime(e.target.value)} className="text-sm" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Đến ngày</Label>
+              <Input type="date" value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)} className="text-sm" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Đến giờ</Label>
+              <Input type="time" value={filterEndTime} onChange={e => setFilterEndTime(e.target.value)} className="text-sm" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label className="text-xs">Cấp họp</Label>
+              <select value={filterLevel} onChange={e => setFilterLevel(e.target.value)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm">
+                <option value="">Tất cả</option>
+                <option value="company">Tổng công ty</option>
+                <option value="department">Phòng ban</option>
+                <option value="team">Nhóm/Team</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Loại họp</Label>
+              <select value={filterType} onChange={e => setFilterType(e.target.value)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm">
+                <option value="">Tất cả</option>
+                <option value="offline">Trực tiếp</option>
+                <option value="online">Trực tuyến</option>
+                <option value="hybrid">Kết hợp</option>
+              </select>
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => { setFilterStartDate(""); setFilterStartTime(""); setFilterEndDate(""); setFilterEndTime(""); setFilterLevel(""); setFilterType(""); }}>
+            Xóa bộ lọc
+          </Button>
+        </div>
+      )}
+
       <div className="bg-card rounded-xl border border-border shadow-sm">
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => {
+                const now = new Date();
+                setCurrentDate(now);
+                setViewMode("day");
+              }}
+            >
+              Hôm nay
+            </Button>
             {viewMode === "day" && (
               <>
                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateDay(-1)}>
@@ -381,6 +548,21 @@ export default function CalendarPage() {
 
         {viewMode === "day" && (
           <div className="relative">
+            {currentDate.toDateString() === today.toDateString() && (() => {
+              const now = new Date();
+              const minutesFromMidnight = now.getHours() * 60 + now.getMinutes();
+              const topPx = (minutesFromMidnight / minutesPerDay) * dayPixelHeight;
+              return (
+                <div
+                  className="absolute left-0 right-0 z-10 flex items-center pointer-events-none"
+                  style={{ top: `${topPx}px` }}
+                >
+                  <div className="w-[72px] h-px bg-primary shrink-0" />
+                  <div className="flex-1 h-px bg-primary" />
+                  <div className="w-2 h-2 rounded-full bg-primary shrink-0 -ml-1" />
+                </div>
+              );
+            })()}
             <div className="absolute inset-0 pointer-events-none divide-y divide-border">
               {timelineHours.map(hour => (
                 <div key={hour} className="grid grid-cols-[72px_1fr] h-16">

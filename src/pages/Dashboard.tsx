@@ -62,17 +62,15 @@ export default function Dashboard() {
   });
 
   return (
-    <div className="space-y-6">
-      {/* Page title */}
+    <div className="page-content">
       <div>
-        <h1 className="text-2xl font-display font-bold text-foreground">Tổng quan</h1>
+        <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">Tổng quan</h1>
         <p className="text-sm text-muted-foreground mt-1">Xin chào, {displayName}. Đây là tóm tắt hoạt động họp hôm nay.</p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {stats.map((stat) => (
-          <Card key={stat.label} className="shadow-card hover:shadow-card-hover transition-shadow duration-300">
+          <Card key={stat.label} className="card-elevated overflow-hidden">
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -91,7 +89,7 @@ export default function Dashboard() {
       {/* Charts + Upcoming */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Bar chart */}
-        <Card className="lg:col-span-2 shadow-card">
+        <Card className="lg:col-span-2 card-elevated overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-display">Cuộc họp trong tuần</CardTitle>
           </CardHeader>
@@ -116,7 +114,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Pie chart */}
-        <Card className="shadow-card">
+        <Card className="card-elevated overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-display">Theo hình thức</CardTitle>
           </CardHeader>
@@ -152,7 +150,7 @@ export default function Dashboard() {
       </div>
 
       {/* Upcoming Meetings */}
-      <Card className="shadow-card">
+      <Card className="card-elevated overflow-hidden">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-display">Cuộc họp sắp tới</CardTitle>
         </CardHeader>

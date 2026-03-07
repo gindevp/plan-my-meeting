@@ -32,7 +32,7 @@ export default function ActivateAccountPage() {
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-md shadow-xl border-0">
           <CardContent className="pt-6 text-center">
             <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
             <p className="mt-4 text-muted-foreground">Đang kích hoạt tài khoản...</p>
@@ -45,7 +45,7 @@ export default function ActivateAccountPage() {
   if (status === "error") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-md shadow-xl border-0">
           <CardContent className="pt-6 text-center space-y-4">
             <div className="flex justify-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
@@ -65,7 +65,7 @@ export default function ActivateAccountPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md shadow-xl border-0">
         <CardContent className="pt-6 text-center space-y-4">
           <div className="flex justify-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">

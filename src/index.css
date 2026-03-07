@@ -67,6 +67,10 @@
     --shadow-lg: 0 12px 32px -4px hsl(222 60% 22% / 0.12);
     --shadow-card: 0 1px 3px 0 hsl(222 60% 22% / 0.04), 0 1px 2px -1px hsl(222 60% 22% / 0.04);
     --shadow-card-hover: 0 8px 24px -4px hsl(222 60% 22% / 0.1);
+
+    /* Page spacing */
+    --page-spacing: 1.5rem;
+    --card-radius: 0.75rem;
   }
 
   .dark {
@@ -146,6 +150,18 @@
 
   .animate-slide-in-left {
     animation: slideInLeft 0.3s ease-out;
+  }
+
+  .page-content {
+    @apply space-y-6;
+  }
+
+  .card-elevated {
+    @apply rounded-xl border border-border bg-card shadow-card transition-all duration-300 hover:shadow-card-hover;
+  }
+
+  .empty-state {
+    @apply flex flex-col items-center justify-center py-16 px-4 rounded-xl border-2 border-dashed border-muted-foreground/20 bg-muted/20;
   }
 
   @keyframes fadeIn {

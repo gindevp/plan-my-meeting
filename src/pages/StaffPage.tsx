@@ -14,6 +14,7 @@ import { createUser, deleteUser, updateUser } from "@/services/api/users";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Edit2, Trash2, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 type UserRole = "admin" | "employee" | "secretary" | "room_manager";
 
@@ -39,6 +40,7 @@ interface StaffForm {
   role: UserRole;
   department: string;
   departmentId?: number;
+  position: string;
 }
 
 const emptyForm: StaffForm = {
@@ -48,10 +50,13 @@ const emptyForm: StaffForm = {
   email: "",
   role: "employee",
   department: "",
+  position: "",
 };
 
 export default function StaffPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.authorities?.includes("ROLE_ADMIN") ?? false;
   const queryClient = useQueryClient();
   const { data: users = [] } = useUsers();
   const { data: departments = [] } = useDepartments();
@@ -101,6 +106,7 @@ export default function StaffPage() {
         email: data.email,
         role: data.role,
         departmentId: data.departmentId,
+        position: data.position,
       }),
     onSuccess: () => {
       toast({ title: "Đã thêm", description: "Nhân viên đã được tạo." });
@@ -120,6 +126,7 @@ export default function StaffPage() {
         email: params.data.email,
         role: params.data.role,
         departmentId: params.data.departmentId,
+        position: params.data.position,
       }),
     onSuccess: () => {
       toast({ title: "Đã cập nhật", description: "Nhân viên đã được cập nhật." });
@@ -150,6 +157,7 @@ export default function StaffPage() {
       .toUpperCase();
 
   const submitCreate = () => {
+    if (!isAdmin) return;
     if (!form.login.trim() || !form.email.trim()) {
       toast({ variant: "destructive", title: "Lỗi", description: "Vui lòng nhập login và email" });
       return;
@@ -159,6 +167,7 @@ export default function StaffPage() {
   };
 
   const submitUpdate = () => {
+    if (!isAdmin) return;
     if (!editingUserId) return;
     if (!form.login.trim() || !form.email.trim()) {
       toast({ variant: "destructive", title: "Lỗi", description: "Vui lòng nhập login và email" });
@@ -169,30 +178,32 @@ export default function StaffPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="page-content">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">Quản lý nhân viên</h1>
+          <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">Quản lý nhân viên</h1>
           <p className="mt-1 text-sm text-muted-foreground">Danh sách nhân viên trong hệ thống</p>
         </div>
-        <Button
-          onClick={() => {
-            setForm(emptyForm);
-            setAddOpen(true);
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />Thêm nhân viên
-        </Button>
+        {isAdmin && (
+          <Button
+            onClick={() => {
+              setForm(emptyForm);
+              setAddOpen(true);
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />Thêm nhân viên
+          </Button>
+        )}
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {[
           { label: "Tổng nhân viên", value: users.length },
           { label: "Quản trị viên", value: users.filter((u) => u.role === "admin").length },
           { label: "Phòng ban", value: new Set(users.map((u) => u.department).filter(Boolean)).size },
           { label: "Thư ký", value: users.filter((u) => u.role === "secretary").length },
         ].map((s) => (
-          <Card key={s.label}>
+          <Card key={s.label} className="card-elevated">
             <CardContent className="pt-6">
               <p className="text-sm text-muted-foreground">{s.label}</p>
               <p className="mt-1 text-2xl font-bold text-foreground">{s.value}</p>
@@ -217,7 +228,7 @@ export default function StaffPage() {
         </Select>
       </div>
 
-      <Card>
+      <Card className="card-elevated overflow-hidden">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -225,6 +236,7 @@ export default function StaffPage() {
                 <TableHead>Nhân viên</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Phòng ban</TableHead>
+                <TableHead>Chức vụ</TableHead>
                 <TableHead>Vai trò</TableHead>
                 <TableHead className="text-right">Thao tác</TableHead>
               </TableRow>
@@ -245,32 +257,38 @@ export default function StaffPage() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">{u.email}</TableCell>
                     <TableCell>{getDepartmentName(u.departmentId) || "-"}</TableCell>
+                    <TableCell className="text-muted-foreground">{u.position || "-"}</TableCell>
                     <TableCell><Badge variant={roleBadgeVariant[role]}>{roleLabels[role]}</Badge></TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          const [firstName = "", ...rest] = (u.name || "").split(" ");
-                          const deptName = getDepartmentName(u.departmentId ? Number(u.departmentId) : undefined);
-                          setEditingUserId(u.id);
-                          setForm({
-                            login: u.login,
-                            firstName,
-                            lastName: rest.join(" "),
-                            email: u.email || "",
-                            role,
-                            department: deptName,
-                            departmentId: u.departmentId ? Number(u.departmentId) : undefined,
-                          });
-                          setEditOpen(true);
-                        }}
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => setDeleteConfirm(u.login)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      {isAdmin && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              const [firstName = "", ...rest] = (u.name || "").split(" ");
+                              const deptName = getDepartmentName(u.departmentId ? Number(u.departmentId) : undefined);
+                              setEditingUserId(u.id);
+                              setForm({
+                                login: u.login,
+                                firstName,
+                                lastName: rest.join(" "),
+                                email: u.email || "",
+                                role,
+                                department: deptName,
+                                departmentId: u.departmentId ? Number(u.departmentId) : undefined,
+                                position: u.position || "",
+                              });
+                              setEditOpen(true);
+                            }}
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => setDeleteConfirm(u.login)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
@@ -305,6 +323,9 @@ export default function StaffPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2"><Label>Chức vụ</Label><Input placeholder="VD: Trưởng phòng, Nhân viên" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Vai trò</Label>
                 <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as UserRole })}>
                   <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
@@ -345,6 +366,9 @@ export default function StaffPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2"><Label>Chức vụ</Label><Input placeholder="VD: Trưởng phòng, Nhân viên" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Vai trò</Label>
                 <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as UserRole })}>
                   <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>

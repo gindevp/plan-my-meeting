@@ -145,6 +145,27 @@ export async function getAccount(): Promise<Account | null> {
   });
 }
 
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const token = getStoredToken();
+  if (!token) throw new Error("Chưa đăng nhập");
+  const res = await fetch(`${API_BASE}/api/account/change-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const msg = err?.message || err?.detail || err?.title || "";
+    if (msg.toLowerCase().includes("incorrect") || msg.toLowerCase().includes("sai") || msg.toLowerCase().includes("không đúng")) {
+      throw new Error("Mật khẩu hiện tại không đúng");
+    }
+    throw new Error(msg || "Không thể đổi mật khẩu");
+  }
+}
+
 export async function fetchApi<T>(
   path: string,
   init?: RequestInit
@@ -183,5 +204,33 @@ export async function fetchApi<T>(
     }
     if (res.status === 204) return undefined as T;
     return res.json();
+  });
+}
+
+/** Fetch binary (blob) with auth; for download endpoints. */
+export async function fetchApiBlob(path: string): Promise<{ blob: Blob; filename: string }> {
+  return withGlobalLoading(async () => {
+    const token = getStoredToken();
+    const headers = new Headers();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const res = await fetch(`${API_BASE}${path}`, { headers });
+    if (res.status === 401) {
+      clearStoredToken();
+      window.location.href = "/login";
+      throw new Error("Phiên đăng nhập hết hạn");
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const rawMessage = err?.message || err?.detail || err?.title || res.statusText;
+      throw new Error(rawMessage || "Lỗi tải file");
+    }
+    const blob = await res.blob();
+    let filename = "document";
+    const disp = res.headers.get("Content-Disposition");
+    if (disp) {
+      const m = disp.match(/filename="?([^";\n]+)"?/);
+      if (m) filename = m[1].trim();
+    }
+    return { blob, filename };
   });
 }

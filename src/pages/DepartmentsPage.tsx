@@ -13,6 +13,7 @@ import { createDepartment, deleteDepartment, updateDepartment } from "@/services
 import { Plus, Building2, Users, CalendarDays, Edit2, Trash2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface DeptForm {
   name: string;
@@ -24,6 +25,8 @@ const emptyForm: DeptForm = { name: "", code: "", description: "" };
 
 export default function DepartmentsPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.authorities?.includes("ROLE_ADMIN") ?? false;
   const queryClient = useQueryClient();
   const { data: departments = [] } = useDepartments();
   const { data: users = [] } = useUsers();
@@ -88,6 +91,7 @@ export default function DepartmentsPage() {
   );
 
   const submitCreate = () => {
+    if (!isAdmin) return;
     if (!form.name.trim() || !form.code.trim()) {
       toast({ variant: "destructive", title: "Lỗi", description: "Nhập tên và mã phòng ban" });
       return;
@@ -97,6 +101,7 @@ export default function DepartmentsPage() {
   };
 
   const submitUpdate = () => {
+    if (!isAdmin) return;
     if (!editingId) return;
     if (!form.name.trim() || !form.code.trim()) {
       toast({ variant: "destructive", title: "Lỗi", description: "Nhập tên và mã phòng ban" });
@@ -107,20 +112,22 @@ export default function DepartmentsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="page-content">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="mt-1 text-2xl font-display font-bold text-foreground">Quản lý phòng ban</h1>
+          <h1 className="mt-1 text-2xl font-display font-bold tracking-tight text-foreground">Quản lý phòng ban</h1>
           <p className="text-sm text-muted-foreground">Cơ cấu tổ chức và phòng ban</p>
         </div>
-        <Button
-          onClick={() => {
-            setForm(emptyForm);
-            setAddOpen(true);
-          }}
-        >
-          <Plus className="mr-2 h-4 w-4" />Thêm phòng ban
-        </Button>
+        {isAdmin && (
+          <Button
+            onClick={() => {
+              setForm(emptyForm);
+              setAddOpen(true);
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />Thêm phòng ban
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -133,7 +140,7 @@ export default function DepartmentsPage() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filtered.map((dept) => (
-          <Card key={dept.id} className="transition-shadow hover:shadow-md">
+          <Card key={dept.id} className="card-elevated">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -146,21 +153,25 @@ export default function DepartmentsPage() {
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => {
-                      setEditingId(dept.id);
-                      setForm({ name: dept.name, code: dept.code, description: dept.description });
-                      setEditOpen(true);
-                    }}
-                  >
-                    <Edit2 className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteConfirm(dept.id)}>
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
+                  {isAdmin && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => {
+                          setEditingId(dept.id);
+                          setForm({ name: dept.name, code: dept.code, description: dept.description });
+                          setEditOpen(true);
+                        }}
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteConfirm(dept.id)}>
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </CardHeader>

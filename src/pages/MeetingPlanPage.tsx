@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -18,14 +18,33 @@ import {
   cancelMeeting,
   softDeleteMeeting,
   completeMeeting,
+  respondToInvitation,
+  updateParticipantAttendance,
+  getIncidentsByMeeting,
+  createIncident,
+  createMeetingDocument,
+  createPostMeetingTask,
+  getAllParticipants,
+  downloadMeetingDocument,
+  updateMeetingTaskStatus,
 } from "@/services/api/meetings";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
-import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit } from "lucide-react";
+import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit, UserCheck, UserX, AlertTriangle, FileText, Upload, Download, Loader2, ListTodo, PlayCircle, Circle, Calendar } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -69,6 +88,7 @@ export default function MeetingPlanPage() {
   const { toast } = useToast();
   const { data: meetings = [] } = useMeetings();
   const { user } = useAuth();
+  const isAdmin = user?.authorities?.includes("ROLE_ADMIN") ?? false;
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -89,26 +109,229 @@ export default function MeetingPlanPage() {
     sessionStorage.setItem("meetingPlanActiveTab", activeTab);
     const params = new URLSearchParams(location.search);
     params.set("tab", activeTab);
+    const meetingId = params.get("meetingId");
+    if (meetingId) params.set("meetingId", meetingId);
     navigate(`/plans?${params.toString()}`, { replace: true });
   }, [activeTab, location.search, navigate]);
 
+
   const [search, setSearch] = useState("");
   const [showFilter, setShowFilter] = useState(false);
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterStartTime, setFilterStartTime] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [filterEndTime, setFilterEndTime] = useState("");
+  const [filterLevel, setFilterLevel] = useState<string>("");
+  const [filterType, setFilterType] = useState<string>("");
   const [selectedMeeting, setSelectedMeeting] = useState<typeof meetings[0] | null>(null);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [deleteConfirmMeeting, setDeleteConfirmMeeting] = useState<typeof meetings[0] | null>(null);
   const [rejectReason, setRejectReason] = useState("");
-  const [taskViewModal, setTaskViewModal] = useState<{ attendee: string; tasks: any[] } | null>(null);
+  const [pendingUploadTaskId, setPendingUploadTaskId] = useState<string | null>(null);
+  const taskFileInputRef = useRef<HTMLInputElement>(null);
+  const [declineParticipantId, setDeclineParticipantId] = useState<number | null>(null);
+  const [declineReason, setDeclineReason] = useState("");
+  const [showIncidentForm, setShowIncidentForm] = useState(false);
+  const [incidentTitle, setIncidentTitle] = useState("");
+  const [incidentDescription, setIncidentDescription] = useState("");
+  const [incidentSeverity, setIncidentSeverity] = useState("MEDIUM");
+  const [minutesFile, setMinutesFile] = useState<File | null>(null);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [completeModalMinutesFile, setCompleteModalMinutesFile] = useState<File | null>(null);
+  const [showPostTaskForm, setShowPostTaskForm] = useState(false);
+  const [postTasks, setPostTasks] = useState<{ key: string; title: string; dueAt: string; assigneeKey: string }[]>(() => [{ key: `task-${Date.now()}`, title: "", dueAt: "", assigneeKey: "" }]);
 
-  const filtered = meetings.filter(m => {
-    const matchStatus = m.status === activeTab;
-    const matchSearch = m.title.toLowerCase().includes(search.toLowerCase());
-    const isOwner = activeTab === "draft" ? m.requesterId === user?.id : m.requesterId === user?.id || m.hostId === user?.id;
-    return matchStatus && matchSearch && isOwner;
+  const { data: allParticipantsForPlan = [] } = useQuery({
+    queryKey: ["all-participants"],
+    queryFn: getAllParticipants,
   });
 
+  const visibleStatusTabs = statusTabs;
+
+  const isSecretary = user?.authorities?.includes("ROLE_SECRETARY") ?? false;
+  const userDepartmentId = user?.departmentId != null ? String(user.departmentId) : null;
+
+  const participantMeetingIds = useMemo(() => {
+    const ids = new Set<string>();
+    (allParticipantsForPlan as any[]).forEach((p: any) => {
+      if (p.userId != null && String(p.userId) === String(user?.id) && String(p.meeting?.status ?? "").toUpperCase() === "APPROVED" && p.meeting?.id != null) {
+        ids.add(String(p.meeting.id));
+      }
+    });
+    return ids;
+  }, [allParticipantsForPlan, user?.id]);
+
+  const secretaryDepartmentMeetingIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!isSecretary || !userDepartmentId) return ids;
+    (allParticipantsForPlan as any[]).forEach((p: any) => {
+      if (p.userId == null && p.departmentId != null && String(p.departmentId) === userDepartmentId && String(p.meeting?.status ?? "").toUpperCase() === "APPROVED" && p.meeting?.id != null) {
+        ids.add(String(p.meeting.id));
+      }
+      if (p.userId != null && p.departmentId != null && String(p.departmentId) === userDepartmentId && String(p.meeting?.status ?? "").toUpperCase() === "APPROVED" && p.meeting?.id != null) {
+        ids.add(String(p.meeting.id));
+      }
+    });
+    return ids;
+  }, [allParticipantsForPlan, isSecretary, userDepartmentId]);
+
+  const participantMeetingsAsList = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
+    (allParticipantsForPlan as any[]).forEach((p: any) => {
+      if (p.userId == null || String(p.userId) !== String(user?.id) || String(p.meeting?.status ?? "").toUpperCase() !== "APPROVED" || !p.meeting?.id) return;
+      const id = String(p.meeting.id);
+      if (seen.has(id)) return;
+      seen.add(id);
+      const m = p.meeting;
+      list.push({
+        id,
+        title: m.title ?? "",
+        type: "offline",
+        level: "department",
+        status: "approved",
+        startTime: m.startTime,
+        endTime: m.endTime,
+        roomName: undefined,
+        meetingLink: undefined,
+        organizer: m.chairperson ?? "",
+        chairperson: m.chairperson ?? "",
+        host: undefined,
+        hostId: undefined,
+        secretaryId: undefined,
+        department: m.department ?? "",
+        description: "",
+        requesterId: undefined,
+        attendees: [],
+        agenda: [],
+      });
+    });
+    return list;
+  }, [allParticipantsForPlan, user?.id]);
+
+  const secretaryDepartmentMeetingsAsList = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
+    (allParticipantsForPlan as any[]).forEach((p: any) => {
+      if (!isSecretary || !userDepartmentId || p.meeting?.id == null) return;
+      const deptMatch = p.departmentId != null && String(p.departmentId) === userDepartmentId;
+      if (!deptMatch) return;
+      if (String(p.meeting?.status ?? "").toUpperCase() !== "APPROVED") return;
+      const id = String(p.meeting.id);
+      if (seen.has(id)) return;
+      seen.add(id);
+      const m = p.meeting;
+      list.push({
+        id,
+        title: m.title ?? "",
+        type: "offline",
+        level: (m.level ?? "department").toLowerCase().includes("corporate") || (m.level ?? "").toLowerCase().includes("company") ? "company" : "department",
+        status: "approved",
+        startTime: m.startTime,
+        endTime: m.endTime,
+        roomName: undefined,
+        meetingLink: undefined,
+        organizer: m.chairperson ?? "",
+        chairperson: m.chairperson ?? "",
+        host: undefined,
+        hostId: undefined,
+        secretaryId: undefined,
+        department: m.department ?? "",
+        description: "",
+        requesterId: undefined,
+        attendees: [],
+        agenda: [],
+      });
+    });
+    return list;
+  }, [allParticipantsForPlan, isSecretary, userDepartmentId]);
+
+  const meetingsForTabs = useMemo(() => {
+    const fromApi = meetings as any[];
+    const existingIds = new Set(fromApi.map((m: any) => String(m.id)));
+    const onlyFromParticipant = participantMeetingsAsList.filter((m: any) => !existingIds.has(m.id));
+    const fromSecretaryDept = secretaryDepartmentMeetingsAsList.filter((m: any) => !existingIds.has(String(m.id)));
+    return [...fromApi, ...onlyFromParticipant, ...fromSecretaryDept];
+  }, [meetings, participantMeetingsAsList, secretaryDepartmentMeetingsAsList]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const meetingId = params.get("meetingId");
+    if (!meetingId) return;
+    const meeting = meetingsForTabs.find((m: any) => String(m.id) === String(meetingId));
+    if (meeting) {
+      setSelectedMeeting(meeting);
+      return;
+    }
+    const fromParticipant = (allParticipantsForPlan as any[]).find(
+      (p: any) => p.meeting?.id != null && String(p.meeting.id) === String(meetingId) && String(p.userId) === String(user?.id)
+    );
+    if (fromParticipant?.meeting) {
+      const m = fromParticipant.meeting;
+      setSelectedMeeting({
+        id: String(m.id),
+        title: m.title ?? "",
+        type: "offline",
+        level: "department",
+        status: (m.status ?? "APPROVED").toLowerCase(),
+        startTime: m.startTime,
+        endTime: m.endTime,
+        roomName: undefined,
+        meetingLink: undefined,
+        organizer: m.chairperson ?? "",
+        chairperson: m.chairperson ?? "",
+        host: undefined,
+        hostId: undefined,
+        secretaryId: undefined,
+        department: m.department ?? "",
+        description: "",
+        requesterId: undefined,
+        attendees: [],
+        agenda: [],
+      } as any);
+    }
+  }, [location.search, meetingsForTabs, allParticipantsForPlan, user?.id]);
+
+  const filtered = useMemo(() => {
+    return meetingsForTabs.filter((m: any) => {
+      const matchStatus = m.status === activeTab;
+      const matchSearch = m.title?.toLowerCase().includes(search.toLowerCase());
+      const isOwner = activeTab === "draft" ? m.requesterId === user?.id : m.requesterId === user?.id || m.hostId === user?.id;
+      const isParticipantInApproved = activeTab === "approved" && participantMeetingIds.has(String(m.id));
+      const isSecretaryDepartmentInvited = activeTab === "approved" && secretaryDepartmentMeetingIds.has(String(m.id));
+      const visibleToUser = isAdmin || isOwner || isParticipantInApproved || isSecretaryDepartmentInvited;
+
+      if (!matchStatus || !matchSearch || !visibleToUser) return false;
+
+      if (filterStartDate && filterStartTime) {
+        const filterStart = new Date(`${filterStartDate}T${filterStartTime}`).getTime();
+        if (new Date(m.endTime).getTime() < filterStart) return false;
+      }
+      if (filterEndDate && filterEndTime) {
+        const filterEnd = new Date(`${filterEndDate}T${filterEndTime}`).getTime();
+        if (new Date(m.startTime).getTime() > filterEnd) return false;
+      }
+      if (filterLevel) {
+        const mLevel = normalizeLevel(m.level);
+        if (mLevel !== filterLevel) return false;
+      }
+      if (filterType && m.type !== filterType) return false;
+
+      return true;
+    });
+  }, [meetingsForTabs, activeTab, search, user?.id, isAdmin, participantMeetingIds, filterStartDate, filterStartTime, filterEndDate, filterEndTime, filterLevel, filterType]);
+
   const getTabCount = (status: string) => {
+    if (isAdmin) {
+      return meetingsForTabs.filter((m: any) => m.status === status).length;
+    }
     if (status === "draft") {
       return meetings.filter(m => m.status === status && m.requesterId === user?.id).length;
+    }
+    if (status === "approved") {
+      return meetingsForTabs.filter(
+        (m: any) => m.status === status && (m.requesterId === user?.id || m.hostId === user?.id || participantMeetingIds.has(String(m.id)))
+      ).length;
     }
     return meetings.filter(m => m.status === status && (m.requesterId === user?.id || m.hostId === user?.id)).length;
   };
@@ -179,12 +402,164 @@ export default function MeetingPlanPage() {
     mutationFn: (id: string) => completeMeeting(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      setShowCompleteModal(false);
       setSelectedMeeting(null);
-      toast({ title: "Hoàn thành", description: "Cuộc họp đã được đánh dấu hoàn thành." });
       setActiveTab("completed");
+      const params = new URLSearchParams(location.search);
+      params.delete("meetingId");
+      navigate(`/plans?tab=completed${params.toString() ? "&" + params.toString() : ""}`, { replace: true });
+      toast({ title: "Hoàn thành", description: "Cuộc họp đã được đánh dấu hoàn thành." });
     },
     onError: () => {
       toast({ variant: "destructive", title: "Lỗi", description: "Không thể đánh dấu hoàn thành." });
+    },
+  });
+
+  const respondMutation = useMutation({
+    mutationFn: ({ participantId, status, reason }: { participantId: number; status: "CONFIRMED" | "DECLINED"; reason?: string }) =>
+      respondToInvitation(participantId, status, reason),
+    onSuccess: async (_, { status }) => {
+      queryClient.invalidateQueries({ queryKey: ["participants", selectedMeeting?.id] });
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      setDeclineParticipantId(null);
+      setDeclineReason("");
+      if (status === "CONFIRMED" && selectedMeeting?.id && user?.id) {
+        const myTasks = (meetingTasks as any[]).filter((t: any) => String(t.assigneeId) === String(user.id));
+        await Promise.all(myTasks.map((t: any) => updateMeetingTaskStatus(t.id, "IN_PROGRESS")));
+        queryClient.invalidateQueries({ queryKey: ["meeting-tasks", selectedMeeting.id] });
+      }
+      toast({
+        title: status === "CONFIRMED" ? "Đã xác nhận tham gia" : "Đã từ chối",
+        description: status === "CONFIRMED" ? "Bạn đã xác nhận tham dự cuộc họp. Task của bạn đã chuyển sang Đang làm." : "Bạn đã từ chối tham dự.",
+      });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể cập nhật." });
+    },
+  });
+
+  const attendanceMutation = useMutation({
+    mutationFn: ({ participantId, attendance }: { participantId: number; attendance: "PRESENT" | "ABSENT" | "NOT_MARKED" | "EXCUSED" }) =>
+      updateParticipantAttendance(participantId, attendance),
+    onSuccess: () => {
+      if (selectedMeeting?.id) queryClient.invalidateQueries({ queryKey: ["participants", selectedMeeting.id] });
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      toast({ title: "Đã cập nhật", description: "Điểm danh đã được cập nhật." });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể cập nhật điểm danh." });
+    },
+  });
+
+  const createIncidentMutation = useMutation({
+    mutationFn: (payload: { meetingId: string; reportedById: number | string; title: string; description?: string; severity?: string }) =>
+      createIncident(payload),
+    onSuccess: () => {
+      if (selectedMeeting?.id) queryClient.invalidateQueries({ queryKey: ["incidents", selectedMeeting.id] });
+      setShowIncidentForm(false);
+      setIncidentTitle("");
+      setIncidentDescription("");
+      setIncidentSeverity("MEDIUM");
+      toast({ title: "Đã gửi", description: "Báo cáo sự cố đã được gửi." });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể gửi báo cáo sự cố." });
+    },
+  });
+
+  const uploadMinutesMutation = useMutation({
+    mutationFn: async (payload: {
+      meetingId: string;
+      fileName: string;
+      uploadedById: number | string;
+      fileBase64?: string;
+      fileContentType?: string;
+    }) => {
+      return createMeetingDocument({
+        meetingId: payload.meetingId,
+        docType: "MINUTES",
+        fileName: payload.fileName,
+        uploadedById: payload.uploadedById,
+        ...(payload.fileBase64 && { fileBase64: payload.fileBase64, fileContentType: payload.fileContentType || "application/octet-stream" }),
+      });
+    },
+    onSuccess: () => {
+      if (selectedMeeting?.id) {
+        queryClient.invalidateQueries({ queryKey: ["meeting-documents", selectedMeeting.id] });
+      }
+      setMinutesFile(null);
+      setCompleteModalMinutesFile(null);
+      toast({ title: "Đã tải lên", description: "Biên bản đã được lưu." });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể tải lên biên bản." });
+    },
+  });
+
+  const createPostTaskMutation = useMutation({
+    mutationFn: (payload: {
+      meetingId: string;
+      title: string;
+      description?: string;
+      dueAt?: string;
+      assigneeId?: string;
+      departmentId?: string;
+      assignedById: number | string;
+    }) =>
+      createPostMeetingTask({
+        ...payload,
+        assigneeId: payload.assigneeId ? Number(payload.assigneeId) : undefined,
+        departmentId: payload.departmentId ? Number(payload.departmentId) : undefined,
+      }),
+    onSuccess: () => {
+      if (selectedMeeting?.id) queryClient.invalidateQueries({ queryKey: ["meeting-tasks", selectedMeeting.id] });
+      toast({ title: "Đã giao", description: "Công việc sau họp đã được tạo." });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể tạo công việc." });
+    },
+  });
+
+  const updateTaskStatusMutation = useMutation({
+    mutationFn: ({ taskId, status }: { taskId: string; status: "IN_PROGRESS" | "DONE" }) =>
+      updateMeetingTaskStatus(taskId, status),
+    onSuccess: (_, { status }) => {
+      if (selectedMeeting?.id) queryClient.invalidateQueries({ queryKey: ["meeting-tasks", selectedMeeting.id] });
+      toast({
+        title: "Đã cập nhật",
+        description: status === "DONE" ? "Task đã đánh dấu hoàn thành." : "Task đã chuyển sang đang làm.",
+      });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể cập nhật trạng thái." });
+    },
+  });
+
+  const uploadTaskDocMutation = useMutation({
+    mutationFn: (payload: {
+      meetingId: string;
+      taskId: string;
+      fileName: string;
+      fileContentType: string;
+      fileBase64: string;
+      uploadedById: number | string;
+    }) =>
+      createMeetingDocument({
+        meetingId: payload.meetingId,
+        taskId: payload.taskId,
+        docType: "TASK_DOC",
+        fileName: payload.fileName,
+        fileContentType: payload.fileContentType,
+        fileBase64: payload.fileBase64,
+        uploadedById: payload.uploadedById,
+      }),
+    onSuccess: () => {
+      if (selectedMeeting?.id) queryClient.invalidateQueries({ queryKey: ["meeting-documents", selectedMeeting.id] });
+      setPendingUploadTaskId(null);
+      toast({ title: "Đã tải lên", description: "Tài liệu task đã được lưu." });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể tải lên tài liệu." });
     },
   });
 
@@ -197,6 +572,69 @@ export default function MeetingPlanPage() {
   const { data: participants = [] } = useQuery({
     queryKey: ["participants", selectedMeeting?.id],
     queryFn: () => getParticipantsByMeeting(selectedMeeting!.id),
+    enabled: !!selectedMeeting,
+  });
+
+  const myParticipant = useMemo(
+    () => (participants as any[]).find((p: any) => p.userId && String(p.userId) === String(user?.id)),
+    [participants, user?.id]
+  );
+  const hasConfirmedParticipation = myParticipant?.confirmationStatus === "CONFIRMED";
+
+  const postTaskAssigneeOptions = useMemo(() => {
+    const list: { value: string; label: string }[] = [];
+    (participants as any[]).forEach((p: any) => {
+      if (p.userId) {
+        list.push({ value: `user-${p.userId}`, label: p.name || p.userId });
+      } else if (p.departmentId) {
+        list.push({ value: `dept-${p.departmentId}`, label: p.name || `Phòng ban #${p.departmentId}` });
+      }
+    });
+    return list;
+  }, [participants]);
+
+  const addPostTaskRow = () => {
+    setPostTasks(prev => [...prev, { key: `task-${Date.now()}-${Math.random().toString(36).slice(2)}`, title: "", dueAt: "", assigneeKey: "" }]);
+  };
+  const removePostTaskRow = (key: string) => {
+    setPostTasks(prev => (prev.length <= 1 ? [{ key: `task-${Date.now()}`, title: "", dueAt: "", assigneeKey: "" }] : prev.filter(t => t.key !== key)));
+  };
+  const updatePostTaskRow = (key: string, field: "title" | "dueAt" | "assigneeKey", value: string) => {
+    setPostTasks(prev => prev.map(t => (t.key === key ? { ...t, [field]: value } : t)));
+  };
+
+  const submitAllPostTasks = async () => {
+    if (!selectedMeeting?.id || !user?.id) return;
+    const toCreate = postTasks.filter(t => t.title.trim());
+    if (toCreate.length === 0) {
+      toast({ variant: "destructive", title: "Lỗi", description: "Vui lòng nhập ít nhất một tiêu đề công việc." });
+      return;
+    }
+    try {
+      for (const t of toCreate) {
+        const assigneeId = t.assigneeKey.startsWith("user-") ? t.assigneeKey.slice(5) : undefined;
+        const departmentId = t.assigneeKey.startsWith("dept-") ? t.assigneeKey.slice(5) : undefined;
+        await createPostTaskMutation.mutateAsync({
+          meetingId: selectedMeeting.id,
+          title: t.title.trim(),
+          dueAt: t.dueAt || undefined,
+          assigneeId,
+          departmentId,
+          assignedById: user.id,
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["meeting-tasks", selectedMeeting.id] });
+      toast({ title: "Đã giao", description: `Đã tạo ${toCreate.length} công việc sau họp.` });
+      setPostTasks([{ key: `task-${Date.now()}`, title: "", dueAt: "", assigneeKey: "" }]);
+      setShowPostTaskForm(false);
+    } catch {
+      // onError of mutation already shows toast
+    }
+  };
+
+  const { data: meetingIncidents = [] } = useQuery({
+    queryKey: ["incidents", selectedMeeting?.id],
+    queryFn: () => getIncidentsByMeeting(selectedMeeting!.id),
     enabled: !!selectedMeeting,
   });
 
@@ -244,66 +682,112 @@ export default function MeetingPlanPage() {
   })();
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-display font-bold">Quản lý kế hoạch lịch họp</h1>
-          <p className="text-sm text-muted-foreground mt-1">Quản lý và theo dõi các kế hoạch cuộc họp</p>
-        </div>
-        <Button onClick={() => navigate("/meetings/new")} className="gap-2">
+    <div className="page-content">
+      <PageHeader
+        title="Quản lý kế hoạch lịch họp"
+        description="Quản lý và theo dõi các kế hoạch cuộc họp"
+      >
+        <Button onClick={() => navigate("/meetings/new")} className="gap-2 h-11">
           <Plus className="h-4 w-4" />
           Lên lịch họp
         </Button>
-      </div>
+      </PageHeader>
 
-      <div className="border-b border-border">
-        <div className="flex gap-0">
-          {statusTabs.map(tab => {
+      <div className="card-elevated overflow-hidden">
+        <div className="flex gap-0 px-1 pt-1 border-b border-border/60 bg-muted/20">
+          {visibleStatusTabs.map(tab => {
             const count = getTabCount(tab.key);
             const isActive = activeTab === tab.key;
             return (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all rounded-t-lg ${
                   isActive
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                    ? "border-primary text-primary bg-background shadow-sm"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-background/60 hover:border-border"
                 }`}
               >
-                <tab.icon className="h-4 w-4" />
+                <tab.icon className="h-4 w-4 shrink-0" />
                 {tab.label}
-                <Badge variant="secondary" className="ml-1 h-5 min-w-[20px] px-1.5 text-[10px]">
+                <Badge variant="secondary" className="ml-1 h-5 min-w-[20px] px-1.5 text-[10px] font-medium">
                   {count}
                 </Badge>
               </button>
             );
           })}
         </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Tìm kiếm cuộc họp..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+        <div className="p-4 border-b border-border/50">
+          <div className="flex items-center gap-3">
+            <div className="relative w-[60%] min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Tìm kiếm cuộc họp..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-11" />
+            </div>
+            <Button variant="outline" size="sm" className="gap-1.5 h-11 shrink-0 ml-auto" onClick={() => setShowFilter(!showFilter)}>
+              <Filter className="h-3.5 w-3.5" /> Bộ lọc
+            </Button>
+          </div>
         </div>
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowFilter(!showFilter)}>
-          <Filter className="h-3.5 w-3.5" /> Bộ lọc
-        </Button>
-      </div>
 
-      <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+        {showFilter && (
+          <div className="px-5 pb-5 pt-2 space-y-4 animate-fade-in border-b border-border/50 bg-muted/10">
+          <p className="text-sm font-medium tracking-tight">Lọc theo thời gian và điều kiện</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Từ ngày</Label>
+              <Input type="date" value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)} className="text-sm h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Từ giờ</Label>
+              <Input type="time" value={filterStartTime} onChange={e => setFilterStartTime(e.target.value)} className="text-sm h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Đến ngày</Label>
+              <Input type="date" value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)} className="text-sm h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Đến giờ</Label>
+              <Input type="time" value={filterEndTime} onChange={e => setFilterEndTime(e.target.value)} className="text-sm h-11" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Cấp họp</Label>
+              <select value={filterLevel} onChange={e => setFilterLevel(e.target.value)} className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <option value="">Tất cả</option>
+                <option value="company">Tổng công ty</option>
+                <option value="department">Phòng ban</option>
+                <option value="team">Nhóm/Team</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Loại họp</Label>
+              <select value={filterType} onChange={e => setFilterType(e.target.value)} className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <option value="">Tất cả</option>
+                <option value="offline">Trực tiếp</option>
+                <option value="online">Trực tuyến</option>
+                <option value="hybrid">Kết hợp</option>
+              </select>
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => { setFilterStartDate(""); setFilterStartTime(""); setFilterEndDate(""); setFilterEndTime(""); setFilterLevel(""); setFilterType(""); }}>
+            Xóa bộ lọc
+          </Button>
+          </div>
+        )}
+
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>Tên cuộc họp</TableHead>
-              <TableHead>Cấp</TableHead>
-              <TableHead>Loại</TableHead>
-              <TableHead>Cơ quan chủ trì</TableHead>
-              <TableHead>Chủ trì</TableHead>
-              <TableHead>Ngày</TableHead>
-              <TableHead>Thời gian</TableHead>
-              <TableHead>Trạng thái</TableHead>
+            <TableRow className="hover:bg-transparent bg-muted/30">
+              <TableHead className="font-semibold tracking-tight">Tên cuộc họp</TableHead>
+              <TableHead className="font-medium">Cấp</TableHead>
+              <TableHead className="font-medium">Loại</TableHead>
+              <TableHead className="font-medium">Cơ quan chủ trì</TableHead>
+              <TableHead className="font-medium">Chủ trì</TableHead>
+              <TableHead className="font-medium">Bắt đầu</TableHead>
+              <TableHead className="font-medium">Kết thúc</TableHead>
+              <TableHead className="font-medium">Trạng thái</TableHead>
               {activeTab === "rejected" && <TableHead>Lý do từ chối</TableHead>}
               <TableHead className="text-right">Thao tác</TableHead>
             </TableRow>
@@ -328,8 +812,14 @@ export default function MeetingPlanPage() {
                   </TableCell>
                   <TableCell className="text-sm">{meeting.department}</TableCell>
                   <TableCell className="text-sm">{meeting.chairperson}</TableCell>
-                  <TableCell className="text-sm">{new Date(meeting.startTime).toLocaleDateString("vi-VN")}</TableCell>
-                  <TableCell className="text-sm">{formatTime(meeting.startTime)} - {formatTime(meeting.endTime)}</TableCell>
+                  <TableCell className="text-sm whitespace-nowrap">
+                    <div className="font-medium">{new Date(meeting.startTime).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</div>
+                    <div className="text-muted-foreground text-xs">{new Date(meeting.startTime).toLocaleDateString("vi-VN")}</div>
+                  </TableCell>
+                  <TableCell className="text-sm whitespace-nowrap">
+                    <div className="font-medium">{new Date(meeting.endTime).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</div>
+                    <div className="text-muted-foreground text-xs">{new Date(meeting.endTime).toLocaleDateString("vi-VN")}</div>
+                  </TableCell>
                   <TableCell className="text-sm">
                     <Badge variant="outline" className={`text-[11px] ${statusColorMap[meeting.status]}`}>
                       {statusLabels[meeting.status]}
@@ -342,9 +832,9 @@ export default function MeetingPlanPage() {
                   )}
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
-                      <button className="p-0 m-0 bg-transparent border-0" onClick={() => setSelectedMeeting(meeting)} aria-label="Xem chi tiết cuộc họp">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedMeeting(meeting)} aria-label="Xem chi tiết cuộc họp">
                         <Eye className="h-4 w-4" />
-                      </button>
+                      </Button>
                       {meeting.status === "draft" && (
                         <>
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate(`/meetings/edit/${meeting.id}`)}>
@@ -353,12 +843,8 @@ export default function MeetingPlanPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-destructive"
-                            onClick={() => {
-                              if (window.confirm("Bạn có chắc chắn muốn xóa cuộc họp này?")) {
-                                cancelMutation.mutate({ id: meeting.id, status: meeting.status });
-                              }
-                            }}
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                            onClick={() => setDeleteConfirmMeeting(meeting)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -376,16 +862,36 @@ export default function MeetingPlanPage() {
             })}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-12 text-sm text-muted-foreground">
-                  Không tìm thấy cuộc họp nào
+                <TableCell colSpan={activeTab === "rejected" ? 10 : 9} className="p-0">
+                  <div className="empty-state">
+                    <Calendar className="h-12 w-12 text-muted-foreground/50 mb-3" />
+                    <p className="text-sm font-medium text-muted-foreground">Không tìm thấy cuộc họp nào</p>
+                    <p className="text-xs text-muted-foreground/80 mt-1">Thử điều chỉnh bộ lọc hoặc tạo cuộc họp mới</p>
+                    <Button variant="outline" size="sm" className="mt-4 gap-1.5" onClick={() => navigate("/meetings/new")}>
+                      <Plus className="h-4 w-4" />
+                      Lên lịch họp
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
 
-      <Dialog open={!!selectedMeeting} onOpenChange={() => setSelectedMeeting(null)}>
+      <Dialog
+        open={!!selectedMeeting}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedMeeting(null);
+            const params = new URLSearchParams(location.search);
+            params.delete("meetingId");
+            const tab = params.get("tab") || activeTab;
+            navigate(`/plans?tab=${tab}`, { replace: true });
+          }
+        }}
+      >
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto pr-14">
           {selectedMeeting && (
             <>
@@ -447,6 +953,34 @@ export default function MeetingPlanPage() {
                 <Separator />
                 <div>
                   <p className="font-medium mb-2">Thành phần tham dự & công việc liên quan</p>
+                  <input
+                    ref={taskFileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      if (!f || !pendingUploadTaskId || !selectedMeeting?.id || !user?.id) return;
+                      const base64 = await new Promise<string>((res, rej) => {
+                        const r = new FileReader();
+                        r.onload = () => {
+                          const dataUrl = r.result as string;
+                          res(dataUrl.includes(",") ? dataUrl.split(",")[1]! : dataUrl);
+                        };
+                        r.onerror = rej;
+                        r.readAsDataURL(f);
+                      });
+                      uploadTaskDocMutation.mutate({
+                        meetingId: selectedMeeting.id,
+                        taskId: pendingUploadTaskId,
+                        fileName: f.name,
+                        fileContentType: f.type || "application/octet-stream",
+                        fileBase64: base64,
+                        uploadedById: user.id,
+                      });
+                      setPendingUploadTaskId(null);
+                      e.target.value = "";
+                    }}
+                  />
                   {participants.length === 0 ? (
                     <p className="text-muted-foreground text-xs">Chưa có thành phần tham dự.</p>
                   ) : (
@@ -461,11 +995,29 @@ export default function MeetingPlanPage() {
                           }
                           return false;
                         });
+                        const confLabel = p.confirmationStatus === "CONFIRMED" ? "Đã xác nhận" : p.confirmationStatus === "DECLINED" ? "Đã từ chối" : "Chưa xác nhận";
+                        const confVariant = p.confirmationStatus === "CONFIRMED" ? "default" : p.confirmationStatus === "DECLINED" ? "destructive" : "secondary";
+                        const ConfIcon = p.confirmationStatus === "CONFIRMED" ? UserCheck : p.confirmationStatus === "DECLINED" ? UserX : Clock;
+                        const isMyTaskRow = !!p.userId && String(p.userId) === String(user?.id) && participantTasks.length > 0;
                         return (
-                          <div key={p.id} className="rounded-lg border p-3 bg-card">
+                          <div key={p.id} className={`rounded-lg border p-3 bg-card ${isMyTaskRow ? "ring-2 ring-primary/50 border-primary/30" : ""}`}>
                             <div className="flex items-center justify-between gap-2 mb-2">
                               <p className="font-semibold text-sm">{p.name}</p>
-                              <Badge variant="secondary" className="text-[11px] cursor-pointer" onClick={() => participantTasks.length > 0 && setTaskViewModal({ attendee: p.name, tasks: participantTasks })}>{participantTasks.length} task</Badge>
+                              <div className="flex items-center gap-2">
+                                {(activeTab === "approved" || activeTab === "completed") && (
+                                  <Badge variant={confVariant} className="text-[11px] gap-1">
+                                    <ConfIcon className="h-3 w-3 shrink-0" />
+                                    {confLabel}
+                                  </Badge>
+                                )}
+                                <Badge
+                                  variant={isMyTaskRow ? "default" : "secondary"}
+                                  className={`text-[11px] gap-1 ${isMyTaskRow ? "bg-primary/90 font-medium" : ""}`}
+                                >
+                                  {isMyTaskRow ? <ListTodo className="h-3.5 w-3.5 shrink-0" /> : null}
+                                  {isMyTaskRow ? `Task của tôi (${participantTasks.length})` : `${participantTasks.length} task`}
+                                </Badge>
+                              </div>
                             </div>
 
                             {participantTasks.length === 0 ? (
@@ -474,18 +1026,85 @@ export default function MeetingPlanPage() {
                               <div className="space-y-2">
                                 {participantTasks.map((task: any) => {
                                   const taskDocs = meetingDocuments.filter((doc: any) => doc.taskId === task.id);
+                                  const isMyTask = !!task.assigneeId && String(task.assigneeId) === String(user?.id);
+                                  const taskStatus = String(task.status || "").toUpperCase();
+                                  const isDone = taskStatus === "DONE";
                                   return (
                                     <div key={task.id} className="rounded-md border bg-secondary/30 p-3 text-xs">
                                       <div className="flex items-center justify-between gap-2">
                                         <p className="font-medium text-sm">{task.title}</p>
-                                        <Badge variant="outline">{task.status}</Badge>
+                                        <div className="flex items-center gap-2">
+                                          {(activeTab === "approved" || activeTab === "completed") && (
+                                            <>
+                                              {isMyTask && hasConfirmedParticipation ? (
+                                                <div
+                                                  role="group"
+                                                  aria-label="Trạng thái task"
+                                                  className="inline-flex h-8 rounded-full bg-muted p-0.5 border border-border shrink-0"
+                                                >
+                                                  <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    disabled={updateTaskStatusMutation.isPending}
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      e.preventDefault();
+                                                      if (task.id) updateTaskStatusMutation.mutate({ taskId: String(task.id), status: "IN_PROGRESS" });
+                                                    }}
+                                                    className={`h-7 min-w-[4.5rem] rounded-full px-3 text-xs font-medium gap-1.5 ${
+                                                      !isDone
+                                                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                                                        : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                                                    }`}
+                                                  >
+                                                    {updateTaskStatusMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin shrink-0" /> : <PlayCircle className="h-3 w-3 shrink-0" />}
+                                                    IN_PROGRESS
+                                                  </Button>
+                                                  <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    disabled={updateTaskStatusMutation.isPending}
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      e.preventDefault();
+                                                      if (task.id) updateTaskStatusMutation.mutate({ taskId: String(task.id), status: "DONE" });
+                                                    }}
+                                                    className={`h-7 min-w-[4.5rem] rounded-full px-3 text-xs font-medium gap-1.5 ${
+                                                      isDone
+                                                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                                                        : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                                                    }`}
+                                                  >
+                                                    <CheckCircle className="h-3 w-3 shrink-0" />
+                                                    Done
+                                                  </Button>
+                                                </div>
+                                              ) : isMyTask ? (
+                                                <Badge variant="outline" className="text-[11px] gap-1">
+                                                  <Circle className="h-3 w-3 shrink-0" />
+                                                  TODO
+                                                </Badge>
+                                              ) : (
+                                                <Badge variant="outline" className="text-[11px] gap-1">
+                                                  {taskStatus === "DONE" ? <CheckCircle className="h-3 w-3 shrink-0" /> : taskStatus === "IN_PROGRESS" ? <PlayCircle className="h-3 w-3 shrink-0" /> : <Circle className="h-3 w-3 shrink-0" />}
+                                                  {task.status}
+                                                </Badge>
+                                              )}
+                                            </>
+                                          )}
+                                        </div>
                                       </div>
                                       <div className="mt-1 grid grid-cols-1 md:grid-cols-3 gap-2 text-muted-foreground">
                                         <p>Hạn chót: <span className="text-foreground">{task.dueAt ? new Date(task.dueAt).toLocaleString("vi-VN") : "-"}</span></p>
                                         <p>Loại: <span className="text-foreground">{task.type || "-"}</span></p>
                                         <p>Nhắc trước: <span className="text-foreground">{task.remindBeforeMinutes ?? "-"} phút</span></p>
                                       </div>
-                                      {task.description && <p className="mt-1 text-muted-foreground">{task.description}</p>}
+                                      <div className="mt-1">
+                                        <p className="font-medium text-muted-foreground mb-0.5">Mô tả:</p>
+                                        <p className="text-muted-foreground">{task.description || "-"}</p>
+                                      </div>
 
                                       <div className="mt-2 pt-2 border-t">
                                         <p className="font-medium mb-1">Tài liệu của task ({taskDocs.length})</p>
@@ -494,14 +1113,37 @@ export default function MeetingPlanPage() {
                                         ) : (
                                           <div className="space-y-1">
                                             {taskDocs.map((doc: any) => (
-                                              <div key={doc.id} className="rounded bg-background px-2 py-1 border text-muted-foreground">
+                                              <div key={doc.id} className="flex items-center justify-between gap-2 rounded bg-background px-2 py-1 border text-muted-foreground">
                                                 <span className="text-foreground">{doc.fileName || "(Không tên)"}</span>
-                                                {" • "}
-                                                {doc.docType || "DOC"}
-                                                {doc.uploadedBy ? ` • ${doc.uploadedBy}` : ""}
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  className="h-7 text-xs gap-1"
+                                                  onClick={() => downloadMeetingDocument(doc.id)}
+                                                >
+                                                  <Download className="h-3 w-3" />
+                                                  Tải xuống
+                                                </Button>
                                               </div>
                                             ))}
                                           </div>
+                                        )}
+                                        {isMyTask && (
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="gap-1.5 mt-2"
+                                            disabled={uploadTaskDocMutation.isPending}
+                                            onClick={() => {
+                                              setPendingUploadTaskId(String(task.id));
+                                              taskFileInputRef.current?.click();
+                                            }}
+                                          >
+                                            <Upload className="h-3.5 w-3.5" />
+                                            Tải tài liệu của bạn lên
+                                          </Button>
                                         )}
                                       </div>
                                     </div>
@@ -515,6 +1157,220 @@ export default function MeetingPlanPage() {
                     </div>
                   )}
                 </div>
+
+                {(() => {
+                  const myParticipant = participants.find((p: any) => p.userId && String(p.userId) === String(user?.id));
+                  const isPending = myParticipant?.confirmationStatus === "PENDING";
+                  const isDeclineMode = declineParticipantId === myParticipant?.id;
+                  const isApproved = selectedMeeting.status === "approved";
+                  if (!myParticipant || !isPending || !isApproved) return null;
+                  return (
+                    <>
+                      <Separator />
+                      <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+                        <p className="font-medium text-sm mb-2">Xác nhận tham dự</p>
+                        <p className="text-xs text-muted-foreground mb-3">Bạn được mời tham dự cuộc họp này. Vui lòng xác nhận tham gia hoặc từ chối.</p>
+                        {!isDeclineMode ? (
+                          <div className="flex gap-2">
+                            <Button size="sm" className="gap-1.5" onClick={() => respondMutation.mutate({ participantId: myParticipant.id, status: "CONFIRMED" })} disabled={respondMutation.isPending}>
+                              <UserCheck className="h-4 w-4" />
+                              Xác nhận tham gia
+                            </Button>
+                            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setDeclineParticipantId(myParticipant.id)}>
+                              <UserX className="h-4 w-4" />
+                              Từ chối
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <Label className="text-xs">Lý do không tham dự (bắt buộc)</Label>
+                            <Textarea
+                              value={declineReason}
+                              onChange={e => setDeclineReason(e.target.value)}
+                              placeholder="Nhập lý do..."
+                              rows={2}
+                              className="text-sm"
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => {
+                                  if (!declineReason.trim()) {
+                                    toast({ variant: "destructive", title: "Lỗi", description: "Vui lòng nhập lý do từ chối." });
+                                    return;
+                                  }
+                                  respondMutation.mutate({ participantId: myParticipant.id, status: "DECLINED", reason: declineReason.trim() });
+                                }}
+                                disabled={respondMutation.isPending}
+                              >
+                                Gửi từ chối
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => { setDeclineParticipantId(null); setDeclineReason(""); }}>
+                                Hủy
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
+
+                {selectedMeeting.status === "approved" && (() => {
+                  const isHostOrSecretary = selectedMeeting.host?.id === user?.id || selectedMeeting.secretaryId === user?.id;
+                  const myParticipant = participants.find((p: any) => p.userId && String(p.userId) === String(user?.id));
+                  if (isHostOrSecretary) {
+                    return (
+                      <>
+                        <Separator />
+                        <div className="rounded-lg border border-border p-3">
+                          <p className="font-medium text-sm mb-2">Điểm danh</p>
+                          <p className="text-xs text-muted-foreground mb-3">Chủ trì / Thư ký đánh dấu có mặt hoặc vắng mặt cho từng thành viên.</p>
+                          <div className="space-y-2 max-h-48 overflow-y-auto">
+                            {participants.filter((p: any) => p.userId || p.departmentId).map((p: any) => (
+                              <div key={p.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-border/50 last:border-0">
+                                <p className="text-sm font-medium">{p.name}</p>
+                                <div
+                                  role="group"
+                                  aria-label="Điểm danh"
+                                  className="inline-flex h-8 rounded-full bg-muted p-0.5 border border-border shrink-0"
+                                >
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={attendanceMutation.isPending}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                      attendanceMutation.mutate({ participantId: p.id, attendance: "PRESENT" });
+                                    }}
+                                    className={`h-7 min-w-[4.5rem] rounded-full px-3 text-xs font-medium ${
+                                      p.attendance === "PRESENT"
+                                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                                        : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                                    }`}
+                                  >
+                                    Có mặt
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={attendanceMutation.isPending}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                      attendanceMutation.mutate({ participantId: p.id, attendance: "ABSENT" });
+                                    }}
+                                    className={`h-7 min-w-[4rem] rounded-full px-3 text-xs font-medium ${
+                                      p.attendance === "ABSENT"
+                                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                                        : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                                    }`}
+                                  >
+                                    Vắng
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    );
+                  }
+                  if (myParticipant && myParticipant.attendance !== "PRESENT") {
+                    return (
+                      <>
+                        <Separator />
+                        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+                          <p className="font-medium text-sm mb-2">Điểm danh</p>
+                          <p className="text-xs text-muted-foreground mb-2">Xác nhận trạng thái có mặt của bạn.</p>
+                          <div
+                            role="group"
+                            aria-label="Điểm danh"
+                            className="inline-flex h-8 rounded-full bg-muted p-0.5 border border-border"
+                          >
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={attendanceMutation.isPending}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                attendanceMutation.mutate({ participantId: myParticipant.id, attendance: "PRESENT" });
+                              }}
+                              className="h-7 min-w-[4.5rem] rounded-full px-3 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"
+                            >
+                              <UserCheck className="h-3 w-3 shrink-0 mr-1" />
+                              Có mặt
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={attendanceMutation.isPending}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                attendanceMutation.mutate({ participantId: myParticipant.id, attendance: "ABSENT" });
+                              }}
+                              className="h-7 min-w-[4rem] rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                            >
+                              Vắng
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {selectedMeeting.status === "approved" && (
+                  <>
+                    <Separator />
+                    <div className="rounded-lg border border-border p-3">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <p className="font-medium text-sm">Báo cáo sự cố</p>
+                        {!showIncidentForm && (
+                          <Button size="sm" variant="outline" className="gap-1" onClick={() => setShowIncidentForm(true)}>
+                            <AlertTriangle className="h-4 w-4" />
+                            Báo cáo sự cố
+                          </Button>
+                        )}
+                      </div>
+                      {showIncidentForm ? (
+                        <div className="space-y-2 pt-2 border-t">
+                          <Input placeholder="Tiêu đề" value={incidentTitle} onChange={e => setIncidentTitle(e.target.value)} className="text-sm" />
+                          <Textarea placeholder="Mô tả" value={incidentDescription} onChange={e => setIncidentDescription(e.target.value)} rows={2} className="text-sm" />
+                          <div className="flex gap-2">
+                            <select value={incidentSeverity} onChange={e => setIncidentSeverity(e.target.value)} className="rounded-md border px-2 py-1.5 text-sm">
+                              <option value="LOW">Thấp</option>
+                              <option value="MEDIUM">Trung bình</option>
+                              <option value="HIGH">Cao</option>
+                            </select>
+                            <Button size="sm" onClick={() => { if (incidentTitle.trim()) createIncidentMutation.mutate({ meetingId: selectedMeeting.id, reportedById: user?.id!, title: incidentTitle.trim(), description: incidentDescription.trim(), severity: incidentSeverity }); }} disabled={createIncidentMutation.isPending || !incidentTitle.trim()}>Gửi</Button>
+                            <Button size="sm" variant="ghost" onClick={() => { setShowIncidentForm(false); setIncidentTitle(""); setIncidentDescription(""); }}>Hủy</Button>
+                          </div>
+                        </div>
+                      ) : null}
+                      {meetingIncidents.length > 0 && (
+                        <div className="mt-2 space-y-1.5 max-h-32 overflow-y-auto">
+                          <p className="text-xs text-muted-foreground">Đã báo cáo ({meetingIncidents.length})</p>
+                          {meetingIncidents.map((inc: any) => (
+                            <div key={inc.id} className="rounded border bg-muted/30 px-2 py-1.5 text-xs">
+                              <p className="font-medium">{inc.title}</p>
+                              <p className="text-muted-foreground">{inc.severity} • {inc.reportedBy} • {inc.reportedAt ? new Date(inc.reportedAt).toLocaleString("vi-VN") : ""}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
 
                 {selectedMeeting.status === "draft" && (
                   <>
@@ -562,10 +1418,111 @@ export default function MeetingPlanPage() {
                   <>
                     <Separator />
                     <div className="flex justify-end">
-                      <Button onClick={() => completeMutation.mutate(selectedMeeting.id)} disabled={completeMutation.isPending} className="gap-2">
+                      <Button onClick={() => setShowCompleteModal(true)} className="gap-2">
                         <CheckCircle className="h-4 w-4" />
-                        {completeMutation.isPending ? "Đang xử lý..." : "Hoàn thành"}
+                        Hoàn thành
                       </Button>
+                    </div>
+                  </>
+                )}
+
+                {selectedMeeting.status === "completed" && (selectedMeeting.host?.id === user?.id || selectedMeeting.secretaryId === user?.id) && (
+                  <>
+                    <Separator />
+                    <div className="rounded-lg border border-border p-3">
+                      <p className="font-medium text-sm mb-2 flex items-center gap-1.5">
+                        <FileText className="h-4 w-4" />
+                        Upload biên bản cuộc họp
+                      </p>
+                      <div className="flex gap-2 flex-wrap items-center">
+                        <Input
+                          type="file"
+                          className="max-w-xs text-sm"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            setMinutesFile(f || null);
+                            e.target.value = "";
+                          }}
+                        />
+                        <Button
+                          size="sm"
+                          disabled={uploadMinutesMutation.isPending || !minutesFile}
+                          onClick={async () => {
+                            if (!minutesFile || !user?.id) return;
+                            const base64 = await new Promise<string>((res, rej) => {
+                              const r = new FileReader();
+                              r.onload = () => {
+                                const dataUrl = r.result as string;
+                                res(dataUrl.includes(",") ? dataUrl.split(",")[1]! : dataUrl);
+                              };
+                              r.onerror = rej;
+                              r.readAsDataURL(minutesFile);
+                            });
+                            uploadMinutesMutation.mutate({
+                              meetingId: selectedMeeting.id,
+                              fileName: minutesFile.name,
+                              uploadedById: user.id,
+                              fileBase64: base64,
+                              fileContentType: minutesFile.type || "application/octet-stream",
+                            });
+                          }}
+                        >
+                          <Upload className="h-3.5 w-3.5 mr-1" />
+                          Tải lên
+                        </Button>
+                      </div>
+                      {(meetingDocuments as any[]).filter((d: any) => (d.docType || "").toUpperCase() === "MINUTES").length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-xs text-muted-foreground">Biên bản đã tải:</p>
+                          {(meetingDocuments as any[]).filter((d: any) => (d.docType || "").toUpperCase() === "MINUTES").map((d: any) => (
+                            <div key={d.id} className="flex items-center justify-between gap-2 text-sm rounded border bg-muted/30 px-2 py-1">
+                              <span>{d.fileName || "(Không tên)"}</span>
+                              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => downloadMeetingDocument(d.id)}>
+                                <Download className="h-3 w-3" /> Tải xuống
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {selectedMeeting.status === "completed" && (selectedMeeting.host?.id === user?.id || selectedMeeting.secretaryId === user?.id) && (
+                  <>
+                    <div className="rounded-lg border border-border p-3 mt-2">
+                      <p className="font-medium text-sm mb-2">Giao công việc sau họp</p>
+                      {!showPostTaskForm ? (
+                        <Button size="sm" variant="outline" onClick={() => setShowPostTaskForm(true)}>Thêm công việc sau họp</Button>
+                      ) : (
+                        <div className="space-y-3">
+                          {postTasks.map((task, idx) => (
+                            <div key={task.key} className="rounded-md border bg-muted/30 p-2 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-medium text-muted-foreground">Công việc #{idx + 1}</p>
+                                {postTasks.length > 1 && (
+                                  <Button type="button" size="sm" variant="ghost" className="h-7 text-destructive text-xs" onClick={() => removePostTaskRow(task.key)}>Xóa</Button>
+                                )}
+                              </div>
+                              <Input placeholder="Tiêu đề công việc" value={task.title} onChange={e => updatePostTaskRow(task.key, "title", e.target.value)} className="text-sm" />
+                              <Input type="datetime-local" placeholder="Hạn" value={task.dueAt} onChange={e => updatePostTaskRow(task.key, "dueAt", e.target.value)} className="text-sm" />
+                              <select value={task.assigneeKey} onChange={e => updatePostTaskRow(task.key, "assigneeKey", e.target.value)} className="rounded-md border px-2 py-1.5 text-sm w-full bg-background">
+                                <option value="">Chọn người nhận / phòng ban</option>
+                                {postTaskAssigneeOptions.map(opt => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          ))}
+                          <Button type="button" size="sm" variant="outline" onClick={addPostTaskRow}>
+                            <Plus className="h-3 w-3 mr-1" /> Tạo thêm task
+                          </Button>
+                          <div className="flex gap-2">
+                            <Button size="sm" onClick={submitAllPostTasks} disabled={createPostTaskMutation.isPending || !postTasks.some(t => t.title.trim())}>Giao việc</Button>
+                            <Button size="sm" variant="ghost" onClick={() => { setShowPostTaskForm(false); setPostTasks([{ key: `task-${Date.now()}`, title: "", dueAt: "", assigneeKey: "" }]); }}>Hủy</Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
@@ -585,50 +1542,107 @@ export default function MeetingPlanPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!taskViewModal} onOpenChange={(open) => !open && setTaskViewModal(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          {taskViewModal && (
+      <Dialog open={showCompleteModal} onOpenChange={(open) => !open && (setShowCompleteModal(false), setCompleteModalMinutesFile(null))}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          {selectedMeeting && (
             <>
               <DialogHeader>
-                <DialogTitle>Task đã giao - {taskViewModal.attendee}</DialogTitle>
+                <DialogTitle>Hoàn thành cuộc họp</DialogTitle>
+                <p className="text-sm text-muted-foreground">Tải biên bản và giao công việc sau họp (tùy chọn), sau đó bấm Hoàn thành cuộc họp.</p>
               </DialogHeader>
-              <div className="space-y-3">
-                {taskViewModal.tasks.map((task: any, idx: number) => {
-                  const taskDocs = meetingDocuments.filter((doc: any) => doc.taskId === task.id);
-                  return (
-                    <div key={task.id} className="rounded-md border bg-card p-3 space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground">Task #{idx + 1}</p>
-                      <div>
-                        <Label className="text-xs">Tiêu đề task</Label>
-                        <Input value={task.title || ""} readOnly className="mt-1" />
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        <div>
-                          <Label className="text-xs">Hạn xử lý (due_at)</Label>
-                          <Input value={task.dueAt ? new Date(task.dueAt).toLocaleString("vi-VN") : ""} readOnly className="mt-1" />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Nhắc trước (phút)</Label>
-                          <Input value={task.remindBeforeMinutes ?? ""} readOnly className="mt-1" />
-                        </div>
-                      </div>
-                      <div>
-                        <Label className="text-xs">Tài liệu liên quan</Label>
-                        <div className="space-y-2 mt-1">
-                          {taskDocs.length === 0 ? (
-                            <Input value="" readOnly placeholder="Không có tài liệu" />
-                          ) : (
-                            taskDocs.map((doc: any) => <Input key={doc.id} value={doc.fileName || ""} readOnly />)
+              <div className="space-y-6 py-2">
+                <div className="rounded-lg border border-border p-3">
+                  <p className="font-medium text-sm mb-2 flex items-center gap-1.5">
+                    <FileText className="h-4 w-4" />
+                    Tải biên bản cuộc họp
+                  </p>
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <Input
+                      type="file"
+                      className="max-w-xs text-sm"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        setCompleteModalMinutesFile(f || null);
+                        e.target.value = "";
+                      }}
+                    />
+                    <Button
+                      size="sm"
+                      disabled={uploadMinutesMutation.isPending || !completeModalMinutesFile}
+                      onClick={async () => {
+                        if (!completeModalMinutesFile || !user?.id) return;
+                        const base64 = await new Promise<string>((res, rej) => {
+                          const r = new FileReader();
+                          r.onload = () => {
+                            const dataUrl = r.result as string;
+                            res(dataUrl.includes(",") ? dataUrl.split(",")[1]! : dataUrl);
+                          };
+                          r.onerror = rej;
+                          r.readAsDataURL(completeModalMinutesFile);
+                        });
+                        uploadMinutesMutation.mutate({
+                          meetingId: selectedMeeting.id,
+                          fileName: completeModalMinutesFile.name,
+                          uploadedById: user.id,
+                          fileBase64: base64,
+                          fileContentType: completeModalMinutesFile.type || "application/octet-stream",
+                        });
+                      }}
+                    >
+                      <Upload className="h-3.5 w-3.5 mr-1" />
+                      Tải lên
+                    </Button>
+                    {completeModalMinutesFile && <span className="text-xs text-muted-foreground">{completeModalMinutesFile.name}</span>}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border p-3">
+                  <p className="font-medium text-sm mb-2">Giao công việc sau họp</p>
+                  <div className="space-y-3">
+                    {postTasks.map((task, idx) => (
+                      <div key={task.key} className="rounded-md border bg-muted/30 p-2 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-medium text-muted-foreground">Công việc #{idx + 1}</p>
+                          {postTasks.length > 1 && (
+                            <Button type="button" size="sm" variant="ghost" className="h-7 text-destructive text-xs" onClick={() => removePostTaskRow(task.key)}>Xóa</Button>
                           )}
                         </div>
+                        <Input placeholder="Tiêu đề công việc" value={task.title} onChange={e => updatePostTaskRow(task.key, "title", e.target.value)} className="text-sm" />
+                        <Input type="datetime-local" placeholder="Hạn" value={task.dueAt} onChange={e => updatePostTaskRow(task.key, "dueAt", e.target.value)} className="text-sm" />
+                        <select value={task.assigneeKey} onChange={e => updatePostTaskRow(task.key, "assigneeKey", e.target.value)} className="rounded-md border px-2 py-1.5 text-sm w-full bg-background">
+                          <option value="">Chọn người nhận / phòng ban</option>
+                          {postTaskAssigneeOptions.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
                       </div>
-                      <div>
-                        <Label className="text-xs">Mô tả</Label>
-                        <Textarea value={task.description || ""} readOnly rows={2} className="mt-1" />
-                      </div>
+                    ))}
+                    <Button type="button" size="sm" variant="outline" onClick={addPostTaskRow}>
+                      <Plus className="h-3 w-3 mr-1" /> Tạo thêm task
+                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={submitAllPostTasks}
+                        disabled={createPostTaskMutation.isPending || !postTasks.some(t => t.title.trim())}
+                      >
+                        Giao việc
+                      </Button>
                     </div>
-                  );
-                })}
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t">
+                  <Button variant="outline" onClick={() => setShowCompleteModal(false)}>Đóng</Button>
+                  <Button
+                    onClick={() => completeMutation.mutate(selectedMeeting.id)}
+                    disabled={completeMutation.isPending}
+                    className="gap-2"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    {completeMutation.isPending ? "Đang xử lý..." : "Hoàn thành cuộc họp"}
+                  </Button>
+                </div>
               </div>
             </>
           )}
@@ -676,6 +1690,62 @@ export default function MeetingPlanPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteConfirmMeeting} onOpenChange={(open) => !open && setDeleteConfirmMeeting(null)}>
+        <AlertDialogContent className="max-w-md rounded-xl border-border shadow-lg">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                <Trash2 className="h-6 w-6 text-destructive" />
+              </div>
+              <div>
+                <AlertDialogTitle className="text-lg font-display font-semibold tracking-tight">
+                  Xóa cuộc họp
+                </AlertDialogTitle>
+                <AlertDialogDescription className="mt-1">
+                  Bạn có chắc chắn muốn xóa cuộc họp này? Cuộc họp sẽ được chuyển sang danh sách đã xóa.
+                </AlertDialogDescription>
+              </div>
+            </div>
+            {deleteConfirmMeeting && (
+              <div className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+                <p className="font-medium text-foreground">{deleteConfirmMeeting.title}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {new Date(deleteConfirmMeeting.startTime).toLocaleString("vi-VN")}
+                </p>
+              </div>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6 flex gap-2 sm:justify-end">
+            <AlertDialogCancel className="h-11">Hủy</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              className="h-11 gap-2"
+              disabled={cancelMutation.isPending}
+              onClick={() => {
+                if (deleteConfirmMeeting) {
+                  cancelMutation.mutate(
+                    { id: deleteConfirmMeeting.id, status: deleteConfirmMeeting.status },
+                    { onSettled: () => setDeleteConfirmMeeting(null) }
+                  );
+                }
+              }}
+            >
+              {cancelMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                  Đang xóa...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 shrink-0" />
+                  Xóa cuộc họp
+                </>
+              )}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

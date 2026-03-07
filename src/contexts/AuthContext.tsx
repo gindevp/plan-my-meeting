@@ -11,14 +11,14 @@ import {
 interface AuthContextType {
   user: Account | null;
   loading: boolean;
-  login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
+  login: (username: string, password: string, rememberMe?: boolean) => Promise<Account>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
-  login: async () => {},
+  login: async () => ({ login: "", authorities: [] } as Account),
   signOut: async () => {},
 });
 
@@ -49,11 +49,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timeout);
   }, []);
 
-  const login = async (username: string, password: string, rememberMe = false) => {
+  const login = async (username: string, password: string, rememberMe = false): Promise<Account> => {
     const { token } = await loginApi({ username, password, rememberMe });
     setStoredToken(token, rememberMe);
     const account = await getAccount();
     setUser(account);
+    return account;
   };
 
   const signOut = async () => {

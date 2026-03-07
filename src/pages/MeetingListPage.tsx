@@ -37,14 +37,14 @@ export default function MeetingListPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="page-content">
       <div>
-        <h1 className="text-2xl font-display font-bold">Danh sách cuộc họp</h1>
+        <h1 className="text-2xl font-display font-bold tracking-tight">Danh sách cuộc họp</h1>
         <p className="text-sm text-muted-foreground mt-1">Quản lý và theo dõi tất cả cuộc họp</p>
       </div>
 
       {/* Filters */}
-      <Card className="shadow-card">
+      <Card className="card-elevated overflow-hidden">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 min-w-[200px]">
@@ -83,7 +83,7 @@ export default function MeetingListPage() {
       </Card>
 
       {/* Meeting List */}
-      <Card className="shadow-card">
+      <Card className="card-elevated overflow-hidden">
         <CardContent className="p-0">
           <div className="divide-y divide-border">
             {filtered.map((meeting) => {

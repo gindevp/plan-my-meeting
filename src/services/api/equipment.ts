@@ -5,12 +5,14 @@ export interface EquipmentListItem {
   code: string;
   name: string;
   description?: string;
+  totalQuantity?: number;
 }
 
 interface EquipmentPayload {
   code: string;
   name: string;
   description?: string;
+  totalQuantity?: number;
 }
 
 export async function getEquipment(params?: { page?: number; size?: number }) {
@@ -24,6 +26,8 @@ export async function getEquipment(params?: { page?: number; size?: number }) {
     code: e.code ?? "",
     name: e.name ?? "",
     description: e.description,
+    totalQuantity: e.totalQuantity ?? 999,
+    equipmentType: e.equipmentType,
   }));
 }
 

@@ -93,6 +93,7 @@ export async function getMeetings(params?: { page?: number; size?: number }) {
     rejectionReason: rejectionReasons[m.id] ?? "",
     requesterId: m.requester?.id,
     hostId: m.host?.id,
+    secretaryId: m.secretary?.id ?? undefined,
     attendees: [] as string[],
     agenda: [] as { order: number; title: string; presenter: string; duration: number }[],
   }));
@@ -111,6 +112,7 @@ export interface CreateMeetingFormPayload {
   meetingLink?: string;
   requesterId: number | string;
   hostId: number | string;
+  secretaryId?: number | string | null;
   organizerDepartmentId?: number | string;
   participants?: { userId?: number; departmentId?: number; role?: string; isRequired?: boolean }[];
   agendaItems?: { title: string; presenter: string; duration: number }[];
@@ -184,6 +186,10 @@ export async function createMeetingFromForm(payload: CreateMeetingFormPayload) {
     requester: { id: Number(payload.requesterId) },
     host: { id: Number(payload.hostId) },
   };
+
+  if (payload.secretaryId != null && payload.secretaryId !== "") {
+    body.secretary = { id: Number(payload.secretaryId) };
+  }
 
   if (payload.selectedRoomId) {
     body.room = { id: Number(payload.selectedRoomId) };
@@ -347,6 +353,12 @@ export async function updateMeeting(id: number | string, payload: Partial<Create
     host: { id: Number(payload.hostId) },
   };
 
+  if (payload.secretaryId != null && payload.secretaryId !== "") {
+    body.secretary = { id: Number(payload.secretaryId) };
+  } else {
+    body.secretary = null;
+  }
+
   if (payload.selectedRoomId !== undefined) {
     body.room = payload.selectedRoomId ? { id: Number(payload.selectedRoomId) } : null;
   }
@@ -432,7 +444,66 @@ export async function getParticipantsByMeeting(meetingId: number | string) {
       role: p.role,
       required: p.isRequired,
       attendance: p.attendance,
+      confirmationStatus: p.confirmationStatus ?? "PENDING",
+      absentReason: p.absentReason ?? "",
     }));
+}
+
+/** Lấy tất cả participant (để filter lời mời của user hiện tại). */
+export async function getAllParticipants(): Promise<any[]> {
+  const list = await fetchApi<unknown[]>("/api/meeting-participants");
+  return (list as any[]).map((p: any) => ({
+    id: p.id,
+    userId: p.user?.id != null ? String(p.user.id) : null,
+    departmentId: p.department?.id != null ? String(p.department.id) : null,
+    departmentName: p.department?.name ?? "",
+    confirmationStatus: p.confirmationStatus ?? "PENDING",
+    absentReason: p.absentReason ?? "",
+    meeting: p.meeting
+      ? {
+          id: String(p.meeting.id),
+          title: p.meeting.title,
+          startTime: p.meeting.startTime,
+          endTime: p.meeting.endTime,
+          status: p.meeting.status,
+          level: p.meeting.level?.name ?? "",
+          chairperson: p.meeting.host?.login ?? p.meeting.requester?.login ?? "",
+          department: p.meeting.organizerDepartment?.name ?? "",
+        }
+      : null,
+  }));
+}
+
+/** Thư ký chọn cá nhân đại diện cho participant theo phòng ban. */
+export async function selectRepresentatives(participantId: number | string, userIds: number[]) {
+  return fetchApi<any[]>(`/api/meeting-participants/${participantId}/select-representatives`, {
+    method: "POST",
+    body: JSON.stringify({ userIds }),
+  });
+}
+
+export async function respondToInvitation(
+  participantId: number | string,
+  confirmationStatus: "CONFIRMED" | "DECLINED",
+  absentReason?: string
+) {
+  return fetchApi<any>(`/api/meeting-participants/${participantId}/respond`, {
+    method: "POST",
+    body: JSON.stringify({
+      confirmationStatus,
+      absentReason: absentReason ?? (confirmationStatus === "DECLINED" ? "" : undefined),
+    }),
+  });
+}
+
+export async function updateParticipantAttendance(
+  participantId: number | string,
+  attendance: "PRESENT" | "ABSENT" | "NOT_MARKED" | "EXCUSED"
+) {
+  return fetchApi<any>(`/api/meeting-participants/${participantId}/attendance`, {
+    method: "PATCH",
+    body: JSON.stringify({ attendance }),
+  });
 }
 
 export async function getMeetingTasksByMeeting(meetingId: number | string) {
@@ -476,4 +547,130 @@ export async function getMeetingRejectionReason(meetingId: number | string): Pro
   } catch {
     return "";
   }
+}
+
+export async function getIncidentsByMeeting(meetingId: number | string) {
+  const list = await fetchApi<unknown[]>("/api/incidents");
+  return (list as any[])
+    .filter((i: any) => i.meeting?.id === Number(meetingId))
+    .map((i: any) => ({
+      id: String(i.id),
+      title: i.title ?? "",
+      description: i.description ?? "",
+      severity: i.severity ?? "",
+      status: i.status ?? "",
+      reportedAt: i.reportedAt ?? "",
+      reportedBy: i.reportedBy?.login ?? "",
+    }));
+}
+
+export async function getAllIncidents(): Promise<any[]> {
+  const list = await fetchApi<unknown[]>("/api/incidents");
+  return (list as any[]).map((i: any) => ({
+    id: String(i.id),
+    title: i.title ?? "",
+    description: i.description ?? "",
+    severity: i.severity ?? "",
+    status: i.status ?? "",
+    reportedAt: i.reportedAt ?? "",
+    reportedBy: i.reportedBy?.login ?? "",
+    meetingId: i.meeting?.id != null ? String(i.meeting.id) : "",
+    meetingTitle: i.meeting?.title ?? "",
+  }));
+}
+
+export async function createIncident(payload: {
+  meetingId: number | string;
+  reportedById: number | string;
+  title: string;
+  description?: string;
+  severity?: string;
+}) {
+  return fetchApi<any>("/api/incidents", {
+    method: "POST",
+    body: JSON.stringify({
+      title: payload.title,
+      description: payload.description ?? "",
+      severity: payload.severity ?? "MEDIUM",
+      status: "OPEN",
+      reportedAt: new Date().toISOString(),
+      meeting: { id: Number(payload.meetingId) },
+      reportedBy: { id: Number(payload.reportedById) },
+    }),
+  });
+}
+
+export async function createMeetingDocument(payload: {
+  meetingId: number | string;
+  docType: string;
+  fileName: string;
+  uploadedById: number | string;
+  taskId?: number | string | null;
+  fileBase64?: string | null;
+  fileContentType?: string | null;
+}) {
+  const body: any = {
+    meeting: { id: Number(payload.meetingId) },
+    docType: payload.docType,
+    fileName: payload.fileName,
+    uploadedBy: { id: Number(payload.uploadedById) },
+    uploadedAt: new Date().toISOString(),
+  };
+  if (payload.taskId != null && payload.taskId !== "") {
+    body.task = { id: Number(payload.taskId) };
+  }
+  if (payload.fileContentType) body.fileContentType = payload.fileContentType;
+  if (payload.fileBase64) body.file = payload.fileBase64;
+  return fetchApi<any>("/api/meeting-documents", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/** Download meeting document file (for task docs or minutes). */
+export async function downloadMeetingDocument(documentId: number | string): Promise<void> {
+  const { fetchApiBlob } = await import("@/lib/api");
+  const { blob, filename } = await fetchApiBlob(`/api/meeting-documents/${documentId}/download`);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function createPostMeetingTask(payload: {
+  meetingId: number | string;
+  title: string;
+  description?: string;
+  dueAt?: string;
+  assigneeId?: number | string;
+  departmentId?: number | string;
+  assignedById: number | string;
+}) {
+  return fetchApi<any>("/api/meeting-tasks", {
+    method: "POST",
+    body: JSON.stringify({
+      meeting: { id: Number(payload.meetingId) },
+      type: "POST_MEETING",
+      title: payload.title,
+      description: payload.description ?? "",
+      dueAt: payload.dueAt ?? null,
+      status: "TODO",
+      assignee: payload.assigneeId != null ? { id: Number(payload.assigneeId) } : null,
+      department: payload.departmentId != null ? { id: Number(payload.departmentId) } : null,
+      assignedBy: { id: Number(payload.assignedById) },
+    }),
+  });
+}
+
+/** Cập nhật trạng thái task. */
+export async function updateMeetingTaskStatus(
+  taskId: number | string,
+  status: "TODO" | "IN_PROGRESS" | "DONE"
+) {
+  return fetchApi<any>(`/api/meeting-tasks/${taskId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
 }

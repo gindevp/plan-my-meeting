@@ -5,3 +5,5 @@ export * from "./equipment";
 export * from "./users";
 export * from "./meetingTasks";
 export * from "./references";
+export * from "./settings";
+export * from "./notifications";

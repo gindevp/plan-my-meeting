@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, Search, Check, Clock } from "lucide-react";
+import { Bell, Search, Check, Clock, CalendarDays, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,8 @@ import {
   markAllNotificationsAsRead,
   type NotificationDTO,
 } from "@/services/api/notifications";
+import { useMeetings } from "@/hooks/useMeetings";
+import { useRooms } from "@/hooks/useRooms";
 
 function formatTime(createdDate: string): string {
   try {
@@ -33,9 +35,33 @@ function formatTime(createdDate: string): string {
 
 export default function AppHeader() {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+
+  const { data: meetings = [] } = useMeetings();
+  const { data: rooms = [] } = useRooms();
+
+  const searchLower = searchQuery.toLowerCase().trim();
+  const searchResults = useMemo(() => {
+    if (!searchLower) return { meetings: [], rooms: [] };
+    const filteredMeetings = (meetings as any[]).filter(
+      (m) => m.title?.toLowerCase().includes(searchLower)
+    );
+    const filteredRooms = (rooms as any[]).filter(
+      (r) =>
+        r.name?.toLowerCase().includes(searchLower) ||
+        (r.code && r.code.toLowerCase().includes(searchLower)) ||
+        (r.floor && r.floor.toLowerCase().includes(searchLower))
+    );
+    return { meetings: filteredMeetings.slice(0, 5), rooms: filteredRooms.slice(0, 5) };
+  }, [meetings, rooms, searchLower]);
+
+  const hasSearchResults =
+    searchResults.meetings.length > 0 || searchResults.rooms.length > 0;
 
   const { data: pageData } = useQuery({
     queryKey: ["notifications", 0, 10],
@@ -68,13 +94,30 @@ export default function AppHeader() {
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (dropdownRef.current && !dropdownRef.current.contains(target)) {
         setShowNotifications(false);
+      }
+      if (searchRef.current && !searchRef.current.contains(target)) {
+        setShowSearchDropdown(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const handleSelectMeeting = (meeting: any) => {
+    const tab = meeting.status || "approved";
+    setSearchQuery("");
+    setShowSearchDropdown(false);
+    navigate(`/plans?tab=${tab}&meetingId=${meeting.id}`);
+  };
+
+  const handleSelectRoom = (room: any) => {
+    setSearchQuery("");
+    setShowSearchDropdown(false);
+    navigate(`/rooms?roomId=${room.id}`);
+  };
 
   const markAsRead = (id: number) => {
     markReadMutation.mutate(id);
@@ -88,10 +131,75 @@ export default function AppHeader() {
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-card/95 backdrop-blur-md px-6 shadow-sm">
-      <div className="flex items-center gap-4 flex-1 max-w-md">
+      <div className="flex items-center gap-4 flex-1 max-w-md" ref={searchRef}>
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Tìm kiếm cuộc họp, phòng họp..." className="pl-9 bg-secondary/50 border-0 focus-visible:ring-1" />
+          <Input
+            placeholder="Tìm kiếm cuộc họp, phòng họp..."
+            className="pl-9 bg-secondary/50 border-0 focus-visible:ring-1"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setShowSearchDropdown(true);
+            }}
+            onFocus={() => searchQuery && setShowSearchDropdown(true)}
+          />
+          {showSearchDropdown && searchQuery.trim() && (
+            <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-lg z-50 overflow-hidden max-h-[320px] overflow-y-auto">
+              {!hasSearchResults ? (
+                <p className="px-4 py-6 text-center text-sm text-muted-foreground">Không tìm thấy kết quả</p>
+              ) : (
+                <div className="py-2">
+                  {searchResults.meetings.length > 0 && (
+                    <div className="px-2 pb-1">
+                      <p className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">Cuộc họp</p>
+                      {searchResults.meetings.map((m: any) => (
+                        <button
+                          key={m.id}
+                          onClick={() => handleSelectMeeting(m)}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-accent/50 rounded-lg transition-colors"
+                        >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                            <CalendarDays className="h-4 w-4 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{m.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {m.startTime ? new Date(m.startTime).toLocaleDateString("vi-VN") : ""}
+                              {m.roomName ? ` • ${m.roomName}` : ""}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {searchResults.rooms.length > 0 && (
+                    <div className="px-2 pt-1 border-t border-border">
+                      <p className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">Phòng họp</p>
+                      {searchResults.rooms.map((r: any) => (
+                        <button
+                          key={r.id}
+                          onClick={() => handleSelectRoom(r)}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-accent/50 rounded-lg transition-colors"
+                        >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-info/10">
+                            <MapPin className="h-4 w-4 text-info" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{r.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {r.code ? `${r.code}` : ""}
+                              {r.floor ? ` • ${r.floor}` : ""}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

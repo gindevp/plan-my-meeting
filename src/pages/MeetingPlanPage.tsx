@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { statusLabels, typeLabels, levelLabels, type MeetingStatus } from "@/data/mockData";
 import { useMeetings } from "@/hooks/useMeetings";
+import { useDepartments } from "@/hooks/useDepartments";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   approveRoom,
@@ -29,7 +30,7 @@ import {
   updateMeetingTaskStatus,
 } from "@/services/api/meetings";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
-import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit, UserCheck, UserX, AlertTriangle, FileText, Upload, Download, Loader2, ListTodo, PlayCircle, Circle, Calendar } from "lucide-react";
+import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit, UserCheck, UserX, AlertTriangle, FileText, Upload, Download, Loader2, ListTodo, PlayCircle, Circle, Calendar, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -136,9 +137,9 @@ export default function MeetingPlanPage() {
   const [incidentTitle, setIncidentTitle] = useState("");
   const [incidentDescription, setIncidentDescription] = useState("");
   const [incidentSeverity, setIncidentSeverity] = useState("MEDIUM");
-  const [minutesFile, setMinutesFile] = useState<File | null>(null);
+  const [minutesFiles, setMinutesFiles] = useState<File[]>([]);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
-  const [completeModalMinutesFile, setCompleteModalMinutesFile] = useState<File | null>(null);
+  const [completeModalMinutesFiles, setCompleteModalMinutesFiles] = useState<File[]>([]);
   const [showPostTaskForm, setShowPostTaskForm] = useState(false);
   const [postTasks, setPostTasks] = useState<{ key: string; title: string; dueAt: string; assigneeKey: string }[]>(() => [{ key: `task-${Date.now()}`, title: "", dueAt: "", assigneeKey: "" }]);
 
@@ -146,6 +147,7 @@ export default function MeetingPlanPage() {
     queryKey: ["all-participants"],
     queryFn: getAllParticipants,
   });
+  const { data: departments = [] } = useDepartments();
 
   const visibleStatusTabs = statusTabs;
 
@@ -495,8 +497,8 @@ export default function MeetingPlanPage() {
       if (selectedMeeting?.id) {
         queryClient.invalidateQueries({ queryKey: ["meeting-documents", selectedMeeting.id] });
       }
-      setMinutesFile(null);
-      setCompleteModalMinutesFile(null);
+      setMinutesFiles([]);
+      setCompleteModalMinutesFiles([]);
       toast({ title: "Đã tải lên", description: "Biên bản đã được lưu." });
     },
     onError: (err: Error) => {
@@ -512,12 +514,14 @@ export default function MeetingPlanPage() {
       dueAt?: string;
       assigneeId?: string;
       departmentId?: string;
+      departmentCode?: string;
+      departmentName?: string;
       assignedById: number | string;
     }) =>
       createPostMeetingTask({
         ...payload,
         assigneeId: payload.assigneeId ? Number(payload.assigneeId) : undefined,
-        departmentId: payload.departmentId ? Number(payload.departmentId) : undefined,
+        departmentId: payload.departmentId,
       }),
     onSuccess: () => {
       if (selectedMeeting?.id) queryClient.invalidateQueries({ queryKey: ["meeting-tasks", selectedMeeting.id] });
@@ -622,12 +626,15 @@ export default function MeetingPlanPage() {
       for (const t of toCreate) {
         const assigneeId = t.assigneeKey.startsWith("user-") ? t.assigneeKey.slice(5) : undefined;
         const departmentId = t.assigneeKey.startsWith("dept-") ? t.assigneeKey.slice(5) : undefined;
+        const dept = departmentId ? (departments as any[]).find((d: any) => String(d.id) === String(departmentId)) : null;
         await createPostTaskMutation.mutateAsync({
           meetingId: selectedMeeting.id,
           title: t.title.trim(),
           dueAt: t.dueAt || undefined,
           assigneeId,
           departmentId,
+          departmentCode: dept?.code,
+          departmentName: dept?.name,
           assignedById: user.id,
         });
       }
@@ -1451,54 +1458,81 @@ export default function MeetingPlanPage() {
                         <FileText className="h-4 w-4" />
                         Upload biên bản cuộc họp
                       </p>
-                      <div className="flex gap-2 flex-wrap items-center">
+                      <div className="flex gap-2 flex-wrap items-center mb-3">
                         <Input
                           type="file"
+                          multiple
                           className="max-w-xs text-sm"
                           onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            setMinutesFile(f || null);
+                            const files = Array.from(e.target.files ?? []);
+                            if (files.length) setMinutesFiles((prev) => [...prev, ...files]);
                             e.target.value = "";
                           }}
                         />
                         <Button
                           size="sm"
-                          disabled={uploadMinutesMutation.isPending || !minutesFile}
+                          disabled={uploadMinutesMutation.isPending || minutesFiles.length === 0}
                           onClick={async () => {
-                            if (!minutesFile || !user?.id) return;
-                            const base64 = await new Promise<string>((res, rej) => {
-                              const r = new FileReader();
-                              r.onload = () => {
-                                const dataUrl = r.result as string;
-                                res(dataUrl.includes(",") ? dataUrl.split(",")[1]! : dataUrl);
-                              };
-                              r.onerror = rej;
-                              r.readAsDataURL(minutesFile);
-                            });
-                            uploadMinutesMutation.mutate({
-                              meetingId: selectedMeeting.id,
-                              fileName: minutesFile.name,
-                              uploadedById: user.id,
-                              fileBase64: base64,
-                              fileContentType: minutesFile.type || "application/octet-stream",
-                            });
+                            if (minutesFiles.length === 0 || !user?.id) return;
+                            for (const file of minutesFiles) {
+                              const base64 = await new Promise<string>((res, rej) => {
+                                const r = new FileReader();
+                                r.onload = () => {
+                                  const dataUrl = r.result as string;
+                                  res(dataUrl.includes(",") ? dataUrl.split(",")[1]! : dataUrl);
+                                };
+                                r.onerror = rej;
+                                r.readAsDataURL(file);
+                              });
+                              await uploadMinutesMutation.mutateAsync({
+                                meetingId: selectedMeeting.id,
+                                fileName: file.name,
+                                uploadedById: user.id,
+                                fileBase64: base64,
+                                fileContentType: file.type || "application/octet-stream",
+                              });
+                            }
+                            setMinutesFiles([]);
                           }}
                         >
                           <Upload className="h-3.5 w-3.5 mr-1" />
                           Tải lên
                         </Button>
                       </div>
+                      {minutesFiles.length > 0 && (
+                        <div className="space-y-1.5 mb-3">
+                          <p className="text-xs font-medium text-muted-foreground">File đã chọn:</p>
+                          <div className="flex flex-col gap-1">
+                            {minutesFiles.map((f, idx) => (
+                              <div key={`${f.name}-${idx}`} className="flex items-center justify-between gap-2 text-sm rounded-md border border-border bg-muted/30 px-3 py-2">
+                                <span className="truncate flex-1 min-w-0">{f.name}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                                  onClick={() => setMinutesFiles((prev) => prev.filter((_, i) => i !== idx))}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {(meetingDocuments as any[]).filter((d: any) => (d.docType || "").toUpperCase() === "MINUTES").length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          <p className="text-xs text-muted-foreground">Biên bản đã tải:</p>
-                          {(meetingDocuments as any[]).filter((d: any) => (d.docType || "").toUpperCase() === "MINUTES").map((d: any) => (
-                            <div key={d.id} className="flex items-center justify-between gap-2 text-sm rounded border bg-muted/30 px-2 py-1">
-                              <span>{d.fileName || "(Không tên)"}</span>
-                              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => downloadMeetingDocument(d.id)}>
-                                <Download className="h-3 w-3" /> Tải xuống
-                              </Button>
-                            </div>
-                          ))}
+                        <div className="space-y-1.5 pt-2 border-t border-border">
+                          <p className="text-xs font-medium text-muted-foreground">Biên bản đã tải:</p>
+                          <div className="flex flex-col gap-1">
+                            {(meetingDocuments as any[]).filter((d: any) => (d.docType || "").toUpperCase() === "MINUTES").map((d: any) => (
+                              <div key={d.id} className="flex items-center justify-between gap-2 text-sm rounded-md border bg-success/5 border-success/20 px-3 py-2">
+                                <span className="truncate flex-1 min-w-0">{d.fileName || "(Không tên)"}</span>
+                                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 shrink-0" onClick={() => downloadMeetingDocument(d.id)}>
+                                  <Download className="h-3 w-3" /> Tải xuống
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1559,7 +1593,7 @@ export default function MeetingPlanPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showCompleteModal} onOpenChange={(open) => !open && (setShowCompleteModal(false), setCompleteModalMinutesFile(null))}>
+      <Dialog open={showCompleteModal} onOpenChange={(open) => !open && (setShowCompleteModal(false), setCompleteModalMinutesFiles([]))}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           {selectedMeeting && (
             <>
@@ -1573,44 +1607,83 @@ export default function MeetingPlanPage() {
                     <FileText className="h-4 w-4" />
                     Tải biên bản cuộc họp
                   </p>
-                  <div className="flex gap-2 flex-wrap items-center">
+                  <div className="flex gap-2 flex-wrap items-center mb-3">
                     <Input
                       type="file"
+                      multiple
                       className="max-w-xs text-sm"
                       onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        setCompleteModalMinutesFile(f || null);
+                        const files = Array.from(e.target.files ?? []);
+                        if (files.length) setCompleteModalMinutesFiles((prev) => [...prev, ...files]);
                         e.target.value = "";
                       }}
                     />
                     <Button
                       size="sm"
-                      disabled={uploadMinutesMutation.isPending || !completeModalMinutesFile}
+                      disabled={uploadMinutesMutation.isPending || completeModalMinutesFiles.length === 0}
                       onClick={async () => {
-                        if (!completeModalMinutesFile || !user?.id) return;
-                        const base64 = await new Promise<string>((res, rej) => {
-                          const r = new FileReader();
-                          r.onload = () => {
-                            const dataUrl = r.result as string;
-                            res(dataUrl.includes(",") ? dataUrl.split(",")[1]! : dataUrl);
-                          };
-                          r.onerror = rej;
-                          r.readAsDataURL(completeModalMinutesFile);
-                        });
-                        uploadMinutesMutation.mutate({
-                          meetingId: selectedMeeting.id,
-                          fileName: completeModalMinutesFile.name,
-                          uploadedById: user.id,
-                          fileBase64: base64,
-                          fileContentType: completeModalMinutesFile.type || "application/octet-stream",
-                        });
+                        if (completeModalMinutesFiles.length === 0 || !user?.id) return;
+                        for (const file of completeModalMinutesFiles) {
+                          const base64 = await new Promise<string>((res, rej) => {
+                            const r = new FileReader();
+                            r.onload = () => {
+                              const dataUrl = r.result as string;
+                              res(dataUrl.includes(",") ? dataUrl.split(",")[1]! : dataUrl);
+                            };
+                            r.onerror = rej;
+                            r.readAsDataURL(file);
+                          });
+                          await uploadMinutesMutation.mutateAsync({
+                            meetingId: selectedMeeting.id,
+                            fileName: file.name,
+                            uploadedById: user.id,
+                            fileBase64: base64,
+                            fileContentType: file.type || "application/octet-stream",
+                          });
+                        }
+                        setCompleteModalMinutesFiles([]);
                       }}
                     >
                       <Upload className="h-3.5 w-3.5 mr-1" />
                       Tải lên
                     </Button>
-                    {completeModalMinutesFile && <span className="text-xs text-muted-foreground">{completeModalMinutesFile.name}</span>}
                   </div>
+                  {completeModalMinutesFiles.length > 0 && (
+                    <div className="space-y-1.5 mb-3">
+                      <p className="text-xs font-medium text-muted-foreground">File đã chọn:</p>
+                      <div className="flex flex-col gap-1">
+                        {completeModalMinutesFiles.map((f, idx) => (
+                          <div key={`${f.name}-${idx}`} className="flex items-center justify-between gap-2 text-sm rounded-md border border-border bg-muted/30 px-3 py-2">
+                            <span className="truncate flex-1 min-w-0">{f.name}</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => setCompleteModalMinutesFiles((prev) => prev.filter((_, i) => i !== idx))}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(meetingDocuments as any[]).filter((d: any) => (d.docType || "").toUpperCase() === "MINUTES").length > 0 && (
+                    <div className="space-y-1.5 pt-2 border-t border-border">
+                      <p className="text-xs font-medium text-muted-foreground">Biên bản đã tải:</p>
+                      <div className="flex flex-col gap-1">
+                        {(meetingDocuments as any[]).filter((d: any) => (d.docType || "").toUpperCase() === "MINUTES").map((d: any) => (
+                          <div key={d.id} className="flex items-center justify-between gap-2 text-sm rounded-md border bg-success/5 border-success/20 px-3 py-2">
+                            <span className="truncate flex-1 min-w-0">{d.fileName || "(Không tên)"}</span>
+                            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 shrink-0" onClick={() => downloadMeetingDocument(d.id)}>
+                              <Download className="h-3 w-3" /> Tải xuống
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="rounded-lg border border-border p-3">

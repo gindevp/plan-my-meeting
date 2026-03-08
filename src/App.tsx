@@ -68,7 +68,7 @@ const App = () => (
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/activate" element={<ActivateAccountPage />} />
               <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                <Route path="/" element={<ProtectedRoute requiredRoles={["ROLE_ADMIN"]}><Dashboard /></ProtectedRoute>} />
+                <Route path="/" element={<Dashboard />} />
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/plans" element={<MeetingPlanPage />} />
                 <Route path="/invitations" element={<InvitationsPage />} />

@@ -639,6 +639,15 @@ export async function downloadMeetingDocument(documentId: number | string): Prom
   URL.revokeObjectURL(url);
 }
 
+function normalizeDueAt(dueAt?: string): string | null {
+  if (!dueAt || !dueAt.trim()) return null;
+  const s = dueAt.trim();
+  if (s.length === 16 && s.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)) {
+    return s + ":00";
+  }
+  return s;
+}
+
 export async function createPostMeetingTask(payload: {
   meetingId: number | string;
   title: string;
@@ -646,21 +655,31 @@ export async function createPostMeetingTask(payload: {
   dueAt?: string;
   assigneeId?: number | string;
   departmentId?: number | string;
+  departmentCode?: string;
+  departmentName?: string;
   assignedById: number | string;
 }) {
+  const body: Record<string, unknown> = {
+    meeting: { id: Number(payload.meetingId) },
+    type: "POST_MEETING",
+    title: payload.title,
+    description: payload.description ?? "",
+    status: "TODO",
+    assignedBy: { id: Number(payload.assignedById) },
+  };
+  const dueAt = normalizeDueAt(payload.dueAt);
+  if (dueAt) body.dueAt = dueAt;
+  if (payload.assigneeId != null) body.assignee = { id: Number(payload.assigneeId) };
+  if (payload.departmentId != null) {
+    body.department = {
+      id: Number(payload.departmentId),
+      code: payload.departmentCode ?? String(payload.departmentId),
+      name: payload.departmentName ?? `Phòng ban #${payload.departmentId}`,
+    };
+  }
   return fetchApi<any>("/api/meeting-tasks", {
     method: "POST",
-    body: JSON.stringify({
-      meeting: { id: Number(payload.meetingId) },
-      type: "POST_MEETING",
-      title: payload.title,
-      description: payload.description ?? "",
-      dueAt: payload.dueAt ?? null,
-      status: "TODO",
-      assignee: payload.assigneeId != null ? { id: Number(payload.assigneeId) } : null,
-      department: payload.departmentId != null ? { id: Number(payload.departmentId) } : null,
-      assignedBy: { id: Number(payload.assignedById) },
-    }),
+    body: JSON.stringify(body),
   });
 }
 

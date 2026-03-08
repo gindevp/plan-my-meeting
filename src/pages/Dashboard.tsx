@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { CalendarDays, DoorOpen, ClipboardList, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +8,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useMeetings } from "@/hooks/useMeetings";
 import { useRooms } from "@/hooks/useRooms";
 import { useMeetingTasks } from "@/hooks/useMeetingTasks";
+import { useQuery } from "@tanstack/react-query";
+import { getAllParticipants } from "@/services/api/meetings";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 const statusColorMap: Record<string, string> = {
@@ -25,9 +29,118 @@ const typeColorMap: Record<string, string> = {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { data: meetings = [] } = useMeetings();
   const { data: rooms = [] } = useRooms();
   const { data: tasks = [] } = useMeetingTasks();
+  const { data: allParticipantsForPlan = [] } = useQuery({
+    queryKey: ["all-participants"],
+    queryFn: getAllParticipants,
+  });
+
+  const isAdmin = user?.authorities?.includes("ROLE_ADMIN") ?? false;
+  const isSecretary = user?.authorities?.includes("ROLE_SECRETARY") ?? false;
+  const userDepartmentId = user?.departmentId != null ? String(user.departmentId) : null;
+
+  const participantMeetingIds = useMemo(() => {
+    const ids = new Set<string>();
+    (allParticipantsForPlan as any[]).forEach((p: any) => {
+      if (p.userId != null && String(p.userId) === String(user?.id) && String(p.meeting?.status ?? "").toUpperCase() === "APPROVED" && p.meeting?.id != null) {
+        ids.add(String(p.meeting.id));
+      }
+    });
+    return ids;
+  }, [allParticipantsForPlan, user?.id]);
+
+  const secretaryDepartmentMeetingIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!isSecretary || !userDepartmentId) return ids;
+    (allParticipantsForPlan as any[]).forEach((p: any) => {
+      if (p.userId == null && p.departmentId != null && String(p.departmentId) === userDepartmentId && String(p.meeting?.status ?? "").toUpperCase() === "APPROVED" && p.meeting?.id != null) {
+        ids.add(String(p.meeting.id));
+      }
+      if (p.userId != null && p.departmentId != null && String(p.departmentId) === userDepartmentId && String(p.meeting?.status ?? "").toUpperCase() === "APPROVED" && p.meeting?.id != null) {
+        ids.add(String(p.meeting.id));
+      }
+    });
+    return ids;
+  }, [allParticipantsForPlan, isSecretary, userDepartmentId]);
+
+  const participantMeetingsAsList = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
+    (allParticipantsForPlan as any[]).forEach((p: any) => {
+      if (p.userId == null || String(p.userId) !== String(user?.id) || String(p.meeting?.status ?? "").toUpperCase() !== "APPROVED" || !p.meeting?.id) return;
+      const id = String(p.meeting.id);
+      if (seen.has(id)) return;
+      seen.add(id);
+      const m = p.meeting;
+      list.push({
+        id,
+        title: m.title ?? "",
+        type: "offline",
+        status: "approved",
+        startTime: m.startTime,
+        endTime: m.endTime,
+        roomName: undefined,
+        requesterId: undefined,
+        hostId: undefined,
+      });
+    });
+    return list;
+  }, [allParticipantsForPlan, user?.id]);
+
+  const secretaryDepartmentMeetingsAsList = useMemo(() => {
+    const list: any[] = [];
+    const seen = new Set<string>();
+    (allParticipantsForPlan as any[]).forEach((p: any) => {
+      if (!isSecretary || !userDepartmentId || p.meeting?.id == null) return;
+      const deptMatch = p.departmentId != null && String(p.departmentId) === userDepartmentId;
+      if (!deptMatch) return;
+      if (String(p.meeting?.status ?? "").toUpperCase() !== "APPROVED") return;
+      const id = String(p.meeting.id);
+      if (seen.has(id)) return;
+      seen.add(id);
+      const m = p.meeting;
+      list.push({
+        id,
+        title: m.title ?? "",
+        type: "offline",
+        status: "approved",
+        startTime: m.startTime,
+        endTime: m.endTime,
+        roomName: undefined,
+        requesterId: undefined,
+        hostId: undefined,
+      });
+    });
+    return list;
+  }, [allParticipantsForPlan, isSecretary, userDepartmentId]);
+
+  const meetingsForTabs = useMemo(() => {
+    const fromApi = meetings as any[];
+    const existingIds = new Set(fromApi.map((m: any) => String(m.id)));
+    const onlyFromParticipant = participantMeetingsAsList.filter((m: any) => !existingIds.has(m.id));
+    const fromSecretaryDept = secretaryDepartmentMeetingsAsList.filter((m: any) => !existingIds.has(String(m.id)));
+    return [...fromApi, ...onlyFromParticipant, ...fromSecretaryDept];
+  }, [meetings, participantMeetingsAsList, secretaryDepartmentMeetingsAsList]);
+
+  const upcomingMeetings = useMemo(() => {
+    const now = Date.now();
+    return (meetingsForTabs as any[])
+      .filter((m) => {
+        if (m.status !== "approved") return false;
+        if (new Date(m.startTime).getTime() < now) return false;
+        const isOwner = m.requesterId === user?.id || m.hostId === user?.id;
+        const isParticipant = participantMeetingIds.has(String(m.id));
+        const isSecretaryDept = secretaryDepartmentMeetingIds.has(String(m.id));
+        const visibleToUser = isAdmin || isOwner || isParticipant || isSecretaryDept;
+        return visibleToUser;
+      })
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+      .slice(0, 5);
+  }, [meetingsForTabs, user?.id, isAdmin, participantMeetingIds, secretaryDepartmentMeetingIds]);
+
   const displayName = user?.firstName
     ? `${user.firstName} ${user.lastName || ""}`.trim()
     : user?.login ?? "User";
@@ -45,15 +158,10 @@ export default function Dashboard() {
     { name: "Kết hợp", value: meetings.filter((m) => m.type === "hybrid").length, color: "hsl(280, 60%, 50%)" },
   ];
 
-  const upcomingMeetings = meetings
-    .filter((m) => m.status === "approved" || m.status === "pending")
-    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-    .slice(0, 5);
-
   const dayNames = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
-  const now = new Date();
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const nowDate = new Date();
+  const startOfWeek = new Date(nowDate);
+  startOfWeek.setDate(nowDate.getDate() - ((nowDate.getDay() + 6) % 7));
   const weeklyData = dayNames.map((day, i) => {
     const d = new Date(startOfWeek);
     d.setDate(startOfWeek.getDate() + i);
@@ -158,10 +266,17 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y divide-border">
-            {upcomingMeetings.map((meeting, i) => (
+            {upcomingMeetings.length === 0 ? (
+              <p className="px-6 py-8 text-center text-sm text-muted-foreground">Không có cuộc họp sắp tới</p>
+            ) : (
+              upcomingMeetings.map((meeting, i) => (
               <div
                 key={meeting.id}
-                className="flex items-center gap-4 px-6 py-4 hover:bg-secondary/30 transition-all duration-200 opacity-0 animate-auth-fade-in-up"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/plans?tab=approved&meetingId=${meeting.id}`)}
+                onKeyDown={(e) => e.key === "Enter" && navigate(`/plans?tab=approved&meetingId=${meeting.id}`)}
+                className="flex items-center gap-4 px-6 py-4 hover:bg-secondary/30 transition-all duration-200 opacity-0 animate-auth-fade-in-up cursor-pointer"
                 style={{ animationDelay: `${0.5 + i * 0.08}s`, animationFillMode: "forwards" }}
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -173,14 +288,15 @@ export default function Dashboard() {
                     {new Date(meeting.startTime).toLocaleDateString('vi-VN')} • {new Date(meeting.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - {new Date(meeting.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
-                <Badge variant="outline" className={typeColorMap[meeting.type]}>
-                  {typeLabels[meeting.type]}
+                <Badge variant="outline" className={typeColorMap[meeting.type] ?? typeColorMap.offline}>
+                  {typeLabels[meeting.type] ?? typeLabels.offline}
                 </Badge>
-                <Badge variant="outline" className={statusColorMap[meeting.status]}>
-                  {statusLabels[meeting.status]}
+                <Badge variant="outline" className={statusColorMap[meeting.status] ?? statusColorMap.approved}>
+                  {statusLabels[meeting.status] ?? statusLabels.approved}
                 </Badge>
               </div>
-            ))}
+            ))
+            )}
           </div>
         </CardContent>
       </Card>

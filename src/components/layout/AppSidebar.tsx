@@ -46,7 +46,7 @@ export default function AppSidebar() {
   const { t } = useI18n();
   const isAdmin = user?.authorities?.includes("ROLE_ADMIN") ?? false;
 
-  const visibleNavigation = navigation.filter(item => item.href !== "/" || isAdmin);
+  const visibleNavigation = navigation;
   const visibleManagement = management.filter(item => (item.href !== "/reports" && item.href !== "/incidents") || isAdmin);
 
   return (

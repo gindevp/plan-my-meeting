@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ const emptyRoom: Omit<RoomListItem, "id"> & { equipment?: { name: string; quanti
 export default function RoomManagementPage() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const canCrudRoom =
     user?.authorities?.includes("ROLE_ADMIN") || user?.authorities?.includes("ROLE_ROOM_MANAGER") || false;
   const queryClient = useQueryClient();
@@ -42,6 +44,7 @@ export default function RoomManagementPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [detailRoom, setDetailRoom] = useState<typeof roomsWithEquipment[0] | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const roomsWithEquipment = roomList.map((r) => {
     const raw = roomEquipments.find((re) => re.roomId === r.id)?.equipment ?? [];
@@ -60,6 +63,37 @@ export default function RoomManagementPage() {
     if (full?.equipmentType) return getEquipmentTypeIcon(full.equipmentType);
     return getEquipmentIcon(eq.name);
   };
+  const roomIdFromUrl = searchParams.get("roomId");
+
+  useEffect(() => {
+    if (!roomIdFromUrl || roomList.length === 0) return;
+    const base = roomList.find((r) => String(r.id) === String(roomIdFromUrl));
+    if (!base) return;
+    const raw = roomEquipments.find((re) => re.roomId === base.id)?.equipment ?? [];
+    const equipment = raw.map((eq) => {
+      const equipmentType =
+        eq.equipmentType ??
+        equipmentList.find((e) => e.name?.toLowerCase() === eq.name?.toLowerCase())?.equipmentType;
+      return { ...eq, equipmentType };
+    });
+    setDetailRoom({ ...base, equipment });
+    setDetailOpen(true);
+  }, [roomIdFromUrl, roomList, roomEquipments, equipmentList]);
+
+  const handleCloseDetailRoom = (open: boolean) => {
+    if (!open) {
+      setDetailOpen(false);
+      setTimeout(() => {
+        setDetailRoom(null);
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("roomId");
+          return next;
+        }, { replace: true });
+      }, 300);
+    }
+  };
+
   const searchLower = search.toLowerCase().trim();
   const filtered = roomsWithEquipment.filter(
     (r) =>
@@ -314,7 +348,7 @@ export default function RoomManagementPage() {
                 </div>
 
                 <div className="flex gap-2 pt-3 border-t border-border">
-                  <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => setDetailRoom(room)}>
+                  <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => { setDetailRoom(room); setDetailOpen(true); }}>
                     <Eye className="h-3.5 w-3.5" /> Chi tiết
                   </Button>
                   {canCrudRoom && (
@@ -463,7 +497,7 @@ export default function RoomManagementPage() {
       </Dialog>
 
       {/* Room Detail Modal */}
-      <Dialog open={!!detailRoom} onOpenChange={(open) => !open && setDetailRoom(null)}>
+      <Dialog open={detailOpen} onOpenChange={handleCloseDetailRoom}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-display text-xl tracking-tight">

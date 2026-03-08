@@ -169,12 +169,14 @@ export default function RoomManagementPage() {
     if (!canCrudRoom) return;
     setEditingRoom(null);
     setForm({ ...emptyRoom, equipmentEntries: [] });
+    setSaving(false);
     setModalOpen(true);
   };
 
   const openEdit = async (room: typeof roomsWithEquipment[0]) => {
     if (!canCrudRoom) return;
     setEditingRoom(room);
+    setSaving(false);
     const raw = await getRoomEquipmentsRaw();
     const roomRaws = raw.filter((re) => re.roomId === room.id);
     const equipmentEntries: RoomEquipmentEntry[] = roomRaws.map((re) => ({
@@ -247,6 +249,8 @@ export default function RoomManagementPage() {
       setModalOpen(false);
     } catch (e: any) {
       toast({ variant: "destructive", title: "Lỗi", description: e?.message ?? "Không thể lưu phòng họp." });
+    } finally {
+      setSaving(false);
     }
   };
 

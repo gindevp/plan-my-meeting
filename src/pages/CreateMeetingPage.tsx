@@ -299,6 +299,21 @@ export default function CreateMeetingPage() {
     } else {
       if (selectedAttendees.length === 0) newErrors.attendees = "Vui lòng chọn ít nhất 1 người tham dự";
     }
+
+    // Kiểm tra sức chứa phòng khi có chọn phòng (offline/hybrid)
+    if ((meetingType === "offline" || meetingType === "hybrid") && selectedRoom) {
+      const room = rooms.find((r: any) => r.id === selectedRoom);
+      const totalParticipants = meetingLevel === "company"
+        ? users.filter((u: any) => {
+            const d = departments.find((dept: any) => String(dept.id) === String(u.departmentId));
+            return d != null && selectedDepartments.includes(d.name);
+          }).length
+        : selectedAttendees.length;
+      if (room && totalParticipants > room.capacity) {
+        newErrors.capacity = `Số người tham dự (${totalParticipants}) vượt sức chứa phòng (${room.capacity}). Vui lòng giảm số người hoặc chọn phòng khác.`;
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -345,9 +360,9 @@ export default function CreateMeetingPage() {
 
   const toggleAttendee = (name: string) => {
     setSelectedAttendees(prev => (prev.includes(name) ? prev.filter(a => a !== name) : [...prev, name]));
-    if (errors.attendees) {
+    if (errors.attendees || errors.capacity) {
       setErrors(prev => {
-        const { attendees, ...rest } = prev;
+        const { attendees, capacity, ...rest } = prev;
         return rest;
       });
     }
@@ -448,9 +463,9 @@ export default function CreateMeetingPage() {
 
   const toggleDepartment = (deptName: string) => {
     setSelectedDepartments(prev => (prev.includes(deptName) ? prev.filter(d => d !== deptName) : [...prev, deptName]));
-    if (errors.attendees) {
+    if (errors.attendees || errors.capacity) {
       setErrors(prev => {
-        const { attendees, ...rest } = prev;
+        const { attendees, capacity, ...rest } = prev;
         return rest;
       });
     }
@@ -971,6 +986,7 @@ export default function CreateMeetingPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {errors.attendees && <p className="text-sm text-destructive font-medium">{errors.attendees}</p>}
+            {errors.capacity && <p className="text-sm text-destructive font-medium flex items-center gap-2"><AlertTriangle className="h-4 w-4 shrink-0" />{errors.capacity}</p>}
 
             {meetingLevel === "company" ? (
               <>

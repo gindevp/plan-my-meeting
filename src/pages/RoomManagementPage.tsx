@@ -225,11 +225,11 @@ export default function RoomManagementPage() {
   return (
     <div className="page-content">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
+        <div className="opacity-0 animate-auth-fade-in-up">
           <h1 className="text-2xl font-display font-bold tracking-tight">Quản lý phòng họp</h1>
           <p className="text-sm text-muted-foreground mt-1">Xem thông tin phòng, thiết bị và trạng thái</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row gap-3 opacity-0 animate-auth-fade-in-up auth-stagger-1">
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -248,13 +248,14 @@ export default function RoomManagementPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-        {filtered.map((room) => {
+        {filtered.map((room, i) => {
           const status = statusConfig[room.status];
           const equipList = room.equipment ?? [];
           return (
             <Card
               key={room.id}
-              className="group overflow-hidden card-elevated"
+              className="group overflow-hidden card-elevated opacity-0 animate-auth-fade-in-up transition-all duration-300 hover:shadow-lg"
+              style={{ animationDelay: `${0.15 + i * 0.04}s`, animationFillMode: "forwards" }}
             >
               {/* Header */}
               <div className="relative bg-gradient-to-br from-slate-800 via-slate-700 to-slate-800 text-white px-5 py-5">

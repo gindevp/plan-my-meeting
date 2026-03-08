@@ -94,10 +94,53 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "auth-fade-in-up": {
+          from: { opacity: "0", transform: "translateY(20px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "auth-scale-in": {
+          from: { opacity: "0", transform: "scale(0.95)" },
+          to: { opacity: "1", transform: "scale(1)" },
+        },
+        "auth-float": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-8px)" },
+        },
+        "auth-shimmer": {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        "auth-success-pop": {
+          "0%": { opacity: "0", transform: "scale(0.5)" },
+          "50%": { transform: "scale(1.08)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
+        },
+        "auth-orb-float": {
+          "0%, 100%": { transform: "translate(0, 0) scale(1)" },
+          "33%": { transform: "translate(30px, -20px) scale(1.05)" },
+          "66%": { transform: "translate(-20px, 20px) scale(0.95)" },
+        },
+        "auth-panel-slide-out": {
+          from: { transform: "translateX(0)" },
+          to: { transform: "translateX(-100%)" },
+        },
+        "auth-panel-split": {
+          "0%": { width: "100%" },
+          "55%": { width: "45%" },
+          "100%": { width: "50%" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "auth-fade-in-up": "auth-fade-in-up 0.6s ease-out forwards",
+        "auth-scale-in": "auth-scale-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+        "auth-float": "auth-float 4s ease-in-out infinite",
+        "auth-shimmer": "auth-shimmer 3s linear infinite",
+        "auth-success-pop": "auth-success-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
+        "auth-orb-float": "auth-orb-float 15s ease-in-out infinite",
+        "auth-panel-slide-out": "auth-panel-slide-out 1.6s cubic-bezier(0.4, 0, 0.2, 1) 0.6s forwards",
+        "auth-panel-split": "auth-panel-split 2s cubic-bezier(0.4, 0, 0.2, 1) 0.5s forwards",
       },
     },
   },

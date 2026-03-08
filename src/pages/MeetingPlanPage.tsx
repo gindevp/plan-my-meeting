@@ -124,6 +124,7 @@ export default function MeetingPlanPage() {
   const [filterLevel, setFilterLevel] = useState<string>("");
   const [filterType, setFilterType] = useState<string>("");
   const [selectedMeeting, setSelectedMeeting] = useState<typeof meetings[0] | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [deleteConfirmMeeting, setDeleteConfirmMeeting] = useState<typeof meetings[0] | null>(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -261,6 +262,7 @@ export default function MeetingPlanPage() {
     const meeting = meetingsForTabs.find((m: any) => String(m.id) === String(meetingId));
     if (meeting) {
       setSelectedMeeting(meeting);
+      setDetailOpen(true);
       return;
     }
     const fromParticipant = (allParticipantsForPlan as any[]).find(
@@ -289,6 +291,7 @@ export default function MeetingPlanPage() {
         attendees: [],
         agenda: [],
       } as any);
+      setDetailOpen(true);
     }
   }, [location.search, meetingsForTabs, allParticipantsForPlan, user?.id]);
 
@@ -343,6 +346,7 @@ export default function MeetingPlanPage() {
     mutationFn: (id: string) => approveRoom(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      setDetailOpen(false);
       setSelectedMeeting(null);
       setActiveTab("approved");
     },
@@ -352,6 +356,7 @@ export default function MeetingPlanPage() {
     mutationFn: (params: { id: string; reason: string }) => rejectMeeting(params.id, params.reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      setDetailOpen(false);
       setSelectedMeeting(null);
       setShowRejectDialog(false);
       setRejectReason("");
@@ -374,6 +379,7 @@ export default function MeetingPlanPage() {
         setActiveTab("pending");
       }
 
+      setDetailOpen(false);
       setSelectedMeeting(null);
     },
     onError: (err: unknown) => {
@@ -389,6 +395,7 @@ export default function MeetingPlanPage() {
     mutationFn: async ({ id }: { id: string; status: string }) => cancelMeeting(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      setDetailOpen(false);
       setSelectedMeeting(null);
       toast({ title: "Đã xóa", description: "Cuộc họp đã được chuyển sang danh sách đã xóa." });
       setActiveTab("cancelled");
@@ -403,6 +410,7 @@ export default function MeetingPlanPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
       setShowCompleteModal(false);
+      setDetailOpen(false);
       setSelectedMeeting(null);
       setActiveTab("completed");
       const params = new URLSearchParams(location.search);
@@ -683,17 +691,19 @@ export default function MeetingPlanPage() {
 
   return (
     <div className="page-content">
-      <PageHeader
-        title="Quản lý kế hoạch lịch họp"
-        description="Quản lý và theo dõi các kế hoạch cuộc họp"
-      >
-        <Button onClick={() => navigate("/meetings/new")} className="gap-2 h-11">
-          <Plus className="h-4 w-4" />
-          Lên lịch họp
-        </Button>
-      </PageHeader>
+      <div className="opacity-0 animate-auth-fade-in-up">
+        <PageHeader
+          title="Quản lý kế hoạch lịch họp"
+          description="Quản lý và theo dõi các kế hoạch cuộc họp"
+        >
+          <Button onClick={() => navigate("/meetings/new")} className="gap-2 h-11 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]">
+            <Plus className="h-4 w-4" />
+            Lên lịch họp
+          </Button>
+        </PageHeader>
+      </div>
 
-      <div className="card-elevated overflow-hidden">
+      <div className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-1 transition-all duration-300 hover:shadow-lg">
         <div className="flex gap-0 px-1 pt-1 border-b border-border/60 bg-muted/20">
           {visibleStatusTabs.map(tab => {
             const count = getTabCount(tab.key);
@@ -702,7 +712,7 @@ export default function MeetingPlanPage() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all rounded-t-lg ${
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-all duration-200 rounded-t-lg hover:scale-[1.02] ${
                   isActive
                     ? "border-primary text-primary bg-background shadow-sm"
                     : "border-transparent text-muted-foreground hover:text-foreground hover:bg-background/60 hover:border-border"
@@ -723,14 +733,14 @@ export default function MeetingPlanPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Tìm kiếm cuộc họp..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-11" />
             </div>
-            <Button variant="outline" size="sm" className="gap-1.5 h-11 shrink-0 ml-auto" onClick={() => setShowFilter(!showFilter)}>
+            <Button variant="outline" size="sm" className="gap-1.5 h-11 shrink-0 ml-auto transition-all duration-200 hover:scale-[1.02]" onClick={() => setShowFilter(!showFilter)}>
               <Filter className="h-3.5 w-3.5" /> Bộ lọc
             </Button>
           </div>
         </div>
 
         {showFilter && (
-          <div className="px-5 pb-5 pt-2 space-y-4 animate-fade-in border-b border-border/50 bg-muted/10">
+          <div className="px-5 pb-5 pt-2 space-y-4 animate-auth-scale-in border-b border-border/50 bg-muted/10">
           <p className="text-sm font-medium tracking-tight">Lọc theo thời gian và điều kiện</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-1.5">
@@ -793,10 +803,14 @@ export default function MeetingPlanPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map(meeting => {
+            {filtered.map((meeting, i) => {
               const TypeIcon = typeIconMap[meeting.type];
               return (
-                <TableRow key={meeting.id} className="hover:bg-secondary/20">
+                <TableRow
+                  key={meeting.id}
+                  className="hover:bg-secondary/20 transition-all duration-200 opacity-0 animate-auth-fade-in-up"
+                  style={{ animationDelay: `${0.15 + i * 0.03}s`, animationFillMode: "forwards" }}
+                >
                   <TableCell>
                     <div>
                       <p className="font-medium text-sm">{meeting.title}</p>
@@ -832,7 +846,7 @@ export default function MeetingPlanPage() {
                   )}
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedMeeting(meeting)} aria-label="Xem chi tiết cuộc họp">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSelectedMeeting(meeting); setDetailOpen(true); }} aria-label="Xem chi tiết cuộc họp">
                         <Eye className="h-4 w-4" />
                       </Button>
                       {meeting.status === "draft" && (
@@ -863,7 +877,7 @@ export default function MeetingPlanPage() {
             {filtered.length === 0 && (
               <TableRow>
                 <TableCell colSpan={activeTab === "rejected" ? 10 : 9} className="p-0">
-                  <div className="empty-state">
+                  <div className="empty-state opacity-0 animate-auth-fade-in-up auth-stagger-2">
                     <Calendar className="h-12 w-12 text-muted-foreground/50 mb-3" />
                     <p className="text-sm font-medium text-muted-foreground">Không tìm thấy cuộc họp nào</p>
                     <p className="text-xs text-muted-foreground/80 mt-1">Thử điều chỉnh bộ lọc hoặc tạo cuộc họp mới</p>
@@ -881,14 +895,17 @@ export default function MeetingPlanPage() {
       </div>
 
       <Dialog
-        open={!!selectedMeeting}
+        open={detailOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setSelectedMeeting(null);
-            const params = new URLSearchParams(location.search);
-            params.delete("meetingId");
-            const tab = params.get("tab") || activeTab;
-            navigate(`/plans?tab=${tab}`, { replace: true });
+            setDetailOpen(false);
+            setTimeout(() => {
+              setSelectedMeeting(null);
+              const params = new URLSearchParams(location.search);
+              params.delete("meetingId");
+              const tab = params.get("tab") || activeTab;
+              navigate(`/plans?tab=${tab}`, { replace: true });
+            }, 300);
           }
         }}
       >

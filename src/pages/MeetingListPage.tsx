@@ -38,13 +38,13 @@ export default function MeetingListPage() {
 
   return (
     <div className="page-content">
-      <div>
+      <div className="opacity-0 animate-auth-fade-in-up">
         <h1 className="text-2xl font-display font-bold tracking-tight">Danh sách cuộc họp</h1>
         <p className="text-sm text-muted-foreground mt-1">Quản lý và theo dõi tất cả cuộc họp</p>
       </div>
 
       {/* Filters */}
-      <Card className="card-elevated overflow-hidden">
+      <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-1">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 min-w-[200px]">
@@ -83,13 +83,13 @@ export default function MeetingListPage() {
       </Card>
 
       {/* Meeting List */}
-      <Card className="card-elevated overflow-hidden">
+      <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-2">
         <CardContent className="p-0">
           <div className="divide-y divide-border">
-            {filtered.map((meeting) => {
+            {filtered.map((meeting, i) => {
               const TypeIcon = typeIconMap[meeting.type];
               return (
-                <div key={meeting.id} className="flex items-center gap-4 px-6 py-4 hover:bg-secondary/20 transition-colors animate-slide-up">
+                <div key={meeting.id} className="flex items-center gap-4 px-6 py-4 hover:bg-secondary/20 transition-colors opacity-0 animate-auth-fade-in-up" style={{ animationDelay: `${0.15 + i * 0.03}s`, animationFillMode: "forwards" }}>
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/8">
                     <TypeIcon className="h-5 w-5 text-primary" />
                   </div>

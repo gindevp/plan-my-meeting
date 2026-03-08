@@ -180,7 +180,7 @@ export default function StaffPage() {
   return (
     <div className="page-content">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
+        <div className="opacity-0 animate-auth-fade-in-up">
           <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">Quản lý nhân viên</h1>
           <p className="mt-1 text-sm text-muted-foreground">Danh sách nhân viên trong hệ thống</p>
         </div>
@@ -202,8 +202,8 @@ export default function StaffPage() {
           { label: "Quản trị viên", value: users.filter((u) => u.role === "admin").length },
           { label: "Phòng ban", value: new Set(users.map((u) => u.department).filter(Boolean)).size },
           { label: "Thư ký", value: users.filter((u) => u.role === "secretary").length },
-        ].map((s) => (
-          <Card key={s.label} className="card-elevated">
+        ].map((s, i) => (
+          <Card key={s.label} className="card-elevated opacity-0 animate-auth-fade-in-up transition-all duration-300 hover:shadow-lg" style={{ animationDelay: `${0.1 + i * 0.05}s`, animationFillMode: "forwards" }}>
             <CardContent className="pt-6">
               <p className="text-sm text-muted-foreground">{s.label}</p>
               <p className="mt-1 text-2xl font-bold text-foreground">{s.value}</p>
@@ -212,7 +212,7 @@ export default function StaffPage() {
         ))}
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex gap-3 opacity-0 animate-auth-fade-in-up auth-stagger-2">
         <div className="relative max-w-sm flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Tìm nhân viên..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -228,7 +228,7 @@ export default function StaffPage() {
         </Select>
       </div>
 
-      <Card className="card-elevated overflow-hidden">
+      <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-3">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -242,10 +242,10 @@ export default function StaffPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((u) => {
+              {filtered.map((u, i) => {
                 const role = ((u.role as UserRole) || "employee") as UserRole;
                 return (
-                  <TableRow key={u.id}>
+                  <TableRow key={u.id} className="opacity-0 animate-auth-fade-in-up" style={{ animationDelay: `${0.2 + i * 0.03}s`, animationFillMode: "forwards" }}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8"><AvatarFallback className="text-xs">{getInitials(u.name)}</AvatarFallback></Avatar>

@@ -74,6 +74,7 @@ export default function ReportsPage() {
 
   return (
     <div className="page-content">
+      <div className="opacity-0 animate-auth-fade-in-up">
       <PageHeader
         title="Báo cáo & Thống kê"
         description="Tổng hợp dữ liệu hoạt động họp và sử dụng tài nguyên"
@@ -110,11 +111,12 @@ export default function ReportsPage() {
           </Button>
         </div>
       </PageHeader>
+      </div>
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {summaryStats.map((stat) => (
-          <Card key={stat.label} className="card-elevated overflow-hidden">
+        {summaryStats.map((stat, i) => (
+          <Card key={stat.label} className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up transition-all duration-300 hover:shadow-lg" style={{ animationDelay: `${0.1 + i * 0.05}s`, animationFillMode: "forwards" }}>
             <CardContent className="p-5">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -132,7 +134,7 @@ export default function ReportsPage() {
 
       {/* Row 1: Monthly Trend + By Type */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 card-elevated overflow-hidden">
+        <Card className="lg:col-span-2 card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-2 transition-all duration-300 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-display font-semibold tracking-tight">Xu hướng cuộc họp theo tháng</CardTitle>
           </CardHeader>
@@ -158,7 +160,7 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="card-elevated overflow-hidden">
+        <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-3 transition-all duration-300 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-display font-semibold tracking-tight">Theo hình thức họp</CardTitle>
           </CardHeader>
@@ -187,7 +189,7 @@ export default function ReportsPage() {
 
       {/* Row 2: Room Usage + By Level */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 card-elevated overflow-hidden">
+        <Card className="lg:col-span-2 card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-2 transition-all duration-300 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-display font-semibold tracking-tight">Tần suất sử dụng phòng họp</CardTitle>
           </CardHeader>
@@ -211,7 +213,7 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="card-elevated overflow-hidden">
+        <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-3 transition-all duration-300 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-display font-semibold tracking-tight">Theo cấp họp</CardTitle>
           </CardHeader>
@@ -240,7 +242,7 @@ export default function ReportsPage() {
 
       {/* Row 3: Task Status */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="card-elevated overflow-hidden">
+        <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-2 transition-all duration-300 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-display font-semibold tracking-tight">Trạng thái nhiệm vụ</CardTitle>
           </CardHeader>
@@ -266,7 +268,7 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        <Card className="card-elevated overflow-hidden">
+        <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-3 transition-all duration-300 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-display font-semibold tracking-tight">Chi tiết nhiệm vụ</CardTitle>
           </CardHeader>

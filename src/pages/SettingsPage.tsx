@@ -295,12 +295,12 @@ export default function SettingsPage() {
 
   return (
     <div className="page-content">
-      <div>
+      <div className="opacity-0 animate-auth-fade-in-up">
         <h1 className="text-2xl font-display font-bold text-foreground">{t("settings.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">{t("settings.subtitle")}</p>
       </div>
 
-      <Tabs defaultValue="general" className="space-y-6">
+      <Tabs defaultValue="general" className="space-y-6 opacity-0 animate-auth-fade-in-up auth-stagger-1">
         <TabsList>
           <TabsTrigger value="general"><Globe className="h-4 w-4 mr-1.5" />{t("settings.tabs.general")}</TabsTrigger>
           <TabsTrigger value="notifications"><Bell className="h-4 w-4 mr-1.5" />{t("settings.tabs.notifications")}</TabsTrigger>

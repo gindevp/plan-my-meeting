@@ -12,7 +12,7 @@ const NotFound = () => {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="text-center max-w-md">
+      <div className="text-center max-w-md opacity-0 animate-auth-fade-in-up">
         <div className="flex justify-center mb-6">
           <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-muted">
             <FileQuestion className="h-10 w-10 text-muted-foreground" />

@@ -114,7 +114,7 @@ export default function DepartmentsPage() {
   return (
     <div className="page-content">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="opacity-0 animate-auth-fade-in-up">
           <h1 className="mt-1 text-2xl font-display font-bold tracking-tight text-foreground">Quản lý phòng ban</h1>
           <p className="text-sm text-muted-foreground">Cơ cấu tổ chức và phòng ban</p>
         </div>
@@ -131,16 +131,16 @@ export default function DepartmentsPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Tổng phòng ban</p><p className="mt-1 text-2xl font-bold text-foreground">{departments.length}</p></CardContent></Card>
-        <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Tổng nhân viên</p><p className="mt-1 text-2xl font-bold text-foreground">{users.length}</p></CardContent></Card>
-        <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Cuộc họp tháng này</p><p className="mt-1 text-2xl font-bold text-foreground">{meetings.length}</p></CardContent></Card>
+        <Card className="opacity-0 animate-auth-fade-in-up auth-stagger-1 transition-all duration-300 hover:shadow-lg"><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Tổng phòng ban</p><p className="mt-1 text-2xl font-bold text-foreground">{departments.length}</p></CardContent></Card>
+        <Card className="opacity-0 animate-auth-fade-in-up auth-stagger-1 transition-all duration-300 hover:shadow-lg"><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Tổng nhân viên</p><p className="mt-1 text-2xl font-bold text-foreground">{users.length}</p></CardContent></Card>
+        <Card className="opacity-0 animate-auth-fade-in-up auth-stagger-1 transition-all duration-300 hover:shadow-lg"><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Cuộc họp tháng này</p><p className="mt-1 text-2xl font-bold text-foreground">{meetings.length}</p></CardContent></Card>
       </div>
 
-      <Input placeholder="Tìm phòng ban..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+      <Input placeholder="Tìm phòng ban..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm opacity-0 animate-auth-fade-in-up auth-stagger-2" />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((dept) => (
-          <Card key={dept.id} className="card-elevated">
+        {filtered.map((dept, i) => (
+          <Card key={dept.id} className="card-elevated opacity-0 animate-auth-fade-in-up transition-all duration-300 hover:shadow-lg" style={{ animationDelay: `${0.2 + i * 0.04}s`, animationFillMode: "forwards" }}>
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">

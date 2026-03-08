@@ -5,8 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CalendarDays, UserPlus, Loader2, ArrowRight } from "lucide-react";
+import { UserPlus, Loader2, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { AuthLayout } from "@/components/auth/AuthLayout";
 
 export default function RegisterPage() {
   const [login, setLogin] = useState("");
@@ -49,86 +50,59 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left: Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary via-primary to-primary/90 p-12 flex-col justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/20 backdrop-blur">
-            <CalendarDays className="h-6 w-6 text-white" />
-          </div>
-          <span className="text-xl font-display font-bold text-white tracking-tight">MeetFlow</span>
-        </div>
-        <div>
-          <h2 className="text-3xl font-display font-bold text-white tracking-tight leading-tight">
-            Bắt đầu với
-            <br />
-            <span className="text-white/90">MeetFlow ngay hôm nay</span>
-          </h2>
-          <p className="mt-4 text-white/80 text-lg max-w-sm">
-            Tạo tài khoản miễn phí để lên lịch và quản lý cuộc họp hiệu quả.
-          </p>
-        </div>
-        <p className="text-white/60 text-sm">© MeetFlow — Hệ thống quản lý cuộc họp</p>
-      </div>
-
-      {/* Right: Form */}
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12 bg-gradient-to-br from-slate-50 via-background to-primary/5 overflow-y-auto">
-        <div className="w-full max-w-md py-8">
-          <div className="lg:hidden flex items-center justify-center gap-3 mb-8">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
-              <CalendarDays className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <span className="text-lg font-display font-bold">MeetFlow</span>
-          </div>
-
-          <Card className="border-0 shadow-2xl shadow-primary/10 overflow-hidden">
+    <AuthLayout
+      title="Bắt đầu với"
+      subtitle="MeetFlow ngay hôm nay"
+      description="Tạo tài khoản miễn phí để lên lịch và quản lý cuộc họp hiệu quả."
+    >
+      <Card className="border-0 shadow-2xl shadow-primary/10 overflow-hidden opacity-0 animate-auth-scale-in py-8 origin-top" style={{ animationDelay: "1.8s", animationFillMode: "forwards" }}>
             <CardHeader className="space-y-2 pb-6">
               <CardTitle className="text-2xl font-display font-bold tracking-tight">Tạo tài khoản</CardTitle>
               <CardDescription>Đăng ký để sử dụng MeetFlow</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleRegister} className="space-y-4">
-                <div className="space-y-2">
+                <div className="space-y-2 opacity-0 animate-auth-fade-in-up auth-stagger-1">
                   <Label htmlFor="login">Tên đăng nhập</Label>
-                  <Input id="login" type="text" placeholder="username" value={login} onChange={(e) => setLogin(e.target.value)} className="h-11" required />
+                  <Input id="login" type="text" placeholder="username" value={login} onChange={(e) => setLogin(e.target.value)} className="h-11 transition-all duration-200 focus:scale-[1.01]" required />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 opacity-0 animate-auth-fade-in-up auth-stagger-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" placeholder="email@company.com" value={email} onChange={(e) => setEmail(e.target.value)} className="h-11" required />
+                  <Input id="email" type="email" placeholder="email@company.com" value={email} onChange={(e) => setEmail(e.target.value)} className="h-11 transition-all duration-200 focus:scale-[1.01]" required />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4 opacity-0 animate-auth-fade-in-up auth-stagger-3">
                   <div className="space-y-2">
                     <Label htmlFor="firstName">Họ</Label>
-                    <Input id="firstName" type="text" placeholder="Nguyễn" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="h-11" />
+                    <Input id="firstName" type="text" placeholder="Nguyễn" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="h-11 transition-all duration-200 focus:scale-[1.01]" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="lastName">Tên</Label>
-                    <Input id="lastName" type="text" placeholder="Văn An" value={lastName} onChange={(e) => setLastName(e.target.value)} className="h-11" />
+                    <Input id="lastName" type="text" placeholder="Văn An" value={lastName} onChange={(e) => setLastName(e.target.value)} className="h-11 transition-all duration-200 focus:scale-[1.01]" />
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 opacity-0 animate-auth-fade-in-up auth-stagger-4">
                   <Label htmlFor="password">Mật khẩu</Label>
-                  <Input id="password" type="password" placeholder="Tối thiểu 4 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} className="h-11" required minLength={4} />
+                  <Input id="password" type="password" placeholder="Tối thiểu 4 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} className="h-11 transition-all duration-200 focus:scale-[1.01]" required minLength={4} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 opacity-0 animate-auth-fade-in-up auth-stagger-5">
                   <Label htmlFor="confirm">Xác nhận mật khẩu</Label>
-                  <Input id="confirm" type="password" placeholder="Nhập lại mật khẩu" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="h-11" required />
+                  <Input id="confirm" type="password" placeholder="Nhập lại mật khẩu" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="h-11 transition-all duration-200 focus:scale-[1.01]" required />
                 </div>
-                <Button type="submit" className="w-full h-11" disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}
-                  Đăng ký
-                </Button>
+                <div className="opacity-0 animate-auth-fade-in-up auth-stagger-6">
+                  <Button type="submit" className="w-full h-11 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]" disabled={loading}>
+                    {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}
+                    Đăng ký
+                  </Button>
+                </div>
               </form>
-              <p className="text-center text-sm text-muted-foreground mt-5 pt-4 border-t">
+              <p className="text-center text-sm text-muted-foreground mt-5 pt-4 border-t opacity-0 animate-auth-fade-in-up auth-stagger-6">
                 Đã có tài khoản?{" "}
-                <Link to="/login" className="text-primary font-semibold hover:underline inline-flex items-center gap-1">
+                <Link to="/login" className="text-primary font-semibold hover:underline inline-flex items-center gap-1 transition-opacity hover:opacity-80">
                   Đăng nhập <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               </p>
             </CardContent>
           </Card>
-        </div>
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

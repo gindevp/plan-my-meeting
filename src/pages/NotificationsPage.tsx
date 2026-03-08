@@ -95,14 +95,14 @@ export default function NotificationsPage() {
 
   return (
     <div className="page-content">
-      <div>
+      <div className="opacity-0 animate-auth-fade-in-up">
         <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">Thông báo</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Danh sách thông báo của bạn. Đánh dấu đã đọc hoặc xóa khi không cần.
         </p>
       </div>
 
-      <Card className="card-elevated overflow-hidden">
+      <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-1">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>Danh sách thông báo</CardTitle>
@@ -130,7 +130,7 @@ export default function NotificationsPage() {
             <p className="py-8 text-center text-muted-foreground text-sm">Chưa có thông báo nào.</p>
           ) : (
             <div className="divide-y divide-border">
-              {notifications.map((n) => {
+              {notifications.map((n, i) => {
                 const read = !!n.readAt;
                 const Icon = typeIcon(n.type);
                 const handleRowClick = (e: React.MouseEvent) => {
@@ -145,9 +145,10 @@ export default function NotificationsPage() {
                     tabIndex={n.linkUrl ? 0 : undefined}
                     onClick={handleRowClick}
                     onKeyDown={n.linkUrl ? (e) => e.key === "Enter" && handleRowClick(e as unknown as React.MouseEvent) : undefined}
-                    className={`flex gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer ${
+                    className={`flex gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer opacity-0 animate-auth-fade-in-up ${
                       !read ? "bg-primary/5" : ""
                     } hover:bg-accent/30`}
+                    style={{ animationDelay: `${0.15 + i * 0.03}s`, animationFillMode: "forwards" }}
                   >
                     <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                       <Icon className="h-5 w-5" />

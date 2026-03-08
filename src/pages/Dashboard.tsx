@@ -61,23 +61,25 @@ export default function Dashboard() {
     return { day, meetings: count };
   });
 
+  const staggerClasses = ["auth-stagger-1", "auth-stagger-2", "auth-stagger-3", "auth-stagger-4"];
+
   return (
     <div className="page-content">
-      <div>
+      <div className="opacity-0 animate-auth-fade-in-up">
         <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">Tổng quan</h1>
         <p className="text-sm text-muted-foreground mt-1">Xin chào, {displayName}. Đây là tóm tắt hoạt động họp hôm nay.</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {stats.map((stat) => (
-          <Card key={stat.label} className="card-elevated overflow-hidden">
+        {stats.map((stat, i) => (
+          <Card key={stat.label} className={`card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up ${staggerClasses[i]} transition-all duration-300 hover:scale-[1.02] hover:shadow-lg group`}>
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{stat.label}</p>
                   <p className="text-3xl font-display font-bold mt-1">{stat.value}</p>
                 </div>
-                <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-secondary ${stat.color}`}>
+                <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-secondary ${stat.color} transition-transform duration-300 group-hover:scale-110`}>
                   <stat.icon className="h-5 w-5" />
                 </div>
               </div>
@@ -89,7 +91,7 @@ export default function Dashboard() {
       {/* Charts + Upcoming */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Bar chart */}
-        <Card className="lg:col-span-2 card-elevated overflow-hidden">
+        <Card className="lg:col-span-2 card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-2 transition-all duration-300 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-display">Cuộc họp trong tuần</CardTitle>
           </CardHeader>
@@ -114,7 +116,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Pie chart */}
-        <Card className="card-elevated overflow-hidden">
+        <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-3 transition-all duration-300 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-display">Theo hình thức</CardTitle>
           </CardHeader>
@@ -150,14 +152,18 @@ export default function Dashboard() {
       </div>
 
       {/* Upcoming Meetings */}
-      <Card className="card-elevated overflow-hidden">
+      <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-4 transition-all duration-300 hover:shadow-lg">
         <CardHeader className="pb-3">
           <CardTitle className="text-base font-display">Cuộc họp sắp tới</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y divide-border">
-            {upcomingMeetings.map((meeting) => (
-              <div key={meeting.id} className="flex items-center gap-4 px-6 py-4 hover:bg-secondary/30 transition-colors">
+            {upcomingMeetings.map((meeting, i) => (
+              <div
+                key={meeting.id}
+                className="flex items-center gap-4 px-6 py-4 hover:bg-secondary/30 transition-all duration-200 opacity-0 animate-auth-fade-in-up"
+                style={{ animationDelay: `${0.5 + i * 0.08}s`, animationFillMode: "forwards" }}
+              >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <CalendarDays className="h-5 w-5" />
                 </div>

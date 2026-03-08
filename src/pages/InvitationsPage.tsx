@@ -126,7 +126,7 @@ export default function InvitationsPage() {
 
   return (
     <div className="page-content">
-      <div>
+      <div className="opacity-0 animate-auth-fade-in-up">
         <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">Lời mời</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Các cuộc họp đã phê duyệt mà bạn được mời tham dự hoặc phòng ban của bạn được mời
@@ -134,7 +134,7 @@ export default function InvitationsPage() {
       </div>
 
       {isSecretary && (
-        <div className="flex gap-2 mt-4 border-b border-border">
+        <div className="flex gap-2 mt-4 border-b border-border opacity-0 animate-auth-fade-in-up auth-stagger-1">
           <Button
             variant={activeTab === "mine" ? "secondary" : "ghost"}
             size="sm"
@@ -170,7 +170,7 @@ export default function InvitationsPage() {
         <div className="text-sm text-muted-foreground py-8">Đang tải...</div>
       ) : activeTab === "department" && isSecretary ? (
         departmentInvitations.length === 0 ? (
-          <Card className="card-elevated mt-4">
+          <Card className="card-elevated mt-4 opacity-0 animate-auth-fade-in-up auth-stagger-2">
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <Building2 className="h-12 w-12 text-muted-foreground/50 mb-3" />
               <p className="font-medium text-foreground">Không có lời mời phòng ban nào</p>
@@ -188,7 +188,7 @@ export default function InvitationsPage() {
               const meeting = inv.meeting;
               if (!meeting) return null;
               return (
-                <Card key={inv.id} className="card-elevated overflow-hidden">
+                <Card key={inv.id} className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up transition-all duration-300 hover:shadow-lg" style={{ animationDelay: `${0.2 + departmentInvitations.indexOf(inv) * 0.05}s`, animationFillMode: "forwards" }}>
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
@@ -232,7 +232,7 @@ export default function InvitationsPage() {
           </div>
         )
       ) : invitations.length === 0 ? (
-        <Card className="card-elevated mt-4">
+        <Card className="card-elevated mt-4 opacity-0 animate-auth-fade-in-up auth-stagger-2">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Mail className="h-12 w-12 text-muted-foreground/50 mb-3" />
             <p className="font-medium text-foreground">Không có lời mời nào chờ xác nhận</p>
@@ -248,7 +248,7 @@ export default function InvitationsPage() {
             if (!meeting) return null;
             const isDeclineMode = declineParticipantId === inv.id;
             return (
-              <Card key={inv.id} className="card-elevated overflow-hidden">
+              <Card key={inv.id} className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up transition-all duration-300 hover:shadow-lg" style={{ animationDelay: `${0.2 + invitations.indexOf(inv) * 0.05}s`, animationFillMode: "forwards" }}>
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">

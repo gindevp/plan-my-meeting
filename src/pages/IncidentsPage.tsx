@@ -30,14 +30,14 @@ export default function IncidentsPage() {
 
   return (
     <div className="page-content">
-      <div>
+      <div className="opacity-0 animate-auth-fade-in-up">
         <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">Quản lý sự cố</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Danh sách báo cáo sự cố trong các cuộc họp
         </p>
       </div>
 
-      <Card className="card-elevated overflow-hidden">
+      <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-1">
         <CardHeader className="pb-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <CardTitle className="text-base font-display flex items-center gap-2">
@@ -74,8 +74,8 @@ export default function IncidentsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((inc: any) => (
-                    <TableRow key={inc.id}>
+                  {filtered.map((inc: any, i: number) => (
+                    <TableRow key={inc.id} className="opacity-0 animate-auth-fade-in-up" style={{ animationDelay: `${0.15 + i * 0.03}s`, animationFillMode: "forwards" }}>
                       <TableCell className="font-medium max-w-[200px] truncate" title={inc.title}>
                         {inc.title || "—"}
                       </TableCell>

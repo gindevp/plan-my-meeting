@@ -310,7 +310,7 @@ export default function CalendarPage() {
   const renderMeetingCard = (m: (typeof meetings)[0]) => (
     <div
       key={m.id}
-      className={`bg-card border-l-[3px] ${typeBorderColor[m.type]} rounded-r px-2 py-1.5 text-[11px] leading-tight cursor-pointer hover:bg-accent/40 transition-colors`}
+      className={`bg-card border-l-[3px] ${typeBorderColor[m.type]} rounded-r px-2 py-1.5 text-[11px] leading-tight cursor-pointer hover:bg-accent/40 transition-all duration-200 hover:scale-[1.02]`}
     >
       <p className="font-semibold text-foreground truncate">{m.title}</p>
       <p className="text-muted-foreground mt-0.5 flex items-center gap-1">
@@ -343,7 +343,8 @@ export default function CalendarPage() {
     return (
       <div
         key={monthIdx}
-        className="border border-border rounded-lg p-3 cursor-pointer hover:bg-accent/30 transition-colors"
+        className="border border-border rounded-lg p-3 cursor-pointer hover:bg-accent/30 transition-all duration-200 hover:scale-[1.02] opacity-0 animate-auth-fade-in-up"
+        style={{ animationDelay: `${monthIdx * 0.04}s`, animationFillMode: "forwards" }}
         onClick={() => handleMonthClick(monthIdx)}
       >
         <p className="text-sm font-semibold mb-2 text-center">{monthNames[monthIdx]}</p>
@@ -380,7 +381,7 @@ export default function CalendarPage() {
 
   return (
     <div className="page-content">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between opacity-0 animate-auth-fade-in-up">
         <div>
           <h1 className="text-2xl font-display font-bold tracking-tight">Lịch họp</h1>
           <p className="text-sm text-muted-foreground mt-1">Xem lịch các cuộc họp theo ngày, tuần, tháng, năm</p>
@@ -397,14 +398,14 @@ export default function CalendarPage() {
               <span className="w-4 h-0.5 bg-orange-500 inline-block rounded" /> Kết hợp
             </span>
           </div>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowFilter(!showFilter)}>
+          <Button variant="outline" size="sm" className="gap-1.5 transition-all duration-200 hover:scale-[1.02]" onClick={() => setShowFilter(!showFilter)}>
             <Filter className="h-3.5 w-3.5" /> Bộ lọc
           </Button>
         </div>
       </div>
 
       {showFilter && (
-        <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4">
+        <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4 opacity-0 animate-auth-scale-in">
           <p className="text-sm font-medium">Lọc theo thời gian và điều kiện</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-1">
@@ -450,7 +451,7 @@ export default function CalendarPage() {
         </div>
       )}
 
-      <div className="bg-card rounded-xl border border-border shadow-sm">
+      <div className="bg-card rounded-xl border border-border shadow-sm opacity-0 animate-auth-fade-in-up auth-stagger-1 transition-all duration-300 hover:shadow-md">
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             <Button
@@ -586,7 +587,7 @@ export default function CalendarPage() {
                   return (
                     <div
                       key={item.meeting.id}
-                      className={`absolute border-l-[4px] ${typeBorderColor[item.meeting.type]} bg-secondary/70 rounded-r-md p-2 overflow-hidden`}
+                      className={`absolute border-l-[4px] ${typeBorderColor[item.meeting.type]} bg-secondary/70 rounded-r-md p-2 overflow-hidden transition-all duration-200 hover:scale-[1.02] hover:shadow-md hover:z-20`}
                       style={{
                         top: `${top}px`,
                         height: `${height}px`,

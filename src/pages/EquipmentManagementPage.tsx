@@ -166,6 +166,7 @@ export default function EquipmentManagementPage() {
 
   return (
     <div className="page-content">
+      <div className="opacity-0 animate-auth-fade-in-up">
       <PageHeader
         title="Quản lý thiết bị"
         description="Danh mục loại thiết bị phòng họp và tổng số lượng"
@@ -177,8 +178,9 @@ export default function EquipmentManagementPage() {
           </Button>
         )}
       </PageHeader>
+      </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 opacity-0 animate-auth-fade-in-up auth-stagger-1">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -190,7 +192,7 @@ export default function EquipmentManagementPage() {
         </div>
       </div>
 
-      <Card className="card-elevated overflow-hidden">
+      <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-2">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent bg-muted/30">
@@ -204,10 +206,10 @@ export default function EquipmentManagementPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((eq) => {
+            {filtered.map((eq, i) => {
               const Icon = getEquipmentIcon(eq.name);
               return (
-                <TableRow key={eq.id} className="hover:bg-muted/30">
+                <TableRow key={eq.id} className="hover:bg-muted/30 opacity-0 animate-auth-fade-in-up" style={{ animationDelay: `${0.2 + i * 0.03}s`, animationFillMode: "forwards" }}>
                   <TableCell>
                     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
                       <Icon className="h-4 w-4 text-primary" />

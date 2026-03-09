@@ -23,7 +23,7 @@ import { getRoomEquipmentsRaw } from "@/services/api/rooms";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { getEquipmentIcon, getEquipmentTypeIcon } from "@/lib/equipmentIcons";
+import { getEquipmentTypeIcon } from "@/lib/equipmentIcons";
 
 const EQUIPMENT_TYPES = [
   { value: "dien_tu", label: "Điện tử" },
@@ -218,26 +218,19 @@ export default function EquipmentManagementPage() {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent bg-muted/30">
-              <TableHead className="font-semibold tracking-tight w-16"></TableHead>
               <TableHead className="font-medium">Mã</TableHead>
               <TableHead className="font-medium">Tên thiết bị</TableHead>
               <TableHead className="font-medium">Loại thiết bị</TableHead>
               <TableHead className="font-medium">Trạng thái</TableHead>
               <TableHead className="font-medium">Mô tả</TableHead>
-              <TableHead className="font-medium text-right">Tổng số lượng</TableHead>
+              <TableHead className="font-medium text-center">Tổng số lượng</TableHead>
               {canManageEquipment && <TableHead className="text-right font-medium w-24">Thao tác</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.map((eq, i) => {
-              const Icon = getEquipmentIcon(eq.name);
               return (
                 <TableRow key={eq.id} className="hover:bg-muted/30 opacity-0 animate-auth-fade-in-up" style={{ animationDelay: `${0.2 + i * 0.03}s`, animationFillMode: "forwards" }}>
-                  <TableCell>
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
-                      <Icon className="h-4 w-4 text-primary" />
-                    </div>
-                  </TableCell>
                   <TableCell className="font-mono text-sm">{eq.code || "—"}</TableCell>
                   <TableCell className="font-medium">{eq.name}</TableCell>
                   <TableCell className="text-sm">
@@ -266,7 +259,7 @@ export default function EquipmentManagementPage() {
                   <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
                     {eq.description || "—"}
                   </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">{eq.totalQuantity ?? 999}</TableCell>
+                  <TableCell className="text-center font-medium tabular-nums">{eq.totalQuantity ?? 999}</TableCell>
                   {canManageEquipment && (
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
@@ -355,6 +348,7 @@ export default function EquipmentManagementPage() {
                 </SelectContent>
               </Select>
             </div>
+            {editingId && (
             <div>
               <Label>Mã (tùy chọn)</Label>
               <Input
@@ -364,6 +358,7 @@ export default function EquipmentManagementPage() {
                 className="mt-1.5 h-11"
               />
             </div>
+            )}
             <div>
               <Label>Mô tả</Label>
               <Input

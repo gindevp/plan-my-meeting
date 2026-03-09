@@ -80,6 +80,8 @@ export default function RoomManagementPage() {
   const detailImageInputRef = useRef<HTMLInputElement>(null);
   const [detailImageUploading, setDetailImageUploading] = useState(false);
   const [layoutCanvasSize, setLayoutCanvasSize] = useState({ w: 800, h: 600 });
+  /** Cache-bust: sau khi cập nhật ảnh phòng, card list dùng timestamp này để tải lại ảnh */
+  const [roomImageUpdatedAt, setRoomImageUpdatedAt] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!modalOpen || !layoutCanvasContainerRef.current) return;
@@ -148,6 +150,8 @@ export default function RoomManagementPage() {
     try {
       await uploadRoomImage(detailRoom.id, file);
       queryClient.invalidateQueries({ queryKey: ["rooms"] });
+      const roomIdKey = String(detailRoom.id);
+      setRoomImageUpdatedAt((prev) => ({ ...prev, [roomIdKey]: Date.now() }));
       setDetailRoom((prev) => (prev ? { ...prev, imageUrl: `/api/rooms/${prev.id}/image?t=${Date.now()}` } : null));
     } catch (err) {
       toast({ variant: "destructive", title: "Lỗi", description: err instanceof Error ? err.message : "Không thể thay ảnh." });
@@ -377,6 +381,7 @@ export default function RoomManagementPage() {
             return null;
           });
         }
+        setRoomImageUpdatedAt((prev) => ({ ...prev, [editingRoom.id]: Date.now() }));
         queryClient.invalidateQueries({ queryKey: ["rooms"] });
         queryClient.invalidateQueries({ queryKey: ["room-equipments"] });
         toast({ title: "Đã cập nhật", description: "Phòng họp đã được cập nhật." });
@@ -405,6 +410,7 @@ export default function RoomManagementPage() {
             });
           }
         }
+        if (roomId) setRoomImageUpdatedAt((prev) => ({ ...prev, [String(roomId)]: Date.now() }));
         queryClient.invalidateQueries({ queryKey: ["rooms"] });
         queryClient.invalidateQueries({ queryKey: ["room-equipments"] });
         toast({ title: "Đã thêm", description: "Phòng họp đã được tạo." });
@@ -508,7 +514,11 @@ export default function RoomManagementPage() {
               <div className="aspect-video w-full overflow-hidden bg-muted shrink-0">
                 {room.imageUrl ? (
                   <img
-                    src={room.imageUrl.startsWith("/api/") ? API_BASE + room.imageUrl : room.imageUrl}
+                    src={(() => {
+                      const base = room.imageUrl.startsWith("/api/") ? API_BASE + room.imageUrl : room.imageUrl;
+                      const ts = roomImageUpdatedAt[String(room.id)];
+                      return base + (ts ? `${base.includes("?") ? "&" : "?"}t=${ts}` : "");
+                    })()}
                     alt={room.name}
                     className="h-full w-full object-cover"
                   />
@@ -621,6 +631,7 @@ export default function RoomManagementPage() {
           </DialogHeader>
           <div className="flex-1 min-h-0 overflow-y-auto p-2 pr-3">
           <div className="space-y-4">
+            {editingRoom && (
             <div>
               <Label>Mã phòng</Label>
               <Input
@@ -630,6 +641,7 @@ export default function RoomManagementPage() {
                 className="mt-1.5 h-11"
               />
             </div>
+            )}
             <div>
               <Label>Tên phòng *</Label>
               <Input

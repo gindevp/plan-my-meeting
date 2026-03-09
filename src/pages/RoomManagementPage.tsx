@@ -991,6 +991,19 @@ export default function RoomManagementPage() {
                   <p className="text-muted-foreground italic py-3 px-3 rounded-lg bg-muted/30">Chưa có thiết bị</p>
                 )}
               </div>
+              {detailRoom.layoutData && detailRoom.layoutData.trim() && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Sơ đồ phòng (layout)</p>
+                  <div className="rounded-lg border border-border bg-muted/10 p-3 overflow-x-auto">
+                    <RoomLayoutEditor
+                      layoutData={detailRoom.layoutData}
+                      capacity={detailRoom.capacity ?? 10}
+                      onChange={() => {}}
+                      disabled
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

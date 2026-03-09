@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import type { MeetingType, MeetingLevel } from "@/data/mockData";
 import { meetingTypes as mockTypes, meetingLevels as mockLevels } from "@/data/mockData";
 import { useMeetings } from "@/hooks/useMeetings";
-import { useRooms } from "@/hooks/useRooms";
+import { useRooms, useRoomEquipments } from "@/hooks/useRooms";
 import { useUsers } from "@/hooks/useUsers";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,10 +24,11 @@ import {
   getMeetingTasksByMeeting,
 } from "@/services/api/meetings";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft, Building2, Users } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft, Building2, Users, MapPin } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { countChairsInLayout } from "@/lib/roomLayoutTemplates";
+import { API_BASE } from "@/lib/api";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 
 interface AgendaForm {
@@ -60,6 +61,14 @@ export default function CreateMeetingPage() {
   const isEditMode = Boolean(meetingId);
 
   const { data: rooms = [] } = useRooms();
+  const { data: roomEquipments = [] } = useRoomEquipments();
+  const roomsWithEquipment = useMemo(() => {
+    return (rooms as any[]).map((r: any) => {
+      const eq = roomEquipments.find((re: any) => String(re.roomId) === String(r.id));
+      return { ...r, equipment: eq?.equipment ?? [] };
+    });
+  }, [rooms, roomEquipments]);
+
   const { data: users = [] } = useUsers();
   const { data: departments = [] } = useDepartments();
 
@@ -884,16 +893,76 @@ export default function CreateMeetingPage() {
             {(meetingType === "offline" || meetingType === "hybrid") && (
               <div>
                 <Label>Phòng họp *</Label>
-                <Select value={selectedRoom} onValueChange={setSelectedRoom}>
-                  <SelectTrigger className={`mt-1.5 ${errorClass("room")}`}><SelectValue placeholder="Chọn phòng họp" /></SelectTrigger>
-                  <SelectContent>
-                    {rooms.map((r: { id: string; name: string; capacity: number; status: string }) => (
-                      <SelectItem key={r.id} value={r.id} disabled={r.status !== "available"}>
-                        {r.name} ({r.capacity} người) {r.status !== "available" ? `- ${r.status === "occupied" ? "Đang sử dụng" : r.status === "disabled" ? "Ngừng sử dụng" : "Bảo trì"}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <p className="text-xs text-muted-foreground mt-1 mb-2">Chọn một phòng từ các thẻ bên dưới</p>
+                <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[320px] overflow-y-auto p-1 rounded-lg border ${errorClass("room")} border-border bg-muted/5`}>
+                  {roomsWithEquipment.map((r: any) => {
+                    const available = r.status === "available";
+                    const selected = selectedRoom === r.id;
+                    const imgSrc = r.imageUrl
+                      ? (r.imageUrl.startsWith("/api/") ? API_BASE + r.imageUrl : r.imageUrl)
+                      : "/placeholder.svg";
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => available && setSelectedRoom(r.id)}
+                        disabled={!available}
+                        className={`relative text-left rounded-xl border-2 overflow-hidden transition-all duration-200 hover:shadow-md ${
+                          selected
+                            ? "border-primary bg-primary/5 shadow-sm ring-2 ring-primary/20"
+                            : available
+                            ? "border-border hover:border-primary/40 bg-card"
+                            : "border-border bg-muted/30 opacity-60 cursor-not-allowed"
+                        }`}
+                      >
+                        <div className="aspect-[4/3] w-full overflow-hidden bg-muted">
+                          <img
+                            src={imgSrc}
+                            alt={r.name}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <div className="p-2.5">
+                          <p className="font-semibold text-sm truncate pr-6">{r.name}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground">
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            <span>{r.floor || "—"}</span>
+                            <span>·</span>
+                            <span>{r.capacity} người</span>
+                          </div>
+                          {(r.equipment?.length ?? 0) > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {r.equipment.slice(0, 3).map((eq: { name: string; quantity?: number }, i: number) => (
+                                <span
+                                  key={i}
+                                  className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                                >
+                                  {eq.name}{eq.quantity > 1 ? ` ×${eq.quantity}` : ""}
+                                </span>
+                              ))}
+                              {r.equipment.length > 3 && (
+                                <span className="text-[10px] text-muted-foreground">+{r.equipment.length - 3}</span>
+                              )}
+                            </div>
+                          )}
+                          {!available && (
+                            <p className="text-[10px] text-amber-600 dark:text-amber-500 mt-1">
+                              {r.status === "occupied" ? "Đang sử dụng" : r.status === "maintenance" ? "Bảo trì" : "Ngừng sử dụng"}
+                            </p>
+                          )}
+                        </div>
+                        {selected && (
+                          <div className="absolute top-2 right-2 rounded-full bg-primary text-primary-foreground p-1">
+                            <CheckCircle2 className="h-4 w-4" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {roomsWithEquipment.length === 0 && (
+                  <p className="text-sm text-muted-foreground py-4 text-center">Chưa có phòng họp nào. Vui lòng liên hệ quản trị để thêm phòng.</p>
+                )}
                 {errors.room && <p className="text-xs text-destructive mt-1">{errors.room}</p>}
               </div>
             )}

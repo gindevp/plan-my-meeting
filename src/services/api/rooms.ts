@@ -1,4 +1,24 @@
-import { fetchApi } from "@/lib/api";
+import { fetchApi, API_BASE, getStoredToken, clearStoredToken } from "@/lib/api";
+
+export const ROOM_TYPES = [
+  { value: "BOARDROOM", label: "Phòng họp bàn dài (Boardroom)" },
+  { value: "CLASSROOM", label: "Phòng họp lớp học (Classroom)" },
+  { value: "THEATER", label: "Phòng hội thảo (Theater)" },
+  { value: "U_SHAPE", label: "Phòng họp chữ U (U-Shape)" },
+  { value: "WORKSHOP", label: "Phòng họp workshop" },
+] as const;
+
+export type RoomTypeValue = (typeof ROOM_TYPES)[number]["value"];
+
+export interface LayoutItem {
+  id: string;
+  type: "chair" | "table" | "podium" | "projector" | "screen" | "camera" | "whiteboard" | "door";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+}
 
 export interface RoomListItem {
   id: string;
@@ -7,7 +27,11 @@ export interface RoomListItem {
   capacity: number;
   floor: string;
   equipment: { name: string; quantity: number; equipmentType?: string }[];
-  status: "available" | "occupied" | "maintenance";
+  status: "available" | "occupied" | "maintenance" | "disabled";
+  imageUrl?: string;
+  description?: string;
+  roomType?: string;
+  layoutData?: string;
 }
 
 interface RoomPayload {
@@ -16,23 +40,51 @@ interface RoomPayload {
   location: string;
   capacity: number;
   active: boolean;
+  imageUrl?: string;
+  description?: string;
+  status?: string;
+  roomType?: string;
+  layoutData?: string;
 }
 
-export async function getRooms(params?: { page?: number; size?: number }) {
+export async function getRooms(params?: {
+  page?: number;
+  size?: number;
+  location?: string;
+  minCapacity?: number;
+  maxCapacity?: number;
+  status?: string;
+}) {
   const sp = new URLSearchParams();
   if (params?.page != null) sp.set("page", String(params.page));
   if (params?.size != null) sp.set("size", String(params.size ?? 100));
+  if (params?.location != null && params.location !== "") sp.set("location", params.location);
+  if (params?.minCapacity != null) sp.set("minCapacity", String(params.minCapacity));
+  if (params?.maxCapacity != null) sp.set("maxCapacity", String(params.maxCapacity));
+  if (params?.status != null && params.status !== "") sp.set("status", params.status);
   const q = sp.toString();
   const list = await fetchApi<unknown[]>(`/api/rooms${q ? "?" + q : ""}`);
-  return (list as any[]).map((r: any) => ({
-    id: String(r.id),
-    name: r.name ?? "",
-    code: r.code ?? "",
-    capacity: r.capacity ?? 0,
-    floor: r.location ?? "",
-    equipment: [] as { name: string; quantity: number }[],
-    status: r.active === false ? "maintenance" : "available",
-  }));
+  return (list as any[]).map((r: any) => {
+    const statusFromApi = r.status ?? (r.active === false ? "MAINTENANCE" : "ACTIVE");
+    const statusMap: Record<string, "available" | "occupied" | "maintenance" | "disabled"> = {
+      ACTIVE: "available",
+      MAINTENANCE: "maintenance",
+      DISABLED: "disabled",
+    };
+    return {
+      id: String(r.id),
+      name: r.name ?? "",
+      code: r.code ?? "",
+      capacity: r.capacity ?? 0,
+      floor: r.location ?? "",
+      equipment: [] as { name: string; quantity: number }[],
+      status: statusMap[statusFromApi] ?? "available",
+      imageUrl: r.imageUrl ?? undefined,
+      description: r.description ?? undefined,
+      roomType: r.roomType ?? undefined,
+      layoutData: r.layoutData ?? undefined,
+    };
+  });
 }
 
 export interface RoomEquipmentItem {
@@ -91,16 +143,41 @@ export async function deleteRoomEquipment(id: number | string) {
 }
 
 export async function createRoom(data: RoomPayload) {
+  const status = data.status ?? (data.active ? "ACTIVE" : "MAINTENANCE");
   return fetchApi("/api/rooms", {
     method: "POST",
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      code: data.code,
+      name: data.name,
+      location: data.location,
+      capacity: data.capacity,
+      active: data.active,
+      imageUrl: data.imageUrl || undefined,
+      description: data.description || undefined,
+      status,
+      roomType: data.roomType || undefined,
+      layoutData: data.layoutData || undefined,
+    }),
   });
 }
 
 export async function updateRoom(id: string, data: RoomPayload) {
+  const status = data.status ?? (data.active ? "ACTIVE" : "MAINTENANCE");
   return fetchApi(`/api/rooms/${id}`, {
     method: "PUT",
-    body: JSON.stringify({ ...data, id: Number(id) }),
+    body: JSON.stringify({
+      id: Number(id),
+      code: data.code,
+      name: data.name,
+      location: data.location,
+      capacity: data.capacity,
+      active: data.active,
+      imageUrl: data.imageUrl || undefined,
+      description: data.description || undefined,
+      status,
+      roomType: data.roomType || undefined,
+      layoutData: data.layoutData || undefined,
+    }),
   });
 }
 
@@ -117,4 +194,30 @@ export async function deleteRoom(id: string) {
   return fetchApi<void>(`/api/rooms/${id}`, {
     method: "DELETE",
   });
+}
+
+/** Copy layout from source room to target room. */
+export async function copyLayoutFromRoom(targetRoomId: string, sourceRoomId: string): Promise<void> {
+  return fetchApi<void>(`/api/rooms/${targetRoomId}/layout/copy-from/${sourceRoomId}`, { method: "POST" });
+}
+
+/** Upload room image (multipart). Call after create/update room. */
+export async function uploadRoomImage(roomId: string, file: File): Promise<void> {
+  const token = getStoredToken();
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}/api/rooms/${roomId}/image`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (res.status === 401) {
+    clearStoredToken();
+    window.location.href = "/login";
+    throw new Error("Phiên đăng nhập hết hạn");
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as any)?.message || err?.detail || "Lỗi tải ảnh lên");
+  }
 }

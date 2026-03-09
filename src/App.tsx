@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { AvatarVersionProvider } from "@/contexts/AvatarVersionContext";
 import { I18nProvider } from "@/contexts/I18nContext";
 import { getIsApiLoading, subscribeApiLoading } from "@/lib/api";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -62,6 +63,7 @@ const App = () => (
       <BrowserRouter>
         <I18nProvider>
           <AuthProvider>
+            <AvatarVersionProvider>
             <Routes>
               <Route path="/login" element={<ErrorBoundary><LoginPage /></ErrorBoundary>} />
               <Route path="/register" element={<RegisterPage />} />
@@ -85,6 +87,7 @@ const App = () => (
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </AvatarVersionProvider>
           </AuthProvider>
         </I18nProvider>
       </BrowserRouter>

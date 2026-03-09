@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,13 +7,22 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Save, Bell, Shield, Palette, Globe, Loader2 } from "lucide-react";
+import { Save, Bell, Shield, Palette, Globe, Loader2, User, ImagePlus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/contexts/I18nContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAvatarVersion } from "@/contexts/AvatarVersionContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getCurrentUserSettings, saveUserSetting, getSystemSettings, saveSystemSetting, type SettingDTO } from "@/services/api/settings";
-import { changePassword } from "@/lib/api";
+import { changePassword, uploadAccountAvatarFromBlob, deleteAccountAvatar } from "@/lib/api";
+import { UserAvatar } from "@/components/ui/UserAvatar";
+import { AvatarCropModal } from "@/components/ui/AvatarCropModal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type ThemeMode = "light" | "dark" | "system";
 
@@ -112,8 +121,13 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const { t, setLanguage: setAppLanguage } = useI18n();
   const { user } = useAuth();
+  const { incAvatarVersion } = useAvatarVersion();
   const queryClient = useQueryClient();
   const isAdmin = user?.authorities?.includes("ROLE_ADMIN") ?? false;
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [cropModalOpen, setCropModalOpen] = useState(false);
 
   const [themeMode, setThemeMode] = useState<ThemeMode>(defaultUiSettings.themeMode);
   const [language, setLanguage] = useState<UiSettings["language"]>(defaultUiSettings.language);
@@ -293,12 +307,108 @@ export default function SettingsPage() {
     }
   };
 
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !file.type.startsWith("image/")) {
+      toast({ variant: "destructive", title: "Lỗi", description: "Vui lòng chọn file ảnh." });
+      return;
+    }
+    setCropFile(file);
+    setCropModalOpen(true);
+  };
+
+  const handleCropSave = async (blob: Blob) => {
+    setAvatarUploading(true);
+    try {
+      await uploadAccountAvatarFromBlob(blob);
+      incAvatarVersion();
+      toast({ title: "Đã cập nhật", description: "Ảnh đại diện đã được thay đổi." });
+      setCropModalOpen(false);
+      setCropFile(null);
+    } catch (err) {
+      toast({ variant: "destructive", title: "Lỗi", description: err instanceof Error ? err.message : "Không thể tải ảnh lên." });
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setAvatarUploading(true);
+    try {
+      await deleteAccountAvatar();
+      incAvatarVersion();
+      toast({ title: "Đã xóa", description: "Ảnh đại diện đã được xóa." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Lỗi", description: err instanceof Error ? err.message : "Không thể xóa ảnh." });
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   return (
     <div className="page-content">
       <div className="opacity-0 animate-auth-fade-in-up">
         <h1 className="text-2xl font-display font-bold text-foreground">{t("settings.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">{t("settings.subtitle")}</p>
       </div>
+
+      <Card className="card-elevated mb-6 opacity-0 animate-auth-fade-in-up auth-stagger-1">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            Thông tin cá nhân
+          </CardTitle>
+          <CardDescription>Thông tin tài khoản của bạn. Nhấn vào ảnh đại diện để đổi hoặc xóa ảnh.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-6">
+          <input
+            ref={avatarFileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleAvatarFileChange}
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="rounded-full ring-2 ring-border ring-offset-2 ring-offset-background hover:ring-primary transition-all focus:outline-none focus:ring-2 focus:ring-primary"
+                disabled={avatarUploading}
+              >
+                <UserAvatar size={80} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem
+                onClick={() => avatarFileInputRef.current?.click()}
+                disabled={avatarUploading}
+              >
+                <ImagePlus className="h-4 w-4 mr-2" />
+                Đổi ảnh
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleRemoveAvatar} disabled={avatarUploading} className="text-destructive focus:text-destructive">
+                <Trash2 className="h-4 w-4 mr-2" />
+                Xóa ảnh
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <div className="space-y-1">
+            <p className="font-medium text-foreground">
+              {user?.firstName || user?.lastName ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : user?.login ?? "—"}
+            </p>
+            {user?.email && <p className="text-sm text-muted-foreground">{user.email}</p>}
+            <p className="text-xs text-muted-foreground">Đăng nhập: {user?.login ?? "—"}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <AvatarCropModal
+        open={cropModalOpen}
+        file={cropFile}
+        onClose={() => { setCropModalOpen(false); setCropFile(null); }}
+        onSave={handleCropSave}
+      />
 
       <Tabs defaultValue="general" className="space-y-6 opacity-0 animate-auth-fade-in-up auth-stagger-1">
         <TabsList>

@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { statusLabels, typeLabels } from "@/data/mockData";
+import { typeLabels } from "@/data/mockData";
 import { useMeetings } from "@/hooks/useMeetings";
 import { useAuth } from "@/contexts/AuthContext";
 import { getAllParticipants } from "@/services/api/meetings";
@@ -35,6 +35,29 @@ const statusDisplayLabels: Record<string, string> = {
   cancelled: "Hủy",
   completed: "Hoàn thành",
 };
+
+/** Trạng thái theo thời gian thực trên lịch: chỉ dùng cho cuộc họp đã phê duyệt. */
+type RuntimeStatus = "preparing" | "in_progress" | "ended";
+const runtimeStatusLabels: Record<RuntimeStatus, string> = {
+  preparing: "Đang chuẩn bị",
+  in_progress: "Đang họp",
+  ended: "Đã kết thúc",
+};
+const runtimeStatusColor: Record<RuntimeStatus, string> = {
+  preparing: "text-amber-600",
+  in_progress: "text-green-600",
+  ended: "text-muted-foreground",
+};
+
+function getMeetingRuntimeStatus(m: { startTime: string; endTime: string; status?: string }): RuntimeStatus {
+  if (m.status === "completed") return "ended";
+  const now = Date.now();
+  const start = new Date(m.startTime).getTime();
+  const end = new Date(m.endTime).getTime();
+  if (now < start) return "preparing";
+  if (now >= end) return "ended";
+  return "in_progress";
+}
 
 const dayNames = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 
@@ -127,6 +150,12 @@ export default function CalendarPage() {
   const [filterEndTime, setFilterEndTime] = useState("");
   const [filterLevel, setFilterLevel] = useState<string>("");
   const [filterType, setFilterType] = useState<string>("");
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const filteredMeetings = useMemo(() => {
     return meetingsForTabs.filter((m: any) => {
@@ -147,12 +176,18 @@ export default function CalendarPage() {
     });
   }, [meetingsForTabs, filterStartDate, filterStartTime, filterEndDate, filterEndTime, filterLevel, filterType]);
 
+  /** Chỉ cuộc họp đã phê duyệt hoặc đã hoàn thành mới hiển thị trên lịch (thời gian thực). */
+  const calendarMeetings = useMemo(
+    () => filteredMeetings.filter((m: any) => m.status === "approved" || m.status === "completed"),
+    [filteredMeetings]
+  );
+
   const today = new Date();
 
   const getMeetingsForDay = (date: Date) => {
-    return filteredMeetings.filter((m: any) => {
+    return calendarMeetings.filter((m: any) => {
       const d = new Date(m.startTime);
-      return d.toDateString() === date.toDateString() && m.status !== "cancelled";
+      return d.toDateString() === date.toDateString();
     });
   };
 
@@ -186,7 +221,7 @@ export default function CalendarPage() {
       getMeetingsForDay(currentDate).sort(
         (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
       ),
-    [filteredMeetings, currentDate]
+    [calendarMeetings, currentDate]
   );
 
   const timelineHours = Array.from({ length: 24 }, (_, i) => i);
@@ -264,7 +299,7 @@ export default function CalendarPage() {
 
     finalizeGroup();
     return result;
-  }, [dayMeetingsSorted, meetings]);
+  }, [dayMeetingsSorted]);
 
   const navigateDay = (dir: number) => {
     const d = new Date(currentDate);
@@ -307,20 +342,23 @@ export default function CalendarPage() {
     setViewMode("month");
   };
 
-  const renderMeetingCard = (m: (typeof meetings)[0]) => (
-    <div
-      key={m.id}
-      className={`bg-card border-l-[3px] ${typeBorderColor[m.type]} rounded-r px-2 py-1.5 text-[11px] leading-tight cursor-pointer hover:bg-accent/40 transition-all duration-200 hover:scale-[1.02]`}
-    >
-      <p className="font-semibold text-foreground truncate">{m.title}</p>
-      <p className="text-muted-foreground mt-0.5 flex items-center gap-1">
-        <span>⏱</span> {formatTime(m.startTime)}-{formatTime(m.endTime)}
-      </p>
-      <p className={`mt-0.5 font-medium ${statusColorMap[m.status] || "text-muted-foreground"}`}>
-        {statusDisplayLabels[m.status] || statusLabels[m.status]}
-      </p>
-    </div>
-  );
+  const renderMeetingCard = (m: (typeof meetings)[0]) => {
+    const runtimeStatus = getMeetingRuntimeStatus(m);
+    return (
+      <div
+        key={m.id}
+        className={`bg-card border-l-[3px] ${typeBorderColor[m.type]} rounded-r px-2 py-1.5 text-[11px] leading-tight cursor-pointer hover:bg-accent/40 transition-all duration-200 hover:scale-[1.02]`}
+      >
+        <p className="font-semibold text-foreground truncate">{m.title}</p>
+        <p className="text-muted-foreground mt-0.5 flex items-center gap-1">
+          <span>⏱</span> {formatTime(m.startTime)}-{formatTime(m.endTime)}
+        </p>
+        <p className={`mt-0.5 font-medium ${runtimeStatusColor[runtimeStatus] || "text-muted-foreground"}`}>
+          {runtimeStatusLabels[runtimeStatus]}
+        </p>
+      </div>
+    );
+  };
 
   const renderMiniMonth = (monthIdx: number) => {
     const year = currentDate.getFullYear();
@@ -583,6 +621,7 @@ export default function CalendarPage() {
                   const height = Math.max(((item.end - item.start) / minutesPerDay) * dayPixelHeight, 28);
                   const widthPercent = 100 / item.columnsInGroup;
                   const leftPercent = item.column * widthPercent;
+                  const runtimeStatus = getMeetingRuntimeStatus(item.meeting);
 
                   return (
                     <div
@@ -597,8 +636,8 @@ export default function CalendarPage() {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-xs font-semibold truncate">{item.meeting.title}</p>
-                        <Badge variant="outline" className="text-[9px] shrink-0">
-                          {statusLabels[item.meeting.status]}
+                        <Badge variant="outline" className={`text-[9px] shrink-0 ${runtimeStatusColor[runtimeStatus]}`}>
+                          {runtimeStatusLabels[runtimeStatus]}
                         </Badge>
                       </div>
                       <p className="text-[10px] text-muted-foreground mt-0.5 truncate">

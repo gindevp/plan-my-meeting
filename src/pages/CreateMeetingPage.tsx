@@ -27,6 +27,8 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft, Building2, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { countChairsInLayout } from "@/lib/roomLayoutTemplates";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 interface AgendaForm {
   title: string;
@@ -76,11 +78,8 @@ export default function CreateMeetingPage() {
   const [selectedRoom, setSelectedRoom] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [isOvernight, setIsOvernight] = useState(false);
+  const [startDateTime, setStartDateTime] = useState("");
+  const [endDateTime, setEndDateTime] = useState("");
   const [chairpersonId, setChairpersonId] = useState("");
   const [secretaryId, setSecretaryId] = useState<string>("");
   const [meetingLink, setMeetingLink] = useState("");
@@ -141,19 +140,8 @@ export default function CreateMeetingPage() {
     const toLocalTimeStr = (d: Date) =>
       `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
-    setStartDate(toLocalDateStr(start));
-    setStartTime(toLocalTimeStr(start));
-    setEndTime(toLocalTimeStr(end));
-
-    const startDateStrLocal = toLocalDateStr(start);
-    const endDateStrLocal = toLocalDateStr(end);
-    if (endDateStrLocal !== startDateStrLocal) {
-      setIsOvernight(true);
-      setEndDate(endDateStrLocal);
-    } else {
-      setIsOvernight(false);
-      setEndDate("");
-    }
+    setStartDateTime(`${toLocalDateStr(start)}T${toLocalTimeStr(start)}`);
+    setEndDateTime(`${toLocalDateStr(end)}T${toLocalTimeStr(end)}`);
 
     setMeetingType(existingMeeting.type || "offline");
     const levelValue = existingMeeting.level?.toLowerCase() || "department";
@@ -265,26 +253,17 @@ export default function CreateMeetingPage() {
   const validateStep1 = (): boolean => {
     const newErrors: ValidationErrors = {};
     if (!title.trim()) newErrors.title = "Vui lòng nhập tiêu đề";
-    if (!startDate) newErrors.startDate = "Vui lòng chọn ngày";
-    if (!startTime) newErrors.startTime = "Vui lòng chọn giờ bắt đầu";
-    if (!endTime) newErrors.endTime = "Vui lòng chọn giờ kết thúc";
+    if (!startDateTime) newErrors.startDateTime = "Vui lòng chọn ngày giờ bắt đầu";
+    if (!endDateTime) newErrors.endDateTime = "Vui lòng chọn ngày giờ kết thúc";
     if (!chairpersonId) newErrors.chairperson = "Vui lòng chọn người chủ trì";
     if ((meetingType === "offline" || meetingType === "hybrid") && !selectedRoom) newErrors.room = "Vui lòng chọn phòng họp";
     if ((meetingType === "online" || meetingType === "hybrid") && !meetingLink.trim()) newErrors.meetingLink = "Vui lòng nhập link họp";
 
-    if (startDate && startTime && endTime) {
-      const start = new Date(`${startDate}T${startTime}:00`);
-      let end: Date;
-
-      if (isOvernight && endDate) {
-        end = new Date(`${endDate}T${endTime}:00`);
-      } else if (!isOvernight) {
-        end = new Date(`${startDate}T${endTime}:00`);
-        if (end <= start) {
-          newErrors.timeRange = "Giờ kết thúc phải sau giờ bắt đầu (họp trong ngày)";
-        }
-      } else {
-        end = new Date(`${startDate}T${endTime}:00`);
+    if (startDateTime && endDateTime) {
+      const start = new Date(startDateTime);
+      const end = new Date(endDateTime);
+      if (end <= start) {
+        newErrors.timeRange = "Ngày giờ kết thúc phải sau ngày giờ bắt đầu";
       }
     }
 
@@ -312,6 +291,10 @@ export default function CreateMeetingPage() {
       if (room && totalParticipants > room.capacity) {
         newErrors.capacity = `Số người tham dự (${totalParticipants}) vượt sức chứa phòng (${room.capacity}). Vui lòng giảm số người hoặc chọn phòng khác.`;
       }
+      const layoutChairs = room?.layoutData ? countChairsInLayout(room.layoutData) : 0;
+      if (layoutChairs > 0 && totalParticipants > layoutChairs) {
+        newErrors.capacity = newErrors.capacity || `Số người tham dự (${totalParticipants}) lớn hơn số ghế trong layout phòng (${layoutChairs}). Vui lòng giảm số người hoặc chọn phòng khác.`;
+      }
     }
 
     setErrors(newErrors);
@@ -325,9 +308,23 @@ export default function CreateMeetingPage() {
       if (!item.title.trim()) newErrors[`agenda_title_${i}`] = "Nhập tên nội dung";
       if (!item.presenter) newErrors[`agenda_presenter_${i}`] = "Chọn người trình bày";
     });
+    const meetingMinutes = getMeetingDurationMinutes();
+    const totalAgenda = agendaItems.reduce((sum, item) => sum + (parseInt(item.duration, 10) || 0), 0);
+    if (agendaItems.length > 0 && meetingMinutes > 0 && totalAgenda > meetingMinutes) {
+      newErrors.agendaDuration =
+        `Tổng thời lượng chương trình họp (${totalAgenda} phút) vượt quá thời lượng cuộc họp (${meetingMinutes} phút). Vui lòng điều chỉnh.`;
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
+  function getMeetingDurationMinutes(): number {
+    if (!startDateTime || !endDateTime) return 0;
+    const start = new Date(startDateTime);
+    const end = new Date(endDateTime);
+    if (end <= start) return 0;
+    return Math.floor((end.getTime() - start.getTime()) / (60 * 1000));
+  }
 
   const checkConflicts = () => {
     const found: string[] = [];
@@ -335,6 +332,7 @@ export default function CreateMeetingPage() {
       const room = rooms.find((r: any) => r.id === selectedRoom);
       if (room?.status === "occupied") found.push(`Phòng ${room.name} đang được sử dụng`);
       if (room?.status === "maintenance") found.push(`Phòng ${room.name} đang bảo trì`);
+      if (room?.status === "disabled") found.push(`Phòng ${room.name} đang ngừng sử dụng`);
 
       let totalParticipants = selectedAttendees.length;
       if (meetingLevel === "company") {
@@ -343,6 +341,10 @@ export default function CreateMeetingPage() {
 
       if (room && totalParticipants > room.capacity) {
         found.push(`Số người tham dự (${totalParticipants}) vượt sức chứa phòng (${room.capacity})`);
+      }
+      const layoutChairs = room?.layoutData ? countChairsInLayout(room.layoutData) : 0;
+      if (layoutChairs > 0 && totalParticipants > layoutChairs) {
+        found.push(`Số người tham dự (${totalParticipants}) lớn hơn số ghế trong layout phòng (${layoutChairs})`);
       }
     }
     setConflicts(found);
@@ -473,20 +475,13 @@ export default function CreateMeetingPage() {
 
   const addAgendaItem = () => {
     setAgendaItems(prev => [...prev, { title: "", presenter: "", duration: "15" }]);
-    if (errors.agenda) {
+    if (errors.agenda || errors.agendaDuration) {
       setErrors(prev => {
-        const { agenda, ...rest } = prev;
+        const { agenda, agendaDuration, ...rest } = prev;
         return rest;
       });
     }
   };
-
-  useEffect(() => {
-    if (step !== 3 || agendaItems.length > 0 || isEditMode) return;
-    const presenters = meetingLevel === "company" ? selectedDepartments : selectedAttendees;
-    if (presenters.length === 0) return;
-    setAgendaItems(presenters.map(p => ({ title: "", presenter: p, duration: "15" })));
-  }, [step, meetingLevel, selectedDepartments, selectedAttendees, isEditMode]);
 
   const removeAgendaItem = (index: number) => {
     setAgendaItems(prev => prev.filter((_, i) => i !== index));
@@ -494,6 +489,12 @@ export default function CreateMeetingPage() {
 
   const updateAgendaItem = (index: number, field: keyof AgendaForm, value: string) => {
     setAgendaItems(prev => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)));
+    if (field === "duration" && errors.agendaDuration) {
+      setErrors(prev => {
+        const { agendaDuration, ...rest } = prev;
+        return rest;
+      });
+    }
   };
 
   const redirectToPlansTab = (tab: "draft" | "pending" | "approved" | "rejected" | "cancelled" | "completed") => {
@@ -504,11 +505,8 @@ export default function CreateMeetingPage() {
   const handleClearForm = () => {
     setTitle("");
     setDescription("");
-    setStartDate("");
-    setStartTime("");
-    setEndTime("");
-    setEndDate("");
-    setIsOvernight(false);
+    setStartDateTime("");
+    setEndDateTime("");
     setChairpersonId("");
     setMeetingLink("");
     setSelectedRoom("");
@@ -596,8 +594,25 @@ export default function CreateMeetingPage() {
     return { tasks, documents };
   };
 
+  const getDateTimePayload = () => ({
+    startDate: startDateTime.slice(0, 10),
+    startTime: startDateTime.slice(11, 16),
+    endTime: endDateTime.slice(11, 16),
+    endDate: endDateTime.slice(0, 10),
+  });
+
   const handleSaveDraft = async () => {
     if (!validateStep1()) return;
+    const meetingMinutes = getMeetingDurationMinutes();
+    const totalAgenda = agendaItems.reduce((sum, item) => sum + (parseInt(item.duration, 10) || 0), 0);
+    if (agendaItems.length > 0 && meetingMinutes > 0 && totalAgenda > meetingMinutes) {
+      toast({
+        variant: "destructive",
+        title: "Không thể lưu",
+        description: `Tổng thời lượng chương trình họp (${totalAgenda} phút) vượt quá thời lượng cuộc họp (${meetingMinutes} phút). Vui lòng điều chỉnh.`,
+      });
+      return;
+    }
     if (!account?.id) {
       toast({ variant: "destructive", title: "Lỗi", description: "Không xác định được người yêu cầu (requester)." });
       return;
@@ -614,10 +629,7 @@ export default function CreateMeetingPage() {
       await createMeetingFromForm({
         title,
         description,
-        startDate,
-        startTime,
-        endTime,
-        endDate: isOvernight ? endDate : undefined,
+        ...getDateTimePayload(),
         meetingType,
         meetingLevel,
         selectedRoomId: selectedRoom || undefined,
@@ -680,10 +692,7 @@ export default function CreateMeetingPage() {
           payload: {
             title,
             description,
-            startDate,
-            startTime,
-            endTime,
-            endDate: isOvernight ? endDate : undefined,
+            ...getDateTimePayload(),
             meetingType,
             meetingLevel,
             selectedRoomId: selectedRoom || undefined,
@@ -714,10 +723,7 @@ export default function CreateMeetingPage() {
         const created = await createMeetingFromForm({
           title,
           description,
-          startDate,
-          startTime,
-          endTime,
-          endDate: isOvernight ? endDate : undefined,
+          ...getDateTimePayload(),
           meetingType,
           meetingLevel,
           selectedRoomId: selectedRoom || undefined,
@@ -843,64 +849,37 @@ export default function CreateMeetingPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <Label>Ngày *</Label>
+                <Label>Ngày giờ bắt đầu *</Label>
                 <Input
-                  type="date"
-                  value={startDate}
-                  onChange={e => {
-                    setStartDate(e.target.value);
-                    if (isOvernight && e.target.value) {
-                      const nextDay = new Date(e.target.value);
-                      nextDay.setDate(nextDay.getDate() + 1);
-                      setEndDate(nextDay.toISOString().split("T")[0]);
-                    }
-                  }}
-                  className={`mt-1.5 ${errorClass("startDate")}`}
+                  type="datetime-local"
+                  min={(() => {
+                    const n = new Date();
+                    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}T${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
+                  })()}
+                  value={startDateTime}
+                  onChange={e => setStartDateTime(e.target.value)}
+                  className={`mt-1.5 ${errorClass("startDateTime")}`}
                 />
-                {errors.startDate && <p className="text-xs text-destructive mt-1">{errors.startDate}</p>}
+                {errors.startDateTime && <p className="text-xs text-destructive mt-1">{errors.startDateTime}</p>}
               </div>
               <div>
-                <Label>Bắt đầu *</Label>
-                <Input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={`mt-1.5 ${errorClass("startTime")}`} />
-                {errors.startTime && <p className="text-xs text-destructive mt-1">{errors.startTime}</p>}
-              </div>
-              <div>
-                <Label>Kết thúc *</Label>
-                <Input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className={`mt-1.5 ${errorClass("endTime")}`} />
-                {errors.endTime && <p className="text-xs text-destructive mt-1">{errors.endTime}</p>}
+                <Label>Ngày giờ kết thúc *</Label>
+                <Input
+                  type="datetime-local"
+                  min={startDateTime || (() => {
+                    const n = new Date();
+                    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}T${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
+                  })()}
+                  value={endDateTime}
+                  onChange={e => setEndDateTime(e.target.value)}
+                  className={`mt-1.5 ${errorClass("endDateTime")}`}
+                />
+                {errors.endDateTime && <p className="text-xs text-destructive mt-1">{errors.endDateTime}</p>}
                 {errors.timeRange && <p className="text-xs text-destructive mt-1">{errors.timeRange}</p>}
               </div>
             </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="isOvernight"
-                checked={isOvernight}
-                onChange={e => {
-                  const checked = e.target.checked;
-                  setIsOvernight(checked);
-                  if (checked && startDate) {
-                    const nextDay = new Date(startDate);
-                    nextDay.setDate(nextDay.getDate() + 1);
-                    setEndDate(nextDay.toISOString().split("T")[0]);
-                  } else if (!checked) {
-                    setEndDate("");
-                  }
-                }}
-                className="h-4 w-4 rounded border-gray-300"
-              />
-              <Label htmlFor="isOvernight" className="text-sm font-normal cursor-pointer">Họp qua đêm (sang ngày hôm sau)</Label>
-            </div>
-
-            {isOvernight && (
-              <div>
-                <Label>Ngày kết thúc (tự động)</Label>
-                <Input type="date" value={endDate} disabled className="mt-1.5 bg-muted cursor-not-allowed" />
-              </div>
-            )}
 
             {(meetingType === "offline" || meetingType === "hybrid") && (
               <div>
@@ -910,7 +889,7 @@ export default function CreateMeetingPage() {
                   <SelectContent>
                     {rooms.map((r: { id: string; name: string; capacity: number; status: string }) => (
                       <SelectItem key={r.id} value={r.id} disabled={r.status !== "available"}>
-                        {r.name} ({r.capacity} người) {r.status !== "available" ? `- ${r.status === "occupied" ? "Đang sử dụng" : "Bảo trì"}` : ""}
+                        {r.name} ({r.capacity} người) {r.status !== "available" ? `- ${r.status === "occupied" ? "Đang sử dụng" : r.status === "disabled" ? "Ngừng sử dụng" : "Bảo trì"}` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -934,7 +913,10 @@ export default function CreateMeetingPage() {
                 <SelectContent>
                   {users.map((u: any) => (
                     <SelectItem key={u.id} value={String(u.id)}>
-                      {(u.name || u.login) + (u.position ? ` - ${u.position}` : "")}
+                      <div className="flex items-center gap-2">
+                        <UserAvatar userId={u.id} name={u.name || u.login} size={24} />
+                        <span>{(u.name || u.login) + (u.position ? ` - ${u.position}` : "")}</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -950,7 +932,10 @@ export default function CreateMeetingPage() {
                   <SelectItem value="none">Không chọn</SelectItem>
                   {users.filter((u: any) => u.role === "secretary").map((u: any) => (
                     <SelectItem key={u.id} value={String(u.id)}>
-                      {(u.name || u.login) + (u.position ? ` - ${u.position}` : "")}
+                      <div className="flex items-center gap-2">
+                        <UserAvatar userId={u.id} name={u.name || u.login} size={24} />
+                        <span>{(u.name || u.login) + (u.position ? ` - ${u.position}` : "")}</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1076,9 +1061,7 @@ export default function CreateMeetingPage() {
                         selectedAttendees.includes(u.name || u.login) ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/30"
                       }`}
                     >
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold">
-                        {u.name?.split(" ")?.[0]?.[0] || "?"}
-                      </div>
+                      <UserAvatar userId={u.id} name={u.name || u.login} size={32} />
                       <div>
                         <p className="font-medium text-xs">{u.name || u.login}</p>
                         <p className="text-[10px] text-muted-foreground">{[u.position, u.department].filter(Boolean).join(" • ") || "—"}</p>
@@ -1207,6 +1190,12 @@ export default function CreateMeetingPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {errors.agenda && <p className="text-sm text-destructive font-medium">{errors.agenda}</p>}
+            {errors.agendaDuration && (
+              <p className="text-sm text-destructive font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {errors.agendaDuration}
+              </p>
+            )}
             {agendaItems.length === 0 && <div className="text-center py-8 text-sm text-muted-foreground">Chưa có mục nào. Nhấn "Thêm mục" để bắt đầu.</div>}
             {agendaItems.map((item, i) => (
               <div key={i} className="flex items-start gap-3 p-4 rounded-lg border border-border bg-secondary/20">

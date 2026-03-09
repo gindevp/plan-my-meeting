@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/contexts/I18nContext";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 const navigation = [
   { key: "sidebar.dashboard", href: "/", icon: LayoutDashboard },
@@ -119,9 +120,7 @@ export default function AppSidebar() {
 
       <div className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-accent text-sm font-semibold text-sidebar-primary">
-            {(user?.firstName?.[0] || user?.login?.[0] || "U").toUpperCase()}
-          </div>
+          <UserAvatar size={36} className="ring-2 ring-sidebar-accent/50" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-sidebar-accent-foreground truncate">
               {user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : user?.login ?? "User"}

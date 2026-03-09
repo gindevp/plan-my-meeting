@@ -38,31 +38,36 @@ interface EquipmentForm {
   name: string;
   code: string;
   description: string;
-  totalQuantity: number;
+  totalQuantity: number | "";
   equipmentType: string;
+  status: string;
 }
 
 const emptyForm: EquipmentForm = {
   name: "",
   code: "",
   description: "",
-  totalQuantity: 999,
+  totalQuantity: "",
   equipmentType: "",
+  status: "ACTIVE",
 };
 
 export default function EquipmentManagementPage() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const isAdmin = user?.authorities?.includes("ROLE_ADMIN") ?? false;
-  const { data: equipmentList = [] } = useEquipment();
-  const queryClient = useQueryClient();
-
+  const canManageEquipment = (user?.authorities?.includes("ROLE_ADMIN") || user?.authorities?.includes("ROLE_ROOM_MANAGER")) ?? false;
   const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState<string>("__all__");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<EquipmentForm>(emptyForm);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const { data: equipmentList = [] } = useEquipment(
+    filterStatus === "__all__" ? undefined : { status: filterStatus }
+  );
+  const queryClient = useQueryClient();
 
   const searchLower = search.toLowerCase().trim();
   const filtered = equipmentList.filter(
@@ -77,13 +82,15 @@ export default function EquipmentManagementPage() {
 
   const validateForm = (): string | null => {
     if (!form.name.trim()) return "Vui lòng nhập tên thiết bị";
-    if (form.totalQuantity < 0) return "Tổng số lượng không được âm";
-    if (form.totalQuantity > 9999) return "Tổng số lượng không được vượt quá 9999";
+    if (form.totalQuantity === "") return "Vui lòng nhập tổng số lượng";
+    const qty = Number(form.totalQuantity);
+    if (qty < 0) return "Tổng số lượng không được âm";
+    if (qty > 9999) return "Tổng số lượng không được vượt quá 9999";
     return null;
   };
 
   const handleSave = async () => {
-    if (!isAdmin) return;
+    if (!canManageEquipment) return;
     const err = validateForm();
     if (err) {
       toast({ variant: "destructive", title: "Lỗi", description: err });
@@ -96,8 +103,9 @@ export default function EquipmentManagementPage() {
           code: form.code.trim() || `EQ_${editingId}`,
           name: form.name.trim(),
           description: form.description.trim() || undefined,
-          totalQuantity: form.totalQuantity,
+          totalQuantity: form.totalQuantity === "" ? 0 : Number(form.totalQuantity),
           equipmentType: form.equipmentType || undefined,
+          status: form.status || "ACTIVE",
         });
         toast({ title: "Đã cập nhật", description: "Thiết bị đã được cập nhật." });
       } else {
@@ -105,8 +113,9 @@ export default function EquipmentManagementPage() {
           code: form.code.trim() || `EQ_${Date.now()}`,
           name: form.name.trim(),
           description: form.description.trim() || undefined,
-          totalQuantity: form.totalQuantity,
+          totalQuantity: form.totalQuantity === "" ? 0 : Number(form.totalQuantity),
           equipmentType: form.equipmentType || undefined,
+          status: form.status || "ACTIVE",
         });
         toast({ title: "Đã thêm", description: "Thiết bị đã được tạo." });
       }
@@ -122,14 +131,15 @@ export default function EquipmentManagementPage() {
   };
 
   const openCreate = () => {
-    if (!isAdmin) return;
+    if (!canManageEquipment) return;
     setEditingId(null);
     setForm(emptyForm);
+    setSaving(false);
     setModalOpen(true);
   };
 
   const openEdit = (eq: (typeof equipmentList)[0]) => {
-    if (!isAdmin) return;
+    if (!canManageEquipment) return;
     setEditingId(eq.id);
     setForm({
       name: eq.name,
@@ -137,7 +147,9 @@ export default function EquipmentManagementPage() {
       description: eq.description || "",
       totalQuantity: eq.totalQuantity ?? 999,
       equipmentType: eq.equipmentType || "",
+      status: eq.status ?? "ACTIVE",
     });
+    setSaving(false);
     setModalOpen(true);
   };
 
@@ -171,7 +183,7 @@ export default function EquipmentManagementPage() {
         title="Quản lý thiết bị"
         description="Danh mục loại thiết bị phòng họp và tổng số lượng"
       >
-        {isAdmin && (
+        {canManageEquipment && (
           <Button onClick={openCreate} className="gap-2 h-11">
             <Plus className="h-4 w-4" />
             Thêm thiết bị
@@ -190,6 +202,16 @@ export default function EquipmentManagementPage() {
             className="pl-9 h-11"
           />
         </div>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="w-[180px] h-11">
+            <SelectValue placeholder="Trạng thái" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Tất cả trạng thái</SelectItem>
+            <SelectItem value="ACTIVE">Đang sử dụng</SelectItem>
+            <SelectItem value="DISABLED">Ngừng sử dụng</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-2">
@@ -200,9 +222,10 @@ export default function EquipmentManagementPage() {
               <TableHead className="font-medium">Mã</TableHead>
               <TableHead className="font-medium">Tên thiết bị</TableHead>
               <TableHead className="font-medium">Loại thiết bị</TableHead>
+              <TableHead className="font-medium">Trạng thái</TableHead>
               <TableHead className="font-medium">Mô tả</TableHead>
               <TableHead className="font-medium text-right">Tổng số lượng</TableHead>
-              {isAdmin && <TableHead className="text-right font-medium w-24">Thao tác</TableHead>}
+              {canManageEquipment && <TableHead className="text-right font-medium w-24">Thao tác</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -230,11 +253,21 @@ export default function EquipmentManagementPage() {
                       "—"
                     )}
                   </TableCell>
+                  <TableCell>
+                    <span
+                      className={
+                        (eq.status === "DISABLED" ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary") +
+                        " inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
+                      }
+                    >
+                      {eq.status === "DISABLED" ? "Ngừng sử dụng" : "Đang sử dụng"}
+                    </span>
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
                     {eq.description || "—"}
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">{eq.totalQuantity ?? 999}</TableCell>
-                  {isAdmin && (
+                  {canManageEquipment && (
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(eq)}>
@@ -256,7 +289,7 @@ export default function EquipmentManagementPage() {
             })}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={isAdmin ? 7 : 6} className="p-0">
+                <TableCell colSpan={canManageEquipment ? 8 : 7} className="p-0">
                   <div className="flex flex-col items-center justify-center py-16 px-4 rounded-xl border-2 border-dashed border-muted-foreground/20 bg-muted/20">
                     <Search className="h-12 w-12 text-muted-foreground/50 mb-3" />
                     <p className="text-sm font-medium text-muted-foreground">
@@ -265,7 +298,7 @@ export default function EquipmentManagementPage() {
                     <p className="text-xs text-muted-foreground mt-1">
                       {search ? "Thử tìm theo tên hoặc mã khác" : "Thêm thiết bị để bắt đầu"}
                     </p>
-                    {isAdmin && !search && (
+                    {canManageEquipment && !search && (
                       <Button variant="outline" size="sm" className="mt-4 gap-1.5" onClick={openCreate}>
                         <Plus className="h-4 w-4" />
                         Thêm thiết bị
@@ -346,13 +379,32 @@ export default function EquipmentManagementPage() {
                 type="number"
                 min={0}
                 max={9999}
-                value={form.totalQuantity}
-                onChange={(e) => setForm({ ...form, totalQuantity: parseInt(e.target.value) || 0 })}
+                placeholder="Nhập số lượng"
+                value={form.totalQuantity === "" ? "" : form.totalQuantity}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setForm({ ...form, totalQuantity: v === "" ? "" : parseInt(v, 10) || 0 });
+                }}
                 className="mt-1.5 h-11"
               />
               <p className="text-xs text-muted-foreground mt-1">
                 Số lượng tối đa có thể phân bổ cho các phòng họp
               </p>
+            </div>
+            <div>
+              <Label>Trạng thái</Label>
+              <Select
+                value={form.status || "ACTIVE"}
+                onValueChange={(v) => setForm({ ...form, status: v })}
+              >
+                <SelectTrigger className="mt-1.5 h-11">
+                  <SelectValue placeholder="Trạng thái" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ACTIVE">Đang sử dụng</SelectItem>
+                  <SelectItem value="DISABLED">Ngừng sử dụng</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

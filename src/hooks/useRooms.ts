@@ -1,11 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRooms, getRoomEquipments } from "@/services/api/rooms";
 
-export function useRooms(options?: { enabled?: boolean }) {
+export interface UseRoomsParams {
+  location?: string;
+  minCapacity?: number;
+  maxCapacity?: number;
+  status?: string;
+}
+
+export function useRooms(params?: UseRoomsParams & { enabled?: boolean }) {
+  const { enabled, ...filterParams } = params ?? {};
   return useQuery({
-    queryKey: ["rooms"],
-    queryFn: () => getRooms({ size: 200 }),
-    enabled: options?.enabled ?? true,
+    queryKey: ["rooms", filterParams],
+    queryFn: () => getRooms({ size: 200, ...filterParams }),
+    enabled: enabled ?? true,
   });
 }
 

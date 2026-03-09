@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -148,14 +148,6 @@ export default function StaffPage() {
     },
   });
 
-  const getInitials = (name: string) =>
-    name
-      .split(" ")
-      .map((w) => w[0])
-      .join("")
-      .slice(-2)
-      .toUpperCase();
-
   const submitCreate = () => {
     if (!isAdmin) return;
     if (!form.login.trim() || !form.email.trim()) {
@@ -248,7 +240,7 @@ export default function StaffPage() {
                   <TableRow key={u.id} className="opacity-0 animate-auth-fade-in-up" style={{ animationDelay: `${0.2 + i * 0.03}s`, animationFillMode: "forwards" }}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8"><AvatarFallback className="text-xs">{getInitials(u.name)}</AvatarFallback></Avatar>
+                        <UserAvatar userId={u.id} name={u.name || u.login} size={32} />
                         <div>
                           <p className="font-medium text-foreground">{u.name || u.login}</p>
                           <p className="text-xs text-muted-foreground">@{u.login}</p>

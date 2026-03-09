@@ -1,7 +1,7 @@
 /**
  * API client cho JHipster meetings backend (JWT)
  */
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080";
+export const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080";
 const AUTH_TOKEN_KEY = "jhi-authenticationToken";
 
 let pendingRequests = 0;
@@ -143,6 +143,108 @@ export async function getAccount(): Promise<Account | null> {
     if (!res.ok) throw new Error("Lỗi tải thông tin tài khoản");
     return res.json();
   });
+}
+
+/** URL for current user's avatar (append ?t=version for cache bust). */
+export function getAccountAvatarUrl(version?: number): string {
+  const base = `${API_BASE}/api/account/avatar`;
+  const token = getStoredToken();
+  if (!token) return base;
+  return version != null ? `${base}?t=${version}` : base;
+}
+
+/** Upload current user's avatar (base64). */
+export async function uploadAccountAvatar(file: File): Promise<void> {
+  const base64 = await fileToBase64(file);
+  await uploadAccountAvatarFromBlob(base64, file.type || "image/jpeg");
+}
+
+/** Upload from blob (e.g. after crop). */
+export async function uploadAccountAvatarFromBlob(blob: Blob): Promise<void> {
+  const base64 = await blobToBase64(blob);
+  const contentType = blob.type || "image/jpeg";
+  const token = getStoredToken();
+  if (!token) throw new Error("Chưa đăng nhập");
+  const res = await fetch(`${API_BASE}/api/account/avatar`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ file: base64, fileContentType: contentType }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.message || err?.detail || "Không thể tải ảnh lên");
+  }
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const dataUrl = r.result as string;
+      res(dataUrl.includes(",") ? dataUrl.split(",")[1]! : dataUrl);
+    };
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const dataUrl = r.result as string;
+      res(dataUrl.includes(",") ? dataUrl.split(",")[1]! : dataUrl);
+    };
+    r.onerror = rej;
+    r.readAsDataURL(blob);
+  });
+}
+
+/** Delete current user's avatar. */
+export async function deleteAccountAvatar(): Promise<void> {
+  const token = getStoredToken();
+  if (!token) throw new Error("Chưa đăng nhập");
+  const res = await fetch(`${API_BASE}/api/account/avatar`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok && res.status !== 204) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.message || err?.detail || "Không thể xóa ảnh");
+  }
+}
+
+/** URL for a user's avatar by id (for participant/staff lists). */
+export function getUserAvatarUrl(userId: string | number, version?: number): string {
+  const base = `${API_BASE}/api/users/${userId}/avatar`;
+  return version != null ? `${base}?t=${version}` : base;
+}
+
+/** Fetch current user avatar as Blob (with auth). Returns null if 204/no image. */
+export async function fetchAccountAvatarBlob(): Promise<Blob | null> {
+  const token = getStoredToken();
+  if (!token) return null;
+  const res = await fetch(`${API_BASE}/api/account/avatar`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 204 || res.status === 404) return null;
+  if (!res.ok) return null;
+  return res.blob();
+}
+
+/** Fetch a user's avatar by id as Blob (with auth). Returns null if 204/no image. */
+export async function fetchUserAvatarBlob(userId: string | number): Promise<Blob | null> {
+  const token = getStoredToken();
+  if (!token) return null;
+  const res = await fetch(`${API_BASE}/api/users/${userId}/avatar`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 204 || res.status === 404) return null;
+  if (!res.ok) return null;
+  return res.blob();
 }
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {

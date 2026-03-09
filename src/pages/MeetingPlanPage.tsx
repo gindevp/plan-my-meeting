@@ -21,6 +21,9 @@ import {
   completeMeeting,
   respondToInvitation,
   updateParticipantAttendance,
+  requestLateCheckIn,
+  approveLateCheckIn,
+  rejectLateCheckIn,
   getIncidentsByMeeting,
   createIncident,
   createMeetingDocument,
@@ -257,6 +260,17 @@ export default function MeetingPlanPage() {
     return [...fromApi, ...onlyFromParticipant, ...fromSecretaryDept];
   }, [meetings, participantMeetingsAsList, secretaryDepartmentMeetingsAsList]);
 
+  const participantCountByMeetingId = useMemo(() => {
+    const map: Record<string, number> = {};
+    (allParticipantsForPlan as any[]).forEach((p: any) => {
+      const id = p.meeting?.id != null ? String(p.meeting.id) : null;
+      if (id) {
+        map[id] = (map[id] ?? 0) + 1;
+      }
+    });
+    return map;
+  }, [allParticipantsForPlan]);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const meetingId = params.get("meetingId");
@@ -458,6 +472,42 @@ export default function MeetingPlanPage() {
     },
     onError: (err: Error) => {
       toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể cập nhật điểm danh." });
+    },
+  });
+
+  const requestLateCheckInMutation = useMutation({
+    mutationFn: (participantId: number) => requestLateCheckIn(participantId),
+    onSuccess: () => {
+      if (selectedMeeting?.id) queryClient.invalidateQueries({ queryKey: ["participants", selectedMeeting.id] });
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      toast({ title: "Đã gửi", description: "Yêu cầu điểm danh bù đã được gửi, chờ chủ trì phê duyệt." });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể gửi yêu cầu điểm danh bù." });
+    },
+  });
+
+  const approveLateCheckInMutation = useMutation({
+    mutationFn: (participantId: number) => approveLateCheckIn(participantId),
+    onSuccess: () => {
+      if (selectedMeeting?.id) queryClient.invalidateQueries({ queryKey: ["participants", selectedMeeting.id] });
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      toast({ title: "Đã phê duyệt", description: "Đã chấp nhận điểm danh bù." });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể phê duyệt." });
+    },
+  });
+
+  const rejectLateCheckInMutation = useMutation({
+    mutationFn: (participantId: number) => rejectLateCheckIn(participantId),
+    onSuccess: () => {
+      if (selectedMeeting?.id) queryClient.invalidateQueries({ queryKey: ["participants", selectedMeeting.id] });
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      toast({ title: "Đã từ chối", description: "Đã từ chối yêu cầu điểm danh bù." });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể từ chối." });
     },
   });
 
@@ -804,7 +854,7 @@ export default function MeetingPlanPage() {
               <TableHead className="font-medium">Chủ trì</TableHead>
               <TableHead className="font-medium">Bắt đầu</TableHead>
               <TableHead className="font-medium">Kết thúc</TableHead>
-              <TableHead className="font-medium">Trạng thái</TableHead>
+              <TableHead className="font-medium">Người tạo</TableHead>
               {activeTab === "rejected" && <TableHead>Lý do từ chối</TableHead>}
               <TableHead className="text-right">Thao tác</TableHead>
             </TableRow>
@@ -821,7 +871,7 @@ export default function MeetingPlanPage() {
                   <TableCell>
                     <div>
                       <p className="font-medium text-sm">{meeting.title}</p>
-                      <p className="text-xs text-muted-foreground">{meeting.attendees?.length ?? 0} đơn vị tham gia</p>
+                      <p className="text-xs text-muted-foreground">{participantCountByMeetingId[String(meeting.id)] ?? meeting.attendees?.length ?? 0} đơn vị tham gia</p>
                     </div>
                   </TableCell>
                   <TableCell className="text-sm">{levelLabels[normalizeLevel(meeting.level) as keyof typeof levelLabels] ?? meeting.level}</TableCell>
@@ -842,9 +892,7 @@ export default function MeetingPlanPage() {
                     <div className="text-muted-foreground text-xs">{new Date(meeting.endTime).toLocaleDateString("vi-VN")}</div>
                   </TableCell>
                   <TableCell className="text-sm">
-                    <Badge variant="outline" className={`text-[11px] ${statusColorMap[meeting.status]}`}>
-                      {statusLabels[meeting.status]}
-                    </Badge>
+                    <span className="text-muted-foreground">{meeting.organizer || "—"}</span>
                   </TableCell>
                   {activeTab === "rejected" && (
                     <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate" title={meeting.rejectionReason}>
@@ -1253,50 +1301,77 @@ export default function MeetingPlanPage() {
                           <p className="text-xs text-muted-foreground mb-3">Chủ trì / Thư ký đánh dấu có mặt hoặc vắng mặt cho từng thành viên.</p>
                           <div className="space-y-2 max-h-48 overflow-y-auto">
                             {participants.filter((p: any) => p.userId || p.departmentId).map((p: any) => (
-                              <div key={p.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-border/50 last:border-0">
-                                <p className="text-sm font-medium">{p.name}</p>
-                                <div
-                                  role="group"
-                                  aria-label="Điểm danh"
-                                  className="inline-flex h-8 rounded-full bg-muted p-0.5 border border-border shrink-0"
-                                >
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    disabled={attendanceMutation.isPending}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      attendanceMutation.mutate({ participantId: p.id, attendance: "PRESENT" });
-                                    }}
-                                    className={`h-7 min-w-[4.5rem] rounded-full px-3 text-xs font-medium ${
-                                      p.attendance === "PRESENT"
-                                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                                        : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-                                    }`}
+                              <div key={p.id} className="flex flex-col gap-1.5 py-1.5 border-b border-border/50 last:border-0">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-sm font-medium">{p.name}</p>
+                                  <div
+                                    role="group"
+                                    aria-label="Điểm danh"
+                                    className="inline-flex h-8 rounded-full bg-muted p-0.5 border border-border shrink-0"
                                   >
-                                    Có mặt
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    disabled={attendanceMutation.isPending}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      attendanceMutation.mutate({ participantId: p.id, attendance: "ABSENT" });
-                                    }}
-                                    className={`h-7 min-w-[4rem] rounded-full px-3 text-xs font-medium ${
-                                      p.attendance === "ABSENT"
-                                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                                        : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-                                    }`}
-                                  >
-                                    Vắng
-                                  </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      disabled={attendanceMutation.isPending}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        attendanceMutation.mutate({ participantId: p.id, attendance: "PRESENT" });
+                                      }}
+                                      className={`h-7 min-w-[4.5rem] rounded-full px-3 text-xs font-medium ${
+                                        p.attendance === "PRESENT"
+                                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                                          : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                                      }`}
+                                    >
+                                      Có mặt
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      disabled={attendanceMutation.isPending}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        attendanceMutation.mutate({ participantId: p.id, attendance: "ABSENT" });
+                                      }}
+                                      className={`h-7 min-w-[4rem] rounded-full px-3 text-xs font-medium ${
+                                        p.attendance === "ABSENT"
+                                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                                          : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                                      }`}
+                                    >
+                                      Vắng
+                                    </Button>
+                                  </div>
                                 </div>
+                                {p.lateCheckInRequestedAt && (
+                                  <div className="flex items-center gap-2 pl-0 text-xs text-muted-foreground">
+                                    <span className="shrink-0">Yêu cầu điểm danh bù</span>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-6 text-xs"
+                                      disabled={approveLateCheckInMutation.isPending || rejectLateCheckInMutation.isPending}
+                                      onClick={() => approveLateCheckInMutation.mutate(p.id)}
+                                    >
+                                      Phê duyệt
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 text-xs text-destructive hover:text-destructive"
+                                      disabled={approveLateCheckInMutation.isPending || rejectLateCheckInMutation.isPending}
+                                      onClick={() => rejectLateCheckInMutation.mutate(p.id)}
+                                    >
+                                      Từ chối
+                                    </Button>
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -1311,40 +1386,56 @@ export default function MeetingPlanPage() {
                         <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
                           <p className="font-medium text-sm mb-2">Điểm danh</p>
                           <p className="text-xs text-muted-foreground mb-2">Xác nhận trạng thái có mặt của bạn.</p>
-                          <div
-                            role="group"
-                            aria-label="Điểm danh"
-                            className="inline-flex h-8 rounded-full bg-muted p-0.5 border border-border"
-                          >
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              disabled={attendanceMutation.isPending}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                attendanceMutation.mutate({ participantId: myParticipant.id, attendance: "PRESENT" });
-                              }}
-                              className="h-7 min-w-[4.5rem] rounded-full px-3 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div
+                              role="group"
+                              aria-label="Điểm danh"
+                              className="inline-flex h-8 rounded-full bg-muted p-0.5 border border-border"
                             >
-                              <UserCheck className="h-3 w-3 shrink-0 mr-1" />
-                              Có mặt
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              disabled={attendanceMutation.isPending}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                attendanceMutation.mutate({ participantId: myParticipant.id, attendance: "ABSENT" });
-                              }}
-                              className="h-7 min-w-[4rem] rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-                            >
-                              Vắng
-                            </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={attendanceMutation.isPending}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  attendanceMutation.mutate({ participantId: myParticipant.id, attendance: "PRESENT" });
+                                }}
+                                className="h-7 min-w-[4.5rem] rounded-full px-3 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"
+                              >
+                                <UserCheck className="h-3 w-3 shrink-0 mr-1" />
+                                Có mặt
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={attendanceMutation.isPending}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  attendanceMutation.mutate({ participantId: myParticipant.id, attendance: "ABSENT" });
+                                }}
+                                className="h-7 min-w-[4rem] rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                              >
+                                Vắng
+                              </Button>
+                            </div>
+                            {myParticipant.lateCheckInRequestedAt ? (
+                              <span className="text-xs text-muted-foreground">Đã gửi yêu cầu điểm danh bù, chờ chủ trì phê duyệt.</span>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs"
+                                disabled={requestLateCheckInMutation.isPending}
+                                onClick={() => requestLateCheckInMutation.mutate(myParticipant.id)}
+                              >
+                                Yêu cầu điểm danh bù
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </>

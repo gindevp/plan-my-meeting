@@ -446,6 +446,7 @@ export async function getParticipantsByMeeting(meetingId: number | string) {
       attendance: p.attendance,
       confirmationStatus: p.confirmationStatus ?? "PENDING",
       absentReason: p.absentReason ?? "",
+      lateCheckInRequestedAt: p.lateCheckInRequestedAt ?? null,
     }));
 }
 
@@ -506,6 +507,21 @@ export async function updateParticipantAttendance(
   });
 }
 
+/** Participant requests late check-in (điểm danh bù). */
+export async function requestLateCheckIn(participantId: number | string) {
+  return fetchApi<any>(`/api/meeting-participants/${participantId}/request-late-check-in`, { method: "POST" });
+}
+
+/** Host/secretary approves late check-in. */
+export async function approveLateCheckIn(participantId: number | string) {
+  return fetchApi<any>(`/api/meeting-participants/${participantId}/approve-late-check-in`, { method: "POST" });
+}
+
+/** Host/secretary rejects late check-in. */
+export async function rejectLateCheckIn(participantId: number | string) {
+  return fetchApi<any>(`/api/meeting-participants/${participantId}/reject-late-check-in`, { method: "POST" });
+}
+
 export async function getMeetingTasksByMeeting(meetingId: number | string) {
   const list = await fetchApi<unknown[]>("/api/meeting-tasks");
   return (list as any[])
@@ -550,33 +566,24 @@ export async function getMeetingRejectionReason(meetingId: number | string): Pro
 }
 
 export async function getIncidentsByMeeting(meetingId: number | string) {
-  const list = await fetchApi<unknown[]>("/api/incidents");
-  return (list as any[])
-    .filter((i: any) => i.meeting?.id === Number(meetingId))
-    .map((i: any) => ({
-      id: String(i.id),
-      title: i.title ?? "",
+  const { getIncidents } = await import("@/services/api/incidents");
+  const list = await getIncidents({ size: 500 });
+  return list
+    .filter((i) => i.meetingId === String(meetingId))
+    .map((i) => ({
+      id: i.id,
+      title: i.title,
       description: i.description ?? "",
       severity: i.severity ?? "",
       status: i.status ?? "",
       reportedAt: i.reportedAt ?? "",
-      reportedBy: i.reportedBy?.login ?? "",
+      reportedBy: i.reportedByLogin ?? "",
     }));
 }
 
 export async function getAllIncidents(): Promise<any[]> {
-  const list = await fetchApi<unknown[]>("/api/incidents");
-  return (list as any[]).map((i: any) => ({
-    id: String(i.id),
-    title: i.title ?? "",
-    description: i.description ?? "",
-    severity: i.severity ?? "",
-    status: i.status ?? "",
-    reportedAt: i.reportedAt ?? "",
-    reportedBy: i.reportedBy?.login ?? "",
-    meetingId: i.meeting?.id != null ? String(i.meeting.id) : "",
-    meetingTitle: i.meeting?.title ?? "",
-  }));
+  const { getIncidents } = await import("@/services/api/incidents");
+  return getIncidents({ size: 200 });
 }
 
 export async function createIncident(payload: {

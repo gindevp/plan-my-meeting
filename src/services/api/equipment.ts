@@ -6,6 +6,8 @@ export interface EquipmentListItem {
   name: string;
   description?: string;
   totalQuantity?: number;
+  equipmentType?: string;
+  status?: string;
 }
 
 interface EquipmentPayload {
@@ -13,12 +15,15 @@ interface EquipmentPayload {
   name: string;
   description?: string;
   totalQuantity?: number;
+  equipmentType?: string;
+  status?: string;
 }
 
-export async function getEquipment(params?: { page?: number; size?: number }) {
+export async function getEquipment(params?: { page?: number; size?: number; status?: string }) {
   const sp = new URLSearchParams();
   if (params?.page != null) sp.set("page", String(params.page));
   if (params?.size != null) sp.set("size", String(params.size ?? 100));
+  if (params?.status != null && params.status !== "__all__" && params.status !== "") sp.set("status", params.status);
   const q = sp.toString();
   const list = await fetchApi<unknown[]>(`/api/equipment${q ? "?" + q : ""}`);
   return (list as any[]).map((e) => ({
@@ -28,6 +33,7 @@ export async function getEquipment(params?: { page?: number; size?: number }) {
     description: e.description,
     totalQuantity: e.totalQuantity ?? 999,
     equipmentType: e.equipmentType,
+    status: e.status ?? "ACTIVE",
   }));
 }
 

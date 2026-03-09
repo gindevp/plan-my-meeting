@@ -264,7 +264,18 @@ export default function MeetingPlanPage() {
     const map: Record<string, number> = {};
     (allParticipantsForPlan as any[]).forEach((p: any) => {
       const id = p.meeting?.id != null ? String(p.meeting.id) : null;
-      if (id) {
+      if (id && p.userId != null) {
+        map[id] = (map[id] ?? 0) + 1;
+      }
+    });
+    return map;
+  }, [allParticipantsForPlan]);
+
+  const departmentCountByMeetingId = useMemo(() => {
+    const map: Record<string, number> = {};
+    (allParticipantsForPlan as any[]).forEach((p: any) => {
+      const id = p.meeting?.id != null ? String(p.meeting.id) : null;
+      if (id && p.departmentId != null) {
         map[id] = (map[id] ?? 0) + 1;
       }
     });
@@ -871,7 +882,11 @@ export default function MeetingPlanPage() {
                   <TableCell>
                     <div>
                       <p className="font-medium text-sm">{meeting.title}</p>
-                      <p className="text-xs text-muted-foreground">{participantCountByMeetingId[String(meeting.id)] ?? meeting.attendees?.length ?? 0} đơn vị tham gia</p>
+                      <p className="text-xs text-muted-foreground">
+                        {normalizeLevel(meeting.level) === "company"
+                          ? `${departmentCountByMeetingId[String(meeting.id)] ?? 0} đơn vị tham gia`
+                          : `${participantCountByMeetingId[String(meeting.id)] ?? meeting.attendees?.length ?? 0} người tham gia`}
+                      </p>
                     </div>
                   </TableCell>
                   <TableCell className="text-sm">{levelLabels[normalizeLevel(meeting.level) as keyof typeof levelLabels] ?? meeting.level}</TableCell>

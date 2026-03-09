@@ -373,10 +373,13 @@ export default function SettingsPage() {
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="rounded-full ring-2 ring-border ring-offset-2 ring-offset-background hover:ring-primary transition-all focus:outline-none focus:ring-2 focus:ring-primary"
+                className="relative rounded-full ring-2 ring-border ring-offset-2 ring-offset-background hover:ring-primary transition-all focus:outline-none focus:ring-2 focus:ring-primary group/avatar disabled:opacity-70"
                 disabled={avatarUploading}
               >
                 <UserAvatar size={80} />
+                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/30 opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none">
+                  <ImagePlus className="h-8 w-8 text-white/80" aria-hidden />
+                </span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">

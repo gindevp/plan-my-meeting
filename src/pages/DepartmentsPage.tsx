@@ -26,6 +26,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 interface DeptForm {
   name: string;
@@ -56,6 +57,7 @@ export default function DepartmentsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<DepartmentListItem | null>(null);
   const [saving, setSaving] = useState(false);
+  const [detailDept, setDetailDept] = useState<typeof deptDetails[0] | null>(null);
 
   const { data: departments = [] } = useDepartments(
     filterStatus === "__all__" ? undefined : { status: filterStatus }
@@ -80,6 +82,11 @@ export default function DepartmentsPage() {
       d.code.toLowerCase().includes(searchLower) ||
       (d.managerLogin && d.managerLogin.toLowerCase().includes(searchLower))
   );
+
+  const staffOfDetailDept = useMemo(() => {
+    if (!detailDept) return [];
+    return users.filter((u: any) => u.departmentId != null && String(u.departmentId) === String(detailDept.id));
+  }, [detailDept, users]);
 
   const validateForm = (): string | null => {
     if (!form.name.trim()) return "Nhập tên phòng ban";
@@ -238,8 +245,9 @@ export default function DepartmentsPage() {
         {filtered.map((dept, i) => (
           <Card
             key={dept.id}
-            className="card-elevated transition-all duration-300 hover:shadow-lg"
+            className="card-elevated transition-all duration-300 hover:shadow-lg cursor-pointer"
             style={{ animationDelay: `${0.15 + i * 0.04}s`, animationFillMode: "forwards" }}
+            onClick={() => setDetailDept(dept)}
           >
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
@@ -252,7 +260,7 @@ export default function DepartmentsPage() {
                     <p className="text-xs text-muted-foreground">{dept.code}</p>
                   </div>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                   {isAdmin && (
                     <>
                       <Button
@@ -309,6 +317,37 @@ export default function DepartmentsPage() {
           </Card>
         ))}
       </div>
+
+      {/* Dialog danh sách nhân viên phòng ban */}
+      <Dialog open={!!detailDept} onOpenChange={(open) => !open && setDetailDept(null)}>
+        <DialogContent className="max-w-md max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="font-display tracking-tight flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary" />
+              {detailDept ? `${detailDept.name} (${detailDept.code})` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">Danh sách nhân viên</p>
+          <div className="flex flex-col min-h-0 overflow-y-auto border rounded-lg divide-y max-h-[50vh]">
+            {detailDept && staffOfDetailDept.length === 0 && (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                Chưa có nhân viên nào trong phòng ban này.
+              </div>
+            )}
+            {detailDept && staffOfDetailDept.map((u: any) => (
+              <div key={u.id} className="flex items-center gap-3 px-3 py-2.5">
+                <UserAvatar userId={u.id} name={u.name || u.login} size={36} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-sm truncate">{u.name || u.login}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {[u.login, u.position].filter(Boolean).join(" · ") || "—"}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {filtered.length === 0 && (
         <Card className="opacity-0 animate-auth-fade-in-up auth-stagger-3">

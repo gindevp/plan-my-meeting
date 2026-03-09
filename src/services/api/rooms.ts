@@ -221,3 +221,8 @@ export async function uploadRoomImage(roomId: string, file: File): Promise<void>
     throw new Error((err as any)?.message || err?.detail || "Lỗi tải ảnh lên");
   }
 }
+
+/** Delete room image (blob). */
+export async function deleteRoomImage(roomId: string): Promise<void> {
+  await fetchApi<void>(`/api/rooms/${roomId}/image`, { method: "DELETE" });
+}

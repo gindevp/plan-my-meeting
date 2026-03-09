@@ -9,12 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import type { RoomListItem, LayoutItem } from "@/services/api/rooms";
-import { createRoom, updateRoom, deleteRoom, createRoomEquipment, deleteRoomEquipment, getRoomEquipmentsRaw, uploadRoomImage, ROOM_TYPES } from "@/services/api/rooms";
+import { createRoom, updateRoom, deleteRoom, createRoomEquipment, deleteRoomEquipment, getRoomEquipmentsRaw, uploadRoomImage, deleteRoomImage, ROOM_TYPES } from "@/services/api/rooms";
 import { API_BASE } from "@/lib/api";
 import { useRooms, useRoomEquipments } from "@/hooks/useRooms";
 import { useEquipment } from "@/hooks/useEquipment";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { Users, Plus, SquarePen, Trash2, Search, MapPin, Cpu, Eye, Minus, CircleDot, LayoutList, RectangleHorizontal, Theater, GraduationCap, LayoutGrid } from "lucide-react";
+import { Users, Plus, SquarePen, Trash2, Search, MapPin, Cpu, Eye, Minus, CircleDot, LayoutList, RectangleHorizontal, Theater, GraduationCap, LayoutGrid, ImagePlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -77,6 +77,8 @@ export default function RoomManagementPage() {
   const [showCopyLayoutSource, setShowCopyLayoutSource] = useState(false);
   const [copyLayoutSourceId, setCopyLayoutSourceId] = useState<string>("");
   const layoutCanvasContainerRef = useRef<HTMLDivElement>(null);
+  const detailImageInputRef = useRef<HTMLInputElement>(null);
+  const [detailImageUploading, setDetailImageUploading] = useState(false);
   const [layoutCanvasSize, setLayoutCanvasSize] = useState({ w: 800, h: 600 });
 
   useEffect(() => {
@@ -135,6 +137,37 @@ export default function RoomManagementPage() {
           return next;
         }, { replace: true });
       }, 300);
+    }
+  };
+
+  const handleDetailImageReplace = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !detailRoom || !file.type.startsWith("image/")) return;
+    setDetailImageUploading(true);
+    try {
+      await uploadRoomImage(detailRoom.id, file);
+      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+      setDetailRoom((prev) => (prev ? { ...prev, imageUrl: `/api/rooms/${prev.id}/image?t=${Date.now()}` } : null));
+    } catch (err) {
+      toast({ variant: "destructive", title: "Lỗi", description: err instanceof Error ? err.message : "Không thể thay ảnh." });
+    } finally {
+      setDetailImageUploading(false);
+    }
+  };
+
+  const handleDetailImageDelete = async () => {
+    if (!detailRoom) return;
+    setDetailImageUploading(true);
+    try {
+      await deleteRoomImage(detailRoom.id);
+      queryClient.invalidateQueries({ queryKey: ["rooms"] });
+      setDetailRoom((prev) => (prev ? { ...prev, imageUrl: undefined } : null));
+      toast({ title: "Đã xóa", description: "Ảnh phòng đã được xóa." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Lỗi", description: err instanceof Error ? err.message : "Không thể xóa ảnh." });
+    } finally {
+      setDetailImageUploading(false);
     }
   };
 
@@ -925,7 +958,14 @@ export default function RoomManagementPage() {
           </DialogHeader>
           {detailRoom && (
             <div className="flex flex-col min-h-0 overflow-y-auto px-6 pb-6 pt-2 space-y-4 text-sm">
-              <div className="rounded-lg overflow-hidden border border-border shrink-0">
+              <div className="rounded-lg overflow-hidden border border-border shrink-0 relative group">
+                <input
+                  ref={detailImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleDetailImageReplace}
+                />
                 <img
                   src={detailRoom.imageUrl
                     ? (detailRoom.imageUrl.startsWith("/api/") ? API_BASE + detailRoom.imageUrl : detailRoom.imageUrl)
@@ -933,6 +973,42 @@ export default function RoomManagementPage() {
                   alt={detailRoom.name}
                   className="w-full aspect-video object-cover object-center"
                 />
+                {canCrudRoom && (
+                  <>
+                    <div className="absolute inset-0 bg-black/30 group-hover:opacity-100 opacity-0 transition-opacity" aria-hidden />
+                    <div className="absolute inset-0 flex items-end justify-between p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      <div className="pointer-events-auto">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="h-8 gap-1.5 bg-background/95 hover:bg-background shadow"
+                          onClick={() => detailImageInputRef.current?.click()}
+                          disabled={detailImageUploading}
+                        >
+                          <ImagePlus className="h-3.5 w-3.5" />
+                          Thay ảnh
+                        </Button>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="h-8 gap-1.5 shadow pointer-events-auto"
+                        onClick={handleDetailImageDelete}
+                        disabled={detailImageUploading || !detailRoom.imageUrl}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Xóa
+                      </Button>
+                    </div>
+                  </>
+                )}
+                {detailImageUploading && (
+                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                    <span className="text-sm text-white font-medium">Đang xử lý...</span>
+                  </div>
+                )}
               </div>
               {detailRoom.description && (
                 <div className="shrink-0">

@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -24,7 +26,7 @@ import {
   getMeetingTasksByMeeting,
 } from "@/services/api/meetings";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft, Building2, Users, MapPin } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft, Building2, Users, MapPin, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { countChairsInLayout } from "@/lib/roomLayoutTemplates";
@@ -91,6 +93,8 @@ export default function CreateMeetingPage() {
   const [endDateTime, setEndDateTime] = useState("");
   const [chairpersonId, setChairpersonId] = useState("");
   const [secretaryId, setSecretaryId] = useState<string>("");
+  const [chairpersonOpen, setChairpersonOpen] = useState(false);
+  const [secretaryOpen, setSecretaryOpen] = useState(false);
   const [meetingLink, setMeetingLink] = useState("");
   const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
@@ -977,38 +981,110 @@ export default function CreateMeetingPage() {
 
             <div>
               <Label>Người chủ trì *</Label>
-              <Select value={chairpersonId} onValueChange={setChairpersonId}>
-                <SelectTrigger className={`mt-1.5 ${errorClass("chairperson")}`}><SelectValue placeholder="Chọn người chủ trì" /></SelectTrigger>
-                <SelectContent>
-                  {users.map((u: any) => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      <div className="flex items-center gap-2">
-                        <UserAvatar userId={u.id} name={u.name || u.login} size={24} />
-                        <span>{(u.name || u.login) + (u.position ? ` - ${u.position}` : "")}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={chairpersonOpen} onOpenChange={setChairpersonOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={chairpersonOpen}
+                    className={`w-full mt-1.5 justify-between h-10 font-normal ${errorClass("chairperson")}`}
+                  >
+                    <span className="truncate">
+                      {chairpersonId
+                        ? (() => {
+                            const u = (users as any[]).find((x: any) => String(x.id) === chairpersonId);
+                            return u ? (u.name || u.login) + (u.position ? ` - ${u.position}` : "") : "Chọn người chủ trì";
+                          })()
+                        : "Chọn người chủ trì"}
+                    </span>
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Tìm theo tên, email..." />
+                    <CommandList>
+                      <CommandEmpty>Không tìm thấy người dùng.</CommandEmpty>
+                      <CommandGroup>
+                        {(users as any[]).map((u: any) => (
+                          <CommandItem
+                            key={u.id}
+                            value={`${u.name || u.login} ${u.email || ""} ${u.position || ""}`}
+                            onSelect={() => {
+                              setChairpersonId(String(u.id));
+                              setChairpersonOpen(false);
+                            }}
+                          >
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <UserAvatar userId={u.id} name={u.name || u.login} size={24} />
+                              <span className="truncate">{(u.name || u.login) + (u.position ? ` - ${u.position}` : "")}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               {errors.chairperson && <p className="text-xs text-destructive mt-1">{errors.chairperson}</p>}
             </div>
 
             <div>
               <Label>Thư ký cuộc họp</Label>
-              <Select value={secretaryId || "none"} onValueChange={v => setSecretaryId(v === "none" ? "" : v)}>
-                <SelectTrigger className="mt-1.5"><SelectValue placeholder="Chọn thư ký (tùy chọn)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Không chọn</SelectItem>
-                  {users.filter((u: any) => u.role === "secretary").map((u: any) => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      <div className="flex items-center gap-2">
-                        <UserAvatar userId={u.id} name={u.name || u.login} size={24} />
-                        <span>{(u.name || u.login) + (u.position ? ` - ${u.position}` : "")}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={secretaryOpen} onOpenChange={setSecretaryOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={secretaryOpen}
+                    className="w-full mt-1.5 justify-between h-10 font-normal"
+                  >
+                    <span className="truncate">
+                      {secretaryId
+                        ? (() => {
+                            const u = (users as any[]).find((x: any) => String(x.id) === secretaryId);
+                            return u ? (u.name || u.login) + (u.position ? ` - ${u.position}` : "") : "Chọn thư ký (tùy chọn)";
+                          })()
+                        : "Chọn thư ký (tùy chọn)"}
+                    </span>
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Tìm theo tên, email..." />
+                    <CommandList>
+                      <CommandEmpty>Không tìm thấy thư ký.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="none"
+                          onSelect={() => {
+                            setSecretaryId("");
+                            setSecretaryOpen(false);
+                          }}
+                        >
+                          Không chọn
+                        </CommandItem>
+                        {(users as any[]).filter((u: any) => u.role === "secretary").map((u: any) => (
+                          <CommandItem
+                            key={u.id}
+                            value={`${u.name || u.login} ${u.email || ""} ${u.position || ""}`}
+                            onSelect={() => {
+                              setSecretaryId(String(u.id));
+                              setSecretaryOpen(false);
+                            }}
+                          >
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <UserAvatar userId={u.id} name={u.name || u.login} size={24} />
+                              <span className="truncate">{(u.name || u.login) + (u.position ? ` - ${u.position}` : "")}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div>

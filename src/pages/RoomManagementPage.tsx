@@ -917,15 +917,15 @@ export default function RoomManagementPage() {
 
       {/* Room Detail Modal */}
       <Dialog open={detailOpen} onOpenChange={handleCloseDetailRoom}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
             <DialogTitle className="font-display text-xl tracking-tight">
               {detailRoom?.name}
             </DialogTitle>
           </DialogHeader>
           {detailRoom && (
-            <div className="space-y-4 text-sm">
-              <div className="rounded-lg overflow-hidden border border-border">
+            <div className="flex flex-col min-h-0 overflow-y-auto px-6 pb-6 pt-2 space-y-4 text-sm">
+              <div className="rounded-lg overflow-hidden border border-border shrink-0">
                 <img
                   src={detailRoom.imageUrl
                     ? (detailRoom.imageUrl.startsWith("/api/") ? API_BASE + detailRoom.imageUrl : detailRoom.imageUrl)
@@ -935,12 +935,12 @@ export default function RoomManagementPage() {
                 />
               </div>
               {detailRoom.description && (
-                <div>
+                <div className="shrink-0">
                   <p className="text-xs font-medium text-muted-foreground mb-1">Mô tả</p>
                   <p className="text-muted-foreground whitespace-pre-wrap">{detailRoom.description}</p>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 shrink-0">
                 <div>
                   <p className="text-xs font-medium text-muted-foreground">Mã phòng</p>
                   <p className="font-mono">{detailRoom.code || "—"}</p>
@@ -968,7 +968,7 @@ export default function RoomManagementPage() {
                   </p>
                 </div>
               </div>
-              <div>
+              <div className="shrink-0">
                 <p className="text-xs font-medium text-muted-foreground mb-2">Thiết bị chi tiết</p>
                 {(detailRoom.equipment ?? []).length > 0 ? (
                   <ul className="space-y-2">
@@ -992,14 +992,15 @@ export default function RoomManagementPage() {
                 )}
               </div>
               {detailRoom.layoutData && detailRoom.layoutData.trim() && (
-                <div>
+                <div className="shrink-0">
                   <p className="text-xs font-medium text-muted-foreground mb-2">Sơ đồ phòng (layout)</p>
-                  <div className="rounded-lg border border-border bg-muted/10 p-3 overflow-x-auto">
+                  <div className="rounded-lg border border-border bg-muted/10 p-3 overflow-auto max-h-[40vh]">
                     <RoomLayoutEditor
                       layoutData={detailRoom.layoutData}
                       capacity={detailRoom.capacity ?? 10}
                       onChange={() => {}}
                       disabled
+                      readOnly
                     />
                   </div>
                 </div>

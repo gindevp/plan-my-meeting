@@ -45,6 +45,8 @@ interface RoomLayoutEditorProps {
   capacity: number;
   onChange: (layoutData: string) => void;
   disabled?: boolean;
+  /** Ẩn toolbar (kéo thả, xóa) và chỉ hiển thị sơ đồ — dùng trong xem chi tiết. */
+  readOnly?: boolean;
   /** Kích thước canvas mặc định (khi chưa lưu kích thước). Dùng size container để canvas lấp đầy bên phải. */
   defaultCanvasWidth?: number;
   defaultCanvasHeight?: number;
@@ -55,6 +57,7 @@ export function RoomLayoutEditor({
   capacity,
   onChange,
   disabled,
+  readOnly = false,
   defaultCanvasWidth = DEFAULT_CANVAS_W,
   defaultCanvasHeight = DEFAULT_CANVAS_H,
 }: RoomLayoutEditorProps) {
@@ -232,43 +235,45 @@ export function RoomLayoutEditor({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-muted-foreground">Kéo thả vào sơ đồ:</span>
-        {LAYOUT_OBJECT_TYPES.map(({ type, label }) => {
-          const Icon = TYPE_ICONS[type];
-          return (
+      {!readOnly && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">Kéo thả vào sơ đồ:</span>
+          {LAYOUT_OBJECT_TYPES.map(({ type, label }) => {
+            const Icon = TYPE_ICONS[type];
+            return (
+              <Button
+                key={type}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 px-3"
+                onClick={() => addItem(type)}
+                disabled={disabled}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("layout-type", type);
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
+              </Button>
+            );
+          })}
+          {selectedId && (
             <Button
-              key={type}
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="h-9 gap-1.5 px-3"
-              onClick={() => addItem(type)}
+              className="h-9 text-destructive hover:text-destructive"
+              onClick={removeSelected}
               disabled={disabled}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData("layout-type", type);
-                e.dataTransfer.effectAllowed = "copy";
-              }}
             >
-              <Icon className="h-4 w-4 shrink-0" />
-              {label}
+              <Trash2 className="h-4 w-4 mr-1" /> Xóa
             </Button>
-          );
-        })}
-        {selectedId && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-9 text-destructive hover:text-destructive"
-            onClick={removeSelected}
-            disabled={disabled}
-          >
-            <Trash2 className="h-4 w-4 mr-1" /> Xóa
-          </Button>
-        )}
-      </div>
+          )}
+        </div>
+      )}
       <div className="relative inline-block">
         <div
           className="relative rounded-lg border-2 border-dashed border-border bg-muted/20 overflow-hidden"
@@ -304,7 +309,7 @@ export function RoomLayoutEditor({
             );
           })}
         </div>
-        {!disabled && (
+        {!disabled && !readOnly && (
           <button
             type="button"
             className="absolute bottom-1 right-1 p-1.5 rounded-md bg-muted hover:bg-muted/80 border border-border cursor-nwse-resize shadow-sm"
@@ -318,18 +323,20 @@ export function RoomLayoutEditor({
           </button>
         )}
       </div>
-      <p className="text-xs text-muted-foreground">Kéo góc dưới phải của khung để thay đổi kích thước phòng. Khung: {canvasW} × {canvasH}</p>
+      {!readOnly && (
+        <p className="text-xs text-muted-foreground">Kéo góc dưới phải của khung để thay đổi kích thước phòng. Khung: {canvasW} × {canvasH}</p>
+      )}
       <div className="flex items-center gap-3 text-xs">
         <span className="text-muted-foreground">
           Số ghế trong layout: <strong>{chairsCount}</strong> / Sức chứa phòng: <strong>{capacity}</strong>
         </span>
-        {overCapacity && (
+        {!readOnly && overCapacity && (
           <span className="text-destructive font-medium">Số ghế vượt quá sức chứa. Cần giảm ghế hoặc tăng sức chứa.</span>
         )}
-        {noChairs && (
+        {!readOnly && noChairs && (
           <span className="text-amber-600 dark:text-amber-500">Layout chưa bố trí ghế ngồi.</span>
         )}
-        {underCapacity && !overCapacity && (
+        {!readOnly && underCapacity && !overCapacity && (
           <span className="text-muted-foreground">Layout có ít ghế hơn sức chứa phòng.</span>
         )}
       </div>

@@ -19,19 +19,18 @@ export default function LoginPage() {
   const { toast } = useToast();
   const { user, loading: authLoading, login } = useAuth();
 
-  const getLandingPath = (authorities?: string[]) =>
-    authorities?.includes("ROLE_ADMIN") ? "/" : "/calendar";
+  const getLandingPath = () => "/";
 
   useEffect(() => {
-    if (!authLoading && user) navigate(getLandingPath(user.authorities), { replace: true });
+    if (!authLoading && user) navigate(getLandingPath(), { replace: true });
   }, [user, authLoading, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const account = await login(username, password, rememberMe);
-      navigate(getLandingPath(account.authorities), { replace: true });
+      await login(username, password, rememberMe);
+      navigate(getLandingPath(), { replace: true });
     } catch (err) {
       toast({
         variant: "destructive",

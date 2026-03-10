@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Bell, Check, Clock, Loader2, Trash2 } from "lucide-react";
+import { Bell, Check, CheckCircle, Loader2, Trash2, XCircle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getNotifications,
@@ -32,10 +32,19 @@ function formatTime(createdDate: string): string {
   }
 }
 
-function typeIcon(type?: string | null) {
-  if (type === "meeting" || type?.toLowerCase().includes("meeting")) return Clock;
-  if (type === "approval" || type?.toLowerCase().includes("approval")) return Check;
-  return Bell;
+function typeIcon(n: NotificationDTO): { Icon: typeof Bell; iconClass: string } {
+  const type = (n.type ?? "").toLowerCase();
+  const title = (n.title ?? "").toLowerCase();
+  const message = (n.message ?? "").toLowerCase();
+  const isRejected = title.includes("từ chối") || title.includes("bị từ chối") || message.includes("từ chối") || message.includes("bị từ chối");
+
+  if (type.includes("approval") || type === "meeting_approval") {
+    return { Icon: isRejected ? XCircle : CheckCircle, iconClass: isRejected ? "bg-destructive/10 text-destructive" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" };
+  }
+  if (type.includes("invite") || type.includes("reminder") || type.includes("meeting")) {
+    return { Icon: Bell, iconClass: "bg-primary/10 text-primary" };
+  }
+  return { Icon: Bell, iconClass: "bg-muted text-muted-foreground" };
 }
 
 export default function NotificationsPage() {
@@ -132,7 +141,7 @@ export default function NotificationsPage() {
             <div className="divide-y divide-border">
               {notifications.map((n, i) => {
                 const read = !!n.readAt;
-                const Icon = typeIcon(n.type);
+                const { Icon, iconClass } = typeIcon(n);
                 const handleRowClick = (e: React.MouseEvent) => {
                   if ((e.target as HTMLElement).closest("button[data-delete]")) return;
                   handleMarkRead(n);
@@ -150,7 +159,7 @@ export default function NotificationsPage() {
                     } hover:bg-accent/30`}
                     style={{ animationDelay: `${0.15 + i * 0.03}s`, animationFillMode: "forwards" }}
                   >
-                    <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <div className={`mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${iconClass}`}>
                       <Icon className="h-5 w-5" />
                     </div>
                     <div className="flex-1 min-w-0">

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, Search, Check, Clock, CalendarDays, MapPin } from "lucide-react";
+import { Bell, Search, CheckCircle, CalendarDays, MapPin, XCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,21 @@ function formatTime(createdDate: string): string {
   } catch {
     return createdDate;
   }
+}
+
+function notificationIcon(n: NotificationDTO): { Icon: typeof Bell; iconClass: string } {
+  const type = (n.type ?? "").toLowerCase();
+  const title = (n.title ?? "").toLowerCase();
+  const message = (n.message ?? "").toLowerCase();
+  const isRejected = title.includes("từ chối") || title.includes("bị từ chối") || message.includes("từ chối") || message.includes("bị từ chối");
+
+  if (type.includes("approval") || type === "meeting_approval") {
+    return { Icon: isRejected ? XCircle : CheckCircle, iconClass: isRejected ? "bg-destructive/10 text-destructive" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" };
+  }
+  if (type.includes("invite") || type.includes("reminder") || type.includes("meeting")) {
+    return { Icon: Bell, iconClass: "bg-primary/10 text-primary" };
+  }
+  return { Icon: Bell, iconClass: "bg-muted text-muted-foreground" };
 }
 
 export default function AppHeader() {
@@ -239,7 +254,7 @@ export default function AppHeader() {
               ) : (
                 notifications.map((n) => {
                   const read = !!n.readAt;
-                  const type = (n.type ?? "").toLowerCase();
+                  const { Icon, iconClass } = notificationIcon(n);
                   const handleClick = () => {
                     if (!read) markAsRead(n.id);
                     if (n.linkUrl) {
@@ -255,12 +270,8 @@ export default function AppHeader() {
                         !read ? "bg-primary/5" : ""
                       }`}
                     >
-                      <div
-                        className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                          type.includes("meeting") ? "bg-info/15 text-info" : type.includes("approval") ? "bg-warning/15 text-warning" : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {type.includes("meeting") ? <Clock className="h-4 w-4" /> : type.includes("approval") ? <Check className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+                      <div className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${iconClass}`}>
+                        <Icon className="h-4 w-4" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">

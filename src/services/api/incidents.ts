@@ -11,6 +11,8 @@ export interface IncidentListItem {
   meetingTitle: string;
   reportedByLogin: string;
   reportedById?: string;
+  assignedToId?: string;
+  assignedToLogin?: string;
 }
 
 interface IncidentPayload {
@@ -35,6 +37,8 @@ function mapIncident(raw: any): IncidentListItem {
     meetingTitle: raw.meeting?.title ?? "",
     reportedByLogin: raw.reportedBy?.login ?? "",
     reportedById: raw.reportedBy?.id != null ? String(raw.reportedBy.id) : undefined,
+    assignedToId: raw.assignedTo?.id != null ? String(raw.assignedTo.id) : undefined,
+    assignedToLogin: raw.assignedTo?.login ?? "",
   };
 }
 
@@ -67,6 +71,7 @@ export async function createIncident(data: {
   severity?: string;
   meetingId: string | number;
   reportedById: string | number;
+  assignedToId?: string | number | null;
 }) {
   const res = await fetchApi<any>("/api/incidents", {
     method: "POST",
@@ -78,6 +83,9 @@ export async function createIncident(data: {
       reportedAt: new Date().toISOString(),
       meeting: { id: Number(data.meetingId) },
       reportedBy: { id: Number(data.reportedById) },
+      ...(data.assignedToId != null && data.assignedToId !== ""
+        ? { assignedTo: { id: Number(data.assignedToId) } }
+        : {}),
     }),
   });
   return mapIncident(res);
@@ -93,6 +101,7 @@ export async function updateIncident(
     reportedAt?: string;
     meetingId: string | number;
     reportedById: string | number;
+    assignedToId?: string | number | null;
   }
 ) {
   const res = await fetchApi<any>(`/api/incidents/${id}`, {
@@ -106,6 +115,9 @@ export async function updateIncident(
       reportedAt: data.reportedAt ?? new Date().toISOString(),
       meeting: { id: Number(data.meetingId) },
       reportedBy: { id: Number(data.reportedById) },
+      ...(data.assignedToId != null && data.assignedToId !== ""
+        ? { assignedTo: { id: Number(data.assignedToId) } }
+        : { assignedTo: null }),
     }),
   });
   return mapIncident(res);

@@ -10,6 +10,15 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Eye, UserCheck, UserX, Calendar, Clock, Building2, Users } from "lucide-react";
 
@@ -36,6 +45,7 @@ export default function InvitationsPage() {
   const queryClient = useQueryClient();
   const [declineParticipantId, setDeclineParticipantId] = useState<number | null>(null);
   const [declineReason, setDeclineReason] = useState("");
+  const [requiredDeclineParticipantId, setRequiredDeclineParticipantId] = useState<number | null>(null);
   const [selectModal, setSelectModal] = useState<{ participantId: number; meeting: any; departmentName: string } | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
 
@@ -290,7 +300,13 @@ export default function InvitationsPage() {
                         size="sm"
                         variant="destructive"
                         className="gap-1.5"
-                        onClick={() => setDeclineParticipantId(inv.id)}
+                        onClick={() => {
+                          if (inv.required === true) {
+                            setRequiredDeclineParticipantId(inv.id);
+                          } else {
+                            setDeclineParticipantId(inv.id);
+                          }
+                        }}
                       >
                         <UserX className="h-4 w-4" />
                         Từ chối
@@ -395,6 +411,32 @@ export default function InvitationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={requiredDeclineParticipantId != null} onOpenChange={(open) => !open && setRequiredDeclineParticipantId(null)}>
+        <AlertDialogContent className="max-w-md rounded-xl border-border shadow-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-display font-semibold tracking-tight">Từ chối tham dự</AlertDialogTitle>
+            <AlertDialogDescription className="mt-1">
+              Bạn được chỉ định bắt buộc tham dự; nếu không thể, vui lòng báo trưởng phòng để đổi người.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6 flex gap-2 sm:justify-end">
+            <AlertDialogCancel className="h-11">Hủy</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              className="h-11"
+              onClick={() => {
+                if (requiredDeclineParticipantId != null) {
+                  setDeclineParticipantId(requiredDeclineParticipantId);
+                  setRequiredDeclineParticipantId(null);
+                }
+              }}
+            >
+              Vẫn từ chối
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

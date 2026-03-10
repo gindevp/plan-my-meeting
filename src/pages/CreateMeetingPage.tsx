@@ -327,6 +327,33 @@ export default function CreateMeetingPage() {
       newErrors.agendaDuration =
         `Tổng thời lượng chương trình họp (${totalAgenda} phút) vượt quá thời lượng cuộc họp (${meetingMinutes} phút). Vui lòng điều chỉnh.`;
     }
+    // Người trình bày bắt buộc phải nằm trong thành phần tham dự (chủ trì, thư ký, hoặc danh sách mời)
+    const allowedNames = new Set<string>();
+    const addName = (raw: string) => {
+      const n = (raw ?? "").trim().toLowerCase();
+      if (n) allowedNames.add(n);
+    };
+    const hostUser = users.find((u: any) => String(u.id) === String(chairpersonId));
+    if (hostUser) {
+      addName(hostUser.name ?? hostUser.login);
+    }
+    if (secretaryId) {
+      const sec = users.find((u: any) => String(u.id) === String(secretaryId));
+      if (sec) addName(sec.name ?? sec.login);
+    }
+    selectedAttendees.forEach((a: string) => addName(a));
+    selectedDepartments.forEach((d: string) => addName(d));
+    const presentersNotInList: string[] = [];
+    agendaItems.forEach((item) => {
+      const p = (item.presenter ?? "").trim();
+      if (!p) return;
+      if (!allowedNames.has(p.toLowerCase())) presentersNotInList.push(p);
+    });
+    if (presentersNotInList.length > 0) {
+      const uniq = [...new Set(presentersNotInList)];
+      newErrors.agendaPresenterNotAttendee =
+        `Người trình bày bắt buộc phải tham dự cuộc họp. Các tên sau chưa có trong thành phần tham dự: ${uniq.join(", ")}. Vui lòng thêm vào danh sách tham dự hoặc chọn người trình bày khác.`;
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -488,9 +515,9 @@ export default function CreateMeetingPage() {
 
   const addAgendaItem = () => {
     setAgendaItems(prev => [...prev, { title: "", presenter: "", duration: "15" }]);
-    if (errors.agenda || errors.agendaDuration) {
+    if (errors.agenda || errors.agendaDuration || errors.agendaPresenterNotAttendee) {
       setErrors(prev => {
-        const { agenda, agendaDuration, ...rest } = prev;
+        const { agenda, agendaDuration, agendaPresenterNotAttendee, ...rest } = prev;
         return rest;
       });
     }
@@ -505,6 +532,12 @@ export default function CreateMeetingPage() {
     if (field === "duration" && errors.agendaDuration) {
       setErrors(prev => {
         const { agendaDuration, ...rest } = prev;
+        return rest;
+      });
+    }
+    if ((field === "presenter" || field === "title") && errors.agendaPresenterNotAttendee) {
+      setErrors(prev => {
+        const { agendaPresenterNotAttendee, ...rest } = prev;
         return rest;
       });
     }
@@ -1339,6 +1372,12 @@ export default function CreateMeetingPage() {
               <p className="text-sm text-destructive font-medium flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 {errors.agendaDuration}
+              </p>
+            )}
+            {errors.agendaPresenterNotAttendee && (
+              <p className="text-sm text-destructive font-medium flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {errors.agendaPresenterNotAttendee}
               </p>
             )}
             {agendaItems.length === 0 && <div className="text-center py-8 text-sm text-muted-foreground">Chưa có mục nào. Nhấn "Thêm mục" để bắt đầu.</div>}

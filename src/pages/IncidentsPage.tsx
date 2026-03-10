@@ -51,6 +51,7 @@ interface IncidentForm {
   status: string;
   meetingId: string;
   reportedById: string;
+  assignedToId: string;
 }
 
 const emptyForm: IncidentForm = {
@@ -60,6 +61,7 @@ const emptyForm: IncidentForm = {
   status: "OPEN",
   meetingId: "",
   reportedById: "",
+  assignedToId: "",
 };
 
 export default function IncidentsPage() {
@@ -135,6 +137,7 @@ export default function IncidentsPage() {
           reportedAt: current?.reportedAt ?? new Date().toISOString(),
           meetingId: form.meetingId,
           reportedById: form.reportedById,
+          assignedToId: form.assignedToId || null,
         });
         toast({ title: "Đã cập nhật", description: "Sự cố đã được cập nhật." });
       } else {
@@ -144,6 +147,7 @@ export default function IncidentsPage() {
           severity: form.severity,
           meetingId: form.meetingId,
           reportedById: form.reportedById,
+          assignedToId: form.assignedToId || undefined,
         });
         toast({ title: "Đã thêm", description: "Sự cố đã được tạo." });
       }
@@ -179,6 +183,7 @@ export default function IncidentsPage() {
       status: inc.status ?? "OPEN",
       meetingId: inc.meetingId ?? "",
       reportedById,
+      assignedToId: inc.assignedToId ?? "",
     });
     setSaving(false);
     setModalOpen(true);
@@ -270,6 +275,7 @@ export default function IncidentsPage() {
               <TableHead className="font-medium">Tiêu đề</TableHead>
               <TableHead className="font-medium">Cuộc họp</TableHead>
               <TableHead className="font-medium">Người báo</TableHead>
+              <TableHead className="font-medium">Người phụ trách</TableHead>
               <TableHead className="font-medium">Mức độ</TableHead>
               <TableHead className="font-medium">Trạng thái</TableHead>
               <TableHead className="font-medium">Thời gian báo</TableHead>
@@ -295,6 +301,9 @@ export default function IncidentsPage() {
                   {inc.meetingTitle || "—"}
                 </TableCell>
                 <TableCell className="text-sm">{inc.reportedByLogin || "—"}</TableCell>
+                <TableCell className="text-sm max-w-[120px] truncate" title={inc.assignedToLogin ?? ""}>
+                  {inc.assignedToLogin || "—"}
+                </TableCell>
                 <TableCell>
                   <Badge variant="outline" className={severityVariant[inc.severity] ?? ""}>
                     {getSeverityLabel(inc.severity)}
@@ -343,7 +352,7 @@ export default function IncidentsPage() {
             {filtered.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={isAdmin ? 8 : 7}
+                  colSpan={isAdmin ? 9 : 8}
                   className="p-0"
                 >
                   <div className="flex flex-col items-center justify-center py-16 px-4 rounded-xl border-2 border-dashed border-muted-foreground/20 bg-muted/20">
@@ -416,6 +425,25 @@ export default function IncidentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">— Chọn người báo —</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name || u.login}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Người phụ trách (hỗ trợ)</Label>
+              <Select
+                value={form.assignedToId || "__none__"}
+                onValueChange={(v) => setForm({ ...form, assignedToId: v === "__none__" ? "" : v })}
+              >
+                <SelectTrigger className="mt-1.5 h-11">
+                  <SelectValue placeholder="Chọn người phụ trách" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Không chọn —</SelectItem>
                   {users.map((u) => (
                     <SelectItem key={u.id} value={u.id}>
                       {u.name || u.login}
@@ -505,6 +533,10 @@ export default function IncidentsPage() {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Người báo</p>
                 <p className="mt-0.5">{detailIncident.reportedByLogin || "—"}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Người phụ trách</p>
+                <p className="mt-0.5">{detailIncident.assignedToLogin || "—"}</p>
               </div>
               <div className="flex gap-2">
                 <Badge variant="outline" className={severityVariant[detailIncident.severity] ?? ""}>

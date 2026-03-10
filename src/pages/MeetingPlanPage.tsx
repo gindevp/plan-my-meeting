@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { statusLabels, typeLabels, levelLabels, type MeetingStatus } from "@/data/mockData";
 import { useMeetings } from "@/hooks/useMeetings";
 import { useDepartments } from "@/hooks/useDepartments";
+import { useUsers } from "@/hooks/useUsers";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   approveRoom,
@@ -30,11 +31,13 @@ import {
   createPostMeetingTask,
   getAllParticipants,
   downloadMeetingDocument,
+  deleteMeetingDocument,
   updateMeetingTaskStatus,
 } from "@/services/api/meetings";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit, UserCheck, UserX, AlertTriangle, FileText, Upload, Download, Loader2, ListTodo, PlayCircle, Circle, Calendar, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -91,6 +94,7 @@ const normalizeLevel = (level?: string) => {
 export default function MeetingPlanPage() {
   const { toast } = useToast();
   const { data: meetings = [] } = useMeetings();
+  const { data: users = [] } = useUsers();
   const { user } = useAuth();
   const isAdmin = user?.authorities?.includes("ROLE_ADMIN") ?? false;
   const queryClient = useQueryClient();
@@ -136,10 +140,12 @@ export default function MeetingPlanPage() {
   const taskFileInputRef = useRef<HTMLInputElement>(null);
   const [declineParticipantId, setDeclineParticipantId] = useState<number | null>(null);
   const [declineReason, setDeclineReason] = useState("");
+  const [requiredDeclineParticipantId, setRequiredDeclineParticipantId] = useState<number | null>(null);
   const [showIncidentForm, setShowIncidentForm] = useState(false);
   const [incidentTitle, setIncidentTitle] = useState("");
   const [incidentDescription, setIncidentDescription] = useState("");
   const [incidentSeverity, setIncidentSeverity] = useState("MEDIUM");
+  const [incidentAssignedToId, setIncidentAssignedToId] = useState<string>("");
   const [minutesFiles, setMinutesFiles] = useState<File[]>([]);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [completeModalMinutesFiles, setCompleteModalMinutesFiles] = useState<File[]>([]);
@@ -367,7 +373,6 @@ export default function MeetingPlanPage() {
   };
 
   const canApproveRoom = user?.authorities?.includes("ROLE_ROOM_MANAGER") || user?.authorities?.includes("ROLE_ADMIN");
-  const canApproveUnit = user?.authorities?.includes("ROLE_UNIT_MANAGER") || user?.authorities?.includes("ROLE_ADMIN");
 
   const approveRoomMutation = useMutation({
     mutationFn: (id: string) => approveRoom(id),
@@ -633,6 +638,17 @@ export default function MeetingPlanPage() {
     },
     onError: (err: Error) => {
       toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể tải lên tài liệu." });
+    },
+  });
+
+  const deleteDocumentMutation = useMutation({
+    mutationFn: (documentId: number | string) => deleteMeetingDocument(documentId),
+    onSuccess: () => {
+      if (selectedMeeting?.id) queryClient.invalidateQueries({ queryKey: ["meeting-documents", selectedMeeting.id] });
+      toast({ title: "Đã xóa", description: "Tài liệu đã được xóa." });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể xóa tài liệu." });
     },
   });
 
@@ -1015,23 +1031,56 @@ export default function MeetingPlanPage() {
                   <p className="text-muted-foreground">{selectedMeeting.description || "-"}</p>
                 </div>
 
+                {(() => {
+                  const preMeetingTasks = (meetingTasks as any[]).filter((t: any) => String(t.type || "").toUpperCase() === "PRE_MEETING");
+                  const incompletePreMeeting = preMeetingTasks.filter((t: any) => String(t.status || "").toUpperCase() !== "DONE");
+                  const startTime = selectedMeeting.startTime ? new Date(selectedMeeting.startTime).getTime() : 0;
+                  const now = Date.now();
+                  const meetingStartedOrNear = startTime > 0 && now >= startTime - 15 * 60 * 1000;
+                  const showWarning =
+                    (selectedMeeting.status === "approved" || selectedMeeting.status === "completed") &&
+                    incompletePreMeeting.length > 0 &&
+                    meetingStartedOrNear;
+                  if (!showWarning) return null;
+                  return (
+                    <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 flex items-start gap-2 mt-3">
+                      <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-medium text-amber-800 dark:text-amber-200">Task chuẩn bị chưa hoàn thành</p>
+                        <p className="text-amber-700 dark:text-amber-300/90 mt-0.5">
+                          Có {incompletePreMeeting.length} task chuẩn bị tài liệu chưa DONE (đã đến / gần giờ họp). Người được giao cần hoàn thành và upload tài liệu.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {agendaItems.length > 0 && (
                   <>
                     <Separator />
                     <div>
                       <p className="font-medium mb-2">Chương trình họp</p>
                       <div className="space-y-2">
-                        {agendaItems.map((item: any) => (
-                          <div key={item.order} className="flex items-center gap-3 text-xs p-2 rounded-lg bg-secondary/50">
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
-                              {item.order}
-                            </span>
-                            <div className="flex-1">
-                              <p className="font-medium">{item.title}</p>
-                              <p className="text-muted-foreground">{item.presenter} • {item.duration} phút</p>
-                            </div>
-                          </div>
-                        ))}
+                        {(() => {
+                          const sorted = [...agendaItems].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
+                          const meetingStart = selectedMeeting.startTime ? new Date(selectedMeeting.startTime).getTime() : 0;
+                          return sorted.map((item: any, idx: number) => {
+                            const prevMinutes = sorted.slice(0, idx).reduce((sum: number, p: any) => sum + (Number(p.duration) || 0), 0);
+                            const startTime = meetingStart ? new Date(meetingStart + prevMinutes * 60 * 1000) : null;
+                            const timeStr = startTime ? startTime.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "";
+                            return (
+                              <div key={item.order ?? idx} className="flex items-center gap-3 text-xs p-2 rounded-lg bg-secondary/50">
+                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                                  {item.order ?? idx + 1}
+                                </span>
+                                <div className="flex-1">
+                                  <p className="font-medium">{timeStr ? `${timeStr} - ${item.title}` : item.title}</p>
+                                  <p className="text-muted-foreground">{item.presenter} • {item.duration} phút</p>
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
                       </div>
                     </div>
                   </>
@@ -1202,16 +1251,31 @@ export default function MeetingPlanPage() {
                                             {taskDocs.map((doc: any) => (
                                               <div key={doc.id} className="flex items-center justify-between gap-2 rounded bg-background px-2 py-1 border text-muted-foreground">
                                                 <span className="text-foreground">{doc.fileName || "(Không tên)"}</span>
-                                                <Button
-                                                  type="button"
-                                                  variant="ghost"
-                                                  size="sm"
-                                                  className="h-7 text-xs gap-1"
-                                                  onClick={() => downloadMeetingDocument(doc.id)}
-                                                >
-                                                  <Download className="h-3 w-3" />
-                                                  Tải xuống
-                                                </Button>
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                  <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 text-xs gap-1"
+                                                    onClick={() => downloadMeetingDocument(doc.id)}
+                                                  >
+                                                    <Download className="h-3 w-3" />
+                                                    Tải xuống
+                                                  </Button>
+                                                  {(selectedMeeting?.host?.id === user?.id || selectedMeeting?.secretaryId === user?.id || isMyTask) && (
+                                                    <Button
+                                                      type="button"
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      className="h-7 text-xs gap-1 text-destructive hover:text-destructive"
+                                                      onClick={() => deleteDocumentMutation.mutate(doc.id)}
+                                                      disabled={deleteDocumentMutation.isPending}
+                                                    >
+                                                      <Trash2 className="h-3 w-3" />
+                                                      Xóa
+                                                    </Button>
+                                                  )}
+                                                </div>
                                               </div>
                                             ))}
                                           </div>
@@ -1263,7 +1327,18 @@ export default function MeetingPlanPage() {
                               <UserCheck className="h-4 w-4" />
                               Xác nhận tham gia
                             </Button>
-                            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setDeclineParticipantId(myParticipant.id)}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5"
+                              onClick={() => {
+                                if (myParticipant.required === true) {
+                                  setRequiredDeclineParticipantId(myParticipant.id);
+                                } else {
+                                  setDeclineParticipantId(myParticipant.id);
+                                }
+                              }}
+                            >
                               <UserX className="h-4 w-4" />
                               Từ chối
                             </Button>
@@ -1476,14 +1551,30 @@ export default function MeetingPlanPage() {
                         <div className="space-y-2 pt-2 border-t">
                           <Input placeholder="Tiêu đề" value={incidentTitle} onChange={e => setIncidentTitle(e.target.value)} className="text-sm" />
                           <Textarea placeholder="Mô tả" value={incidentDescription} onChange={e => setIncidentDescription(e.target.value)} rows={2} className="text-sm" />
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2 items-center">
                             <select value={incidentSeverity} onChange={e => setIncidentSeverity(e.target.value)} className="rounded-md border px-2 py-1.5 text-sm">
                               <option value="LOW">Thấp</option>
                               <option value="MEDIUM">Trung bình</option>
                               <option value="HIGH">Cao</option>
                             </select>
-                            <Button size="sm" onClick={() => { if (incidentTitle.trim()) createIncidentMutation.mutate({ meetingId: selectedMeeting.id, reportedById: user?.id!, title: incidentTitle.trim(), description: incidentDescription.trim(), severity: incidentSeverity }); }} disabled={createIncidentMutation.isPending || !incidentTitle.trim()}>Gửi</Button>
-                            <Button size="sm" variant="ghost" onClick={() => { setShowIncidentForm(false); setIncidentTitle(""); setIncidentDescription(""); }}>Hủy</Button>
+                            <div className="flex items-center gap-2">
+                              <Label className="text-xs text-muted-foreground whitespace-nowrap">Gửi tới người phụ trách:</Label>
+                              <Select value={incidentAssignedToId || "none"} onValueChange={v => setIncidentAssignedToId(v === "none" ? "" : v)}>
+                                <SelectTrigger className="w-[200px] h-8 text-xs">
+                                  <SelectValue placeholder="Không chọn" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">Không chọn</SelectItem>
+                                  {(users as any[]).map((u: any) => (
+                                    <SelectItem key={u.id} value={String(u.id)}>
+                                      {u.name || u.login}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button size="sm" onClick={() => { if (incidentTitle.trim()) createIncidentMutation.mutate({ meetingId: selectedMeeting.id, reportedById: user?.id!, title: incidentTitle.trim(), description: incidentDescription.trim(), severity: incidentSeverity, assignedToId: incidentAssignedToId || undefined }); }} disabled={createIncidentMutation.isPending || !incidentTitle.trim()}>Gửi</Button>
+                            <Button size="sm" variant="ghost" onClick={() => { setShowIncidentForm(false); setIncidentTitle(""); setIncidentDescription(""); setIncidentAssignedToId(""); }}>Hủy</Button>
                           </div>
                         </div>
                       ) : null}
@@ -1493,7 +1584,7 @@ export default function MeetingPlanPage() {
                           {meetingIncidents.map((inc: any) => (
                             <div key={inc.id} className="rounded border bg-muted/30 px-2 py-1.5 text-xs">
                               <p className="font-medium">{inc.title}</p>
-                              <p className="text-muted-foreground">{inc.severity} • {inc.reportedBy} • {inc.reportedAt ? new Date(inc.reportedAt).toLocaleString("vi-VN") : ""}</p>
+                              <p className="text-muted-foreground">{inc.severity} • {inc.reportedBy} • {inc.reportedAt ? new Date(inc.reportedAt).toLocaleString("vi-VN") : ""}{inc.assignedTo ? ` • Gửi tới: ${inc.assignedTo}` : ""}</p>
                             </div>
                           ))}
                         </div>
@@ -1534,7 +1625,7 @@ export default function MeetingPlanPage() {
                   </>
                 )}
 
-                {(canApproveRoom || canApproveUnit) && selectedMeeting.status === "pending" && (
+                {canApproveRoom && selectedMeeting.status === "pending" && (
                   <>
                     <Separator />
                     <div className="flex gap-2 justify-end">
@@ -1633,9 +1724,22 @@ export default function MeetingPlanPage() {
                             {(meetingDocuments as any[]).filter((d: any) => (d.docType || "").toUpperCase() === "MINUTES").map((d: any) => (
                               <div key={d.id} className="flex items-center justify-between gap-2 text-sm rounded-md border bg-success/5 border-success/20 px-3 py-2">
                                 <span className="truncate flex-1 min-w-0">{d.fileName || "(Không tên)"}</span>
-                                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 shrink-0" onClick={() => downloadMeetingDocument(d.id)}>
-                                  <Download className="h-3 w-3" /> Tải xuống
-                                </Button>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => downloadMeetingDocument(d.id)}>
+                                    <Download className="h-3 w-3" /> Tải xuống
+                                  </Button>
+                                  {(selectedMeeting?.host?.id === user?.id || selectedMeeting?.secretaryId === user?.id) && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 text-xs gap-1 text-destructive hover:text-destructive"
+                                      onClick={() => deleteDocumentMutation.mutate(d.id)}
+                                      disabled={deleteDocumentMutation.isPending}
+                                    >
+                                      <Trash2 className="h-3 w-3" /> Xóa
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -1782,9 +1886,22 @@ export default function MeetingPlanPage() {
                         {(meetingDocuments as any[]).filter((d: any) => (d.docType || "").toUpperCase() === "MINUTES").map((d: any) => (
                           <div key={d.id} className="flex items-center justify-between gap-2 text-sm rounded-md border bg-success/5 border-success/20 px-3 py-2">
                             <span className="truncate flex-1 min-w-0">{d.fileName || "(Không tên)"}</span>
-                            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 shrink-0" onClick={() => downloadMeetingDocument(d.id)}>
-                              <Download className="h-3 w-3" /> Tải xuống
-                            </Button>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => downloadMeetingDocument(d.id)}>
+                                <Download className="h-3 w-3" /> Tải xuống
+                              </Button>
+                              {(selectedMeeting?.host?.id === user?.id || selectedMeeting?.secretaryId === user?.id) && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 text-xs gap-1 text-destructive hover:text-destructive"
+                                  onClick={() => deleteDocumentMutation.mutate(d.id)}
+                                  disabled={deleteDocumentMutation.isPending}
+                                >
+                                  <Trash2 className="h-3 w-3" /> Xóa
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1938,6 +2055,32 @@ export default function MeetingPlanPage() {
                   Xóa cuộc họp
                 </>
               )}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={requiredDeclineParticipantId != null} onOpenChange={(open) => !open && setRequiredDeclineParticipantId(null)}>
+        <AlertDialogContent className="max-w-md rounded-xl border-border shadow-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-lg font-display font-semibold tracking-tight">Từ chối tham dự</AlertDialogTitle>
+            <AlertDialogDescription className="mt-1">
+              Bạn được chỉ định bắt buộc tham dự; nếu không thể, vui lòng báo trưởng phòng để đổi người.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6 flex gap-2 sm:justify-end">
+            <AlertDialogCancel className="h-11">Hủy</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              className="h-11"
+              onClick={() => {
+                if (requiredDeclineParticipantId != null) {
+                  setDeclineParticipantId(requiredDeclineParticipantId);
+                  setRequiredDeclineParticipantId(null);
+                }
+              }}
+            >
+              Vẫn từ chối
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

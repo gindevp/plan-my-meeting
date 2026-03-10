@@ -460,6 +460,7 @@ export async function getAllParticipants(): Promise<any[]> {
     departmentName: p.department?.name ?? "",
     confirmationStatus: p.confirmationStatus ?? "PENDING",
     absentReason: p.absentReason ?? "",
+    required: p.isRequired === true,
     meeting: p.meeting
       ? {
           id: String(p.meeting.id),
@@ -578,6 +579,7 @@ export async function getIncidentsByMeeting(meetingId: number | string) {
       status: i.status ?? "",
       reportedAt: i.reportedAt ?? "",
       reportedBy: i.reportedByLogin ?? "",
+      assignedTo: i.assignedToLogin ?? "",
     }));
 }
 
@@ -592,18 +594,23 @@ export async function createIncident(payload: {
   title: string;
   description?: string;
   severity?: string;
+  assignedToId?: number | string | null;
 }) {
+  const body: any = {
+    title: payload.title,
+    description: payload.description ?? "",
+    severity: payload.severity ?? "MEDIUM",
+    status: "OPEN",
+    reportedAt: new Date().toISOString(),
+    meeting: { id: Number(payload.meetingId) },
+    reportedBy: { id: Number(payload.reportedById) },
+  };
+  if (payload.assignedToId != null && payload.assignedToId !== "") {
+    body.assignedTo = { id: Number(payload.assignedToId) };
+  }
   return fetchApi<any>("/api/incidents", {
     method: "POST",
-    body: JSON.stringify({
-      title: payload.title,
-      description: payload.description ?? "",
-      severity: payload.severity ?? "MEDIUM",
-      status: "OPEN",
-      reportedAt: new Date().toISOString(),
-      meeting: { id: Number(payload.meetingId) },
-      reportedBy: { id: Number(payload.reportedById) },
-    }),
+    body: JSON.stringify(body),
   });
 }
 
@@ -644,6 +651,11 @@ export async function downloadMeetingDocument(documentId: number | string): Prom
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** Delete a meeting document (requester, host, secretary, uploader or task assignee). */
+export async function deleteMeetingDocument(documentId: number | string): Promise<void> {
+  await fetchApi(`/api/meeting-documents/${documentId}`, { method: "DELETE" });
 }
 
 function normalizeDueAt(dueAt?: string): string | null {

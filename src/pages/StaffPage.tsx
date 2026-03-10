@@ -192,7 +192,14 @@ export default function StaffPage() {
         {[
           { label: "Tổng nhân viên", value: users.length },
           { label: "Quản trị viên", value: users.filter((u) => u.role === "admin").length },
-          { label: "Phòng ban", value: new Set(users.map((u) => u.department).filter(Boolean)).size },
+          {
+            label: "Phòng ban",
+            value: new Set(
+              users
+                .map((u) => (u.departmentId != null ? `id:${u.departmentId}` : u.department ? `name:${u.department}` : null))
+                .filter(Boolean)
+            ).size,
+          },
           { label: "Thư ký", value: users.filter((u) => u.role === "secretary").length },
         ].map((s, i) => (
           <Card key={s.label} className="card-elevated opacity-0 animate-auth-fade-in-up transition-all duration-300 hover:shadow-lg" style={{ animationDelay: `${0.1 + i * 0.05}s`, animationFillMode: "forwards" }}>

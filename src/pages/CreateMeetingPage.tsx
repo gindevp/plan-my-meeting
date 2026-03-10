@@ -468,11 +468,21 @@ export default function CreateMeetingPage() {
   const validateTasksForAttendee = (attendee: string) => {
     const attendeeTasks = taskAssignments.filter(assignment => assignment.attendee === attendee);
     const nextErrors: Record<string, string> = {};
+    const now = new Date();
+    const meetingStart = startDateTime ? new Date(startDateTime) : null;
 
     attendeeTasks.forEach(assignment => {
       if (!assignment.title.trim()) nextErrors[`${assignment.key}-title`] = "Vui lòng nhập tiêu đề task";
-      if (!assignment.dueAt) nextErrors[`${assignment.key}-dueAt`] = "Vui lòng chọn hạn xử lý";
+      if (!assignment.dueAt) {
+        nextErrors[`${assignment.key}-dueAt`] = "Vui lòng chọn hạn xử lý";
+      } else {
+        const due = new Date(assignment.dueAt);
+        if (due <= now) nextErrors[`${assignment.key}-dueAt`] = "Thời hạn giao task phải sau thời gian hiện tại.";
+        else if (meetingStart && due >= meetingStart) nextErrors[`${assignment.key}-dueAt`] = "Thời hạn giao task phải trước thời gian bắt đầu cuộc họp.";
+      }
+      const remindVal = Number(assignment.remindBeforeMinutes);
       if (!String(assignment.remindBeforeMinutes).trim()) nextErrors[`${assignment.key}-remind`] = "Vui lòng nhập nhắc trước";
+      else if (Number.isNaN(remindVal) || remindVal < 1) nextErrors[`${assignment.key}-remind`] = "Nhắc trước phải lớn hơn 0 (phút).";
     });
 
     setTaskModalErrors(nextErrors);
@@ -1331,12 +1341,19 @@ export default function CreateMeetingPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         <div>
                           <Label className="text-xs">Hạn xử lý (due_at)</Label>
-                          <Input type="datetime-local" value={assignment.dueAt} onChange={e => updateTaskAssignment(assignment.key, "dueAt", e.target.value)} className="mt-1" />
+                          <Input
+                            type="datetime-local"
+                            min={(() => { const t = new Date(); return t.toISOString().slice(0, 16); })()}
+                            max={startDateTime ? startDateTime.slice(0, 16) : undefined}
+                            value={assignment.dueAt}
+                            onChange={e => updateTaskAssignment(assignment.key, "dueAt", e.target.value)}
+                            className="mt-1"
+                          />
                           {taskModalErrors[`${assignment.key}-dueAt`] && <p className="text-xs text-destructive mt-1">{taskModalErrors[`${assignment.key}-dueAt`]}</p>}
                         </div>
                         <div>
                           <Label className="text-xs">Nhắc trước (phút)</Label>
-                          <Input type="number" min={0} placeholder="VD: 30" value={assignment.remindBeforeMinutes} onChange={e => updateTaskAssignment(assignment.key, "remindBeforeMinutes", e.target.value)} className="mt-1" />
+                          <Input type="number" min={1} placeholder="VD: 30" value={assignment.remindBeforeMinutes} onChange={e => updateTaskAssignment(assignment.key, "remindBeforeMinutes", e.target.value)} className="mt-1" />
                           {taskModalErrors[`${assignment.key}-remind`] && <p className="text-xs text-destructive mt-1">{taskModalErrors[`${assignment.key}-remind`]}</p>}
                         </div>
                       </div>

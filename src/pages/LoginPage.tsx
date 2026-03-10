@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, PasswordInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LogIn, Loader2, ArrowRight } from "lucide-react";
@@ -55,9 +55,9 @@ export default function LoginPage() {
 
   return (
     <AuthLayout
-      title="Quản lý cuộc họp"
-      subtitle="chuyên nghiệp"
-      description="Lên lịch, theo dõi và quản lý cuộc họp hiệu quả. Tất cả trong một nền tảng."
+      title="MeetViet"
+      subtitle="nền tảng quản lý cuộc họp"
+      description="Lên lịch, theo dõi và quản lý cuộc họp hiệu quả. Tất cả trong một nền tảng MeetViet."
     >
       <Card className="border-0 shadow-2xl shadow-primary/10 overflow-hidden opacity-0 animate-auth-scale-in" style={{ animationDelay: "1.8s", animationFillMode: "forwards" }}>
             <CardHeader className="space-y-2 pb-6">
@@ -80,9 +80,8 @@ export default function LoginPage() {
                 </div>
                 <div className="space-y-2 opacity-0 animate-auth-fade-in-up auth-stagger-2">
                   <Label htmlFor="password">Mật khẩu</Label>
-                  <Input
+                  <PasswordInput
                     id="password"
-                    type="password"
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}

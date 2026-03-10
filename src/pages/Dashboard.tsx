@@ -177,21 +177,21 @@ export default function Dashboard() {
   return (
     <div className="page-content">
       <div className="opacity-0 animate-auth-fade-in-up">
-        <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">Tổng quan</h1>
-        <p className="text-sm text-muted-foreground mt-1">Xin chào, {displayName}. Đây là tóm tắt hoạt động họp hôm nay.</p>
+        <h1 className="text-lg sm:text-xl lg:text-2xl font-display font-bold tracking-tight text-foreground">Tổng quan</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">Xin chào, {displayName}. Đây là tóm tắt hoạt động họp hôm nay.</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4 lg:gap-5">
         {stats.map((stat, i) => (
           <Card key={stat.label} className={`card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up ${staggerClasses[i]} transition-all duration-300 hover:scale-[1.02] hover:shadow-lg group`}>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{stat.label}</p>
-                  <p className="text-3xl font-display font-bold mt-1">{stat.value}</p>
+            <CardContent className="p-3 sm:p-4 lg:p-5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide truncate">{stat.label}</p>
+                  <p className="text-xl sm:text-2xl lg:text-3xl font-display font-bold mt-0.5 sm:mt-1">{stat.value}</p>
                 </div>
-                <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-secondary ${stat.color} transition-transform duration-300 group-hover:scale-110`}>
-                  <stat.icon className="h-5 w-5" />
+                <div className={`flex h-8 w-8 sm:h-9 sm:w-9 lg:h-11 lg:w-11 shrink-0 items-center justify-center rounded-lg sm:rounded-xl bg-secondary ${stat.color} transition-transform duration-300 group-hover:scale-110`}>
+                  <stat.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 lg:h-5 lg:w-5" />
                 </div>
               </div>
             </CardContent>
@@ -200,14 +200,14 @@ export default function Dashboard() {
       </div>
 
       {/* Charts + Upcoming */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
         {/* Bar chart */}
         <Card className="lg:col-span-2 card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-2 transition-all duration-300 hover:shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-display">Cuộc họp trong tuần</CardTitle>
+          <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-sm sm:text-base font-display">Cuộc họp trong tuần</CardTitle>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <ResponsiveContainer width="100%" height={200}>
               <BarChart data={weeklyData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 90%)" />
                 <XAxis dataKey="day" tick={{ fontSize: 12 }} />
@@ -228,18 +228,18 @@ export default function Dashboard() {
 
         {/* Pie chart */}
         <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-3 transition-all duration-300 hover:shadow-lg">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-display">Theo hình thức</CardTitle>
+          <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-sm sm:text-base font-display">Theo hình thức</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col items-center">
-            <ResponsiveContainer width="100%" height={180}>
+          <CardContent className="flex flex-col items-center px-3 sm:px-6 pb-3 sm:pb-6">
+            <ResponsiveContainer width="100%" height={150}>
               <PieChart>
                 <Pie
                   data={meetingsByType}
                   cx="50%"
                   cy="50%"
-                  innerRadius={45}
-                  outerRadius={75}
+                  innerRadius={32}
+                  outerRadius={52}
                   paddingAngle={4}
                   dataKey="value"
                 >
@@ -250,7 +250,7 @@ export default function Dashboard() {
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
-            <div className="flex gap-4 mt-2">
+            <div className="flex flex-wrap gap-2 sm:gap-4 mt-1 sm:mt-2 justify-center">
               {meetingsByType.map((item) => (
                 <div key={item.name} className="flex items-center gap-1.5 text-xs">
                   <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
@@ -264,13 +264,13 @@ export default function Dashboard() {
 
       {/* Upcoming Meetings */}
       <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-4 transition-all duration-300 hover:shadow-lg">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-display">Cuộc họp sắp tới</CardTitle>
+        <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
+          <CardTitle className="text-sm sm:text-base font-display">Cuộc họp sắp tới</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y divide-border">
             {upcomingMeetings.length === 0 ? (
-              <p className="px-6 py-8 text-center text-sm text-muted-foreground">Không có cuộc họp sắp tới</p>
+              <p className="px-4 sm:px-6 py-5 sm:py-8 text-center text-xs sm:text-sm text-muted-foreground">Không có cuộc họp sắp tới</p>
             ) : (
               upcomingMeetings.map((meeting, i) => (
               <div
@@ -279,22 +279,22 @@ export default function Dashboard() {
                 tabIndex={0}
                 onClick={() => navigate(`/plans?tab=approved&meetingId=${meeting.id}`)}
                 onKeyDown={(e) => e.key === "Enter" && navigate(`/plans?tab=approved&meetingId=${meeting.id}`)}
-                className="flex items-center gap-4 px-6 py-4 hover:bg-secondary/30 transition-all duration-200 opacity-0 animate-auth-fade-in-up cursor-pointer"
+                className="flex items-center gap-2 sm:gap-4 px-3 sm:px-6 py-3 sm:py-4 hover:bg-secondary/30 transition-all duration-200 opacity-0 animate-auth-fade-in-up cursor-pointer"
                 style={{ animationDelay: `${0.5 + i * 0.08}s`, animationFillMode: "forwards" }}
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <CalendarDays className="h-5 w-5" />
+                <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <CalendarDays className="h-4 w-4 sm:h-5 sm:w-5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{meeting.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="text-xs sm:text-sm font-medium truncate">{meeting.title}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
                     {new Date(meeting.startTime).toLocaleDateString('vi-VN')} • {new Date(meeting.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - {new Date(meeting.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
-                <Badge variant="outline" className={typeColorMap[meeting.type] ?? typeColorMap.offline}>
+                <Badge variant="outline" className={`text-[10px] sm:text-xs shrink-0 ${typeColorMap[meeting.type] ?? typeColorMap.offline}`}>
                   {typeLabels[meeting.type] ?? typeLabels.offline}
                 </Badge>
-                <Badge variant="outline" className={statusColorMap[meeting.status] ?? statusColorMap.approved}>
+                <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] sm:text-xs shrink-0 ${statusColorMap[meeting.status] ?? statusColorMap.approved}`}>
                   {statusLabels[meeting.status] ?? statusLabels.approved}
                 </Badge>
               </div>

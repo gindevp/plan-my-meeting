@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, PasswordInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,12 +17,14 @@ import { getCurrentUserSettings, saveUserSetting, getSystemSettings, saveSystemS
 import { changePassword, uploadAccountAvatarFromBlob, deleteAccountAvatar } from "@/lib/api";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { AvatarCropModal } from "@/components/ui/AvatarCropModal";
+import { useAvatarBlobUrl } from "@/hooks/useAvatarBlobUrl";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 type ThemeMode = "light" | "dark" | "system";
 
@@ -121,13 +123,16 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const { t, setLanguage: setAppLanguage } = useI18n();
   const { user } = useAuth();
-  const { incAvatarVersion } = useAvatarVersion();
+  const { avatarVersion, incAvatarVersion } = useAvatarVersion();
   const queryClient = useQueryClient();
   const isAdmin = user?.authorities?.includes("ROLE_ADMIN") ?? false;
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [avatarPreviewOpen, setAvatarPreviewOpen] = useState(false);
+
+  const { blobUrl: avatarBlobUrl, loading: loadingAvatarPreview } = useAvatarBlobUrl(null, avatarVersion);
 
   const [themeMode, setThemeMode] = useState<ThemeMode>(defaultUiSettings.themeMode);
   const [language, setLanguage] = useState<UiSettings["language"]>(defaultUiSettings.language);
@@ -383,6 +388,10 @@ export default function SettingsPage() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={() => setAvatarPreviewOpen(true)} disabled={avatarUploading}>
+                <User className="h-4 w-4 mr-2" />
+                Xem ảnh
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => avatarFileInputRef.current?.click()}
                 disabled={avatarUploading}
@@ -412,6 +421,33 @@ export default function SettingsPage() {
         onClose={() => { setCropModalOpen(false); setCropFile(null); }}
         onSave={handleCropSave}
       />
+
+      <Dialog open={avatarPreviewOpen} onOpenChange={setAvatarPreviewOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Ảnh đại diện</DialogTitle>
+            <DialogDescription>
+              {user?.firstName || user?.lastName ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : user?.login ?? "Tài khoản"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center justify-center">
+            {avatarBlobUrl ? (
+              <img
+                src={avatarBlobUrl}
+                alt="Avatar"
+                className="max-h-[70vh] w-auto max-w-full rounded-xl border object-contain"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-2 rounded-xl border p-10 text-center">
+                <UserAvatar size={96} />
+                <p className="text-sm text-muted-foreground">
+                  {loadingAvatarPreview ? "Đang tải ảnh..." : "Bạn chưa có ảnh đại diện."}
+                </p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Tabs defaultValue="general" className="space-y-6 opacity-0 animate-auth-fade-in-up auth-stagger-1">
         <TabsList>
@@ -547,17 +583,23 @@ export default function SettingsPage() {
               <CardDescription>Cài đặt bảo mật tài khoản</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2"><Label>Mật khẩu hiện tại</Label><Input type="password" placeholder="••••••••" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></div>
+              <div className="space-y-2">
+                <Label>Mật khẩu hiện tại</Label>
+                <PasswordInput placeholder="••••••••" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} />
+              </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>Mật khẩu mới</Label><Input type="password" placeholder="••••••••" value={newPassword} onChange={e => setNewPassword(e.target.value)} /></div>
+                <div className="space-y-2">
+                  <Label>Mật khẩu mới</Label>
+                  <PasswordInput placeholder="••••••••" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+                </div>
                 <div className="space-y-2">
                   <Label>Xác nhận mật khẩu</Label>
-                  <Input
-                    type="password"
+                  <PasswordInput
                     placeholder="••••••••"
                     value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
                     className={confirmPassword && newPassword !== confirmPassword ? "border-destructive" : ""}
+                    error={!!confirmPassword && newPassword !== confirmPassword}
                   />
                   {confirmPassword && newPassword !== confirmPassword && (
                     <p className="text-xs text-destructive">Mật khẩu xác nhận không khớp</p>

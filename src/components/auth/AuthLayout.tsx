@@ -33,7 +33,7 @@ export function AuthLayout({ children, title, subtitle, description, showMobileL
             </p>
           )}
         </div>
-        <p className="absolute bottom-6 lg:bottom-8 left-0 right-0 text-center text-white/50 text-xs lg:text-sm">© MeetFlow</p>
+        <p className="absolute bottom-6 lg:bottom-8 left-0 right-0 text-center text-white/50 text-xs lg:text-sm">© MeetViet</p>
       </div>
 
       {/* Right: Form - 50%, scroll khi form dài, không đẩy layout */}
@@ -52,7 +52,7 @@ export function AuthLayout({ children, title, subtitle, description, showMobileL
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary animate-auth-float">
                 <CalendarDays className="h-5 w-5 text-primary-foreground" />
               </div>
-              <span className="text-lg font-display font-bold">MeetFlow</span>
+              <span className="text-lg font-display font-bold">MeetViet</span>
             </div>
           )}
           {children}

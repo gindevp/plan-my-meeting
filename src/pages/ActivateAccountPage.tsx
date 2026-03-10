@@ -4,8 +4,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle, XCircle, CalendarDays } from "lucide-react";
 import { AuthLayout } from "@/components/auth/AuthLayout";
+import { API_BASE } from "@/lib/api";
 
-const API_BASE_URL = "http://localhost:8080/api";
+const API_BASE_URL = `${API_BASE}/api`;
 
 export default function ActivateAccountPage() {
   const [searchParams] = useSearchParams();

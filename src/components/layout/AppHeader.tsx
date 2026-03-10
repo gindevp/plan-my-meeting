@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, Search, CheckCircle, CalendarDays, MapPin, XCircle } from "lucide-react";
+import { Bell, Search, CheckCircle, CalendarDays, MapPin, XCircle, Menu } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,7 +48,12 @@ function notificationIcon(n: NotificationDTO): { Icon: typeof Bell; iconClass: s
   return { Icon: Bell, iconClass: "bg-muted text-muted-foreground" };
 }
 
-export default function AppHeader() {
+interface AppHeaderProps {
+  showMenuButton?: boolean;
+  onMenuClick?: () => void;
+}
+
+export default function AppHeader({ showMenuButton = false, onMenuClick }: AppHeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
@@ -145,8 +150,8 @@ export default function AppHeader() {
   const displayUnreadCount = unreadCount > 0 ? unreadCount : 0;
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-card/95 backdrop-blur-md px-6 shadow-sm">
-      <div className="flex items-center gap-4 flex-1 max-w-md" ref={searchRef}>
+    <header className="sticky top-0 z-40 flex min-h-14 flex-wrap items-center gap-2 border-b border-border bg-card/95 px-3 py-2 shadow-sm backdrop-blur-md sm:h-16 sm:flex-nowrap sm:justify-between sm:gap-0 sm:px-6 sm:py-0">
+      <div className="order-2 flex w-full items-center gap-4 sm:order-1 sm:flex-1 sm:max-w-md" ref={searchRef}>
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -160,7 +165,7 @@ export default function AppHeader() {
             onFocus={() => searchQuery && setShowSearchDropdown(true)}
           />
           {showSearchDropdown && searchQuery.trim() && (
-            <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-lg z-50 overflow-hidden max-h-[320px] overflow-y-auto">
+            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[280px] overflow-y-auto overflow-x-hidden rounded-xl border border-border bg-card shadow-lg sm:max-h-[320px]">
               {!hasSearchResults ? (
                 <p className="px-4 py-6 text-center text-sm text-muted-foreground">Không tìm thấy kết quả</p>
               ) : (
@@ -218,7 +223,12 @@ export default function AppHeader() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 relative" ref={dropdownRef}>
+      <div className="order-1 relative ml-auto flex items-center gap-2 sm:order-2" ref={dropdownRef}>
+        {showMenuButton && (
+          <Button variant="ghost" size="icon" className="md:hidden" onClick={onMenuClick}>
+            <Menu className="h-5 w-5" />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon"
@@ -235,7 +245,7 @@ export default function AppHeader() {
 
         {/* Notification Dropdown */}
         {showNotifications && (
-          <div className="absolute right-0 top-12 w-96 bg-card border border-border rounded-xl shadow-lg z-50 overflow-hidden animate-slide-up">
+          <div className="absolute right-0 top-12 z-50 w-[calc(100vw-1rem)] max-w-96 overflow-hidden rounded-xl border border-border bg-card shadow-lg animate-slide-up">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <h3 className="font-display font-semibold text-sm">Thông báo</h3>
               {displayUnreadCount > 0 && (

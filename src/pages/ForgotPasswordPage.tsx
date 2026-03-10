@@ -2,13 +2,14 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, PasswordInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Loader2, Mail, Lock, CheckCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AuthLayout } from "@/components/auth/AuthLayout";
+import { API_BASE } from "@/lib/api";
 
-const API_BASE_URL = "http://localhost:8080/api";
+const API_BASE_URL = `${API_BASE}/api`;
 
 export default function ForgotPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -48,9 +49,9 @@ function ForgotPasswordRequestForm() {
 
   return (
     <AuthLayout
-      title="Quản lý cuộc họp"
-      subtitle="chuyên nghiệp"
-      description="Lên lịch, theo dõi và quản lý cuộc họp hiệu quả."
+      title="MeetViet"
+      subtitle="nền tảng quản lý cuộc họp"
+      description="Lên lịch, theo dõi và quản lý cuộc họp hiệu quả với MeetViet."
     >
       <Card className="border-0 shadow-2xl shadow-primary/10 overflow-hidden opacity-0 animate-auth-scale-in" style={{ animationDelay: "1.8s", animationFillMode: "forwards" }}>
         <CardHeader className="space-y-2 pb-6">
@@ -151,9 +152,9 @@ function ResetPasswordForm({ resetKey }: { resetKey: string }) {
   if (success) {
     return (
       <AuthLayout
-        title="Quản lý cuộc họp"
-        subtitle="chuyên nghiệp"
-        description="Lên lịch, theo dõi và quản lý cuộc họp hiệu quả."
+        title="MeetViet"
+        subtitle="nền tảng quản lý cuộc họp"
+        description="Lên lịch, theo dõi và quản lý cuộc họp hiệu quả với MeetViet."
       >
         <Card className="border-0 shadow-2xl shadow-primary/10 overflow-hidden opacity-0 animate-auth-scale-in" style={{ animationDelay: "1.8s", animationFillMode: "forwards" }}>
           <CardContent className="pt-10 pb-10 px-8 text-center">
@@ -181,9 +182,9 @@ function ResetPasswordForm({ resetKey }: { resetKey: string }) {
 
   return (
     <AuthLayout
-      title="Quản lý cuộc họp"
-      subtitle="chuyên nghiệp"
-      description="Lên lịch, theo dõi và quản lý cuộc họp hiệu quả."
+      title="MeetViet"
+      subtitle="nền tảng quản lý cuộc họp"
+      description="Lên lịch, theo dõi và quản lý cuộc họp hiệu quả với MeetViet."
     >
       <Card className="border-0 shadow-2xl shadow-primary/10 overflow-hidden opacity-0 animate-auth-scale-in" style={{ animationDelay: "1.8s", animationFillMode: "forwards" }}>
         <CardHeader className="space-y-3 pb-6">
@@ -208,9 +209,8 @@ function ResetPasswordForm({ resetKey }: { resetKey: string }) {
             )}
             <div className="space-y-2 opacity-0 animate-auth-fade-in-up auth-stagger-1">
               <Label htmlFor="newPassword">Mật khẩu mới</Label>
-              <Input
+              <PasswordInput
                 id="newPassword"
-                type="password"
                 placeholder="Nhập mật khẩu mới"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
@@ -221,9 +221,8 @@ function ResetPasswordForm({ resetKey }: { resetKey: string }) {
             </div>
             <div className="space-y-2 opacity-0 animate-auth-fade-in-up auth-stagger-2">
               <Label htmlFor="confirmPassword">Xác nhận mật khẩu</Label>
-              <Input
+              <PasswordInput
                 id="confirmPassword"
-                type="password"
                 placeholder="Nhập lại mật khẩu"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}

@@ -41,7 +41,13 @@ const isPlansActive = (pathname: string) => {
   return pathname === "/plans" || pathname.startsWith("/plans?") || pathname.startsWith("/meetings/edit");
 };
 
-export default function AppSidebar() {
+interface AppSidebarProps {
+  isMobile: boolean;
+  isMobileOpen: boolean;
+  onCloseMobile: () => void;
+}
+
+export default function AppSidebar({ isMobile, isMobileOpen, onCloseMobile }: AppSidebarProps) {
   const location = useLocation();
   const { user, signOut } = useAuth();
   const { t } = useI18n();
@@ -51,14 +57,25 @@ export default function AppSidebar() {
   const visibleManagement = management.filter(item => (item.href !== "/reports" && item.href !== "/incidents") || isAdmin);
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-gradient-sidebar border-r border-sidebar-border shadow-xl">
+    <>
+      {isMobile && isMobileOpen && (
+        <div className="fixed inset-0 z-40 bg-black/45 md:hidden" onClick={onCloseMobile} />
+      )}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex flex-col bg-gradient-sidebar border-r border-sidebar-border shadow-xl transition-transform duration-300",
+          "w-64 md:translate-x-0 md:w-64",
+          isMobile ? "w-[85vw] max-w-[320px]" : "",
+          isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        )}
+      >
       <div className="flex h-16 items-center gap-3 px-5 border-b border-sidebar-border">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sidebar-primary shadow-md">
           <CalendarDays className="h-5 w-5 text-sidebar-primary-foreground" />
         </div>
         <div>
-          <h1 className="text-sm font-display font-bold text-sidebar-accent-foreground tracking-tight">MeetFlow</h1>
-          <p className="text-[10px] text-sidebar-muted">Quản lý cuộc họp</p>
+          <h1 className="text-sm font-display font-bold text-sidebar-accent-foreground tracking-tight">MeetViet</h1>
+          <p className="text-[10px] text-sidebar-muted">Nền tảng quản lý cuộc họp</p>
         </div>
       </div>
 
@@ -72,6 +89,7 @@ export default function AppSidebar() {
               <li key={item.key}>
                 <NavLink
                   to={item.href}
+                  onClick={isMobile ? onCloseMobile : undefined}
                   end={item.href !== "/plans"}
                   className={({ isActive }) =>
                     cn(
@@ -99,6 +117,7 @@ export default function AppSidebar() {
               <li key={item.key}>
                 <NavLink
                   to={item.href}
+                  onClick={isMobile ? onCloseMobile : undefined}
                   end
                   className={({ isActive }) =>
                     cn(
@@ -131,6 +150,7 @@ export default function AppSidebar() {
           </div>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

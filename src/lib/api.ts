@@ -1,7 +1,21 @@
 /**
  * API client cho JHipster meetings backend (JWT)
+ * * Khi chạy local hoặc nhúng trong app mobile (WebView load từ IP máy), API base dùng cùng hostname, port 8080.
  */
-export const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080";
+function getApiBase(): string {
+  if (typeof window === "undefined") {
+    return import.meta.env.VITE_API_URL || "http://localhost:8080";
+  }
+  const hostname = window.location.hostname;
+  const envUrl = import.meta.env.VITE_API_URL;
+  const isProduction =
+      /vercel\.app|netlify\.app|railway\.app|plan-my-meeting\./.test(hostname) ||
+      (typeof envUrl === "string" && envUrl.startsWith("https://"));
+  if (isProduction && envUrl) return envUrl;
+  return `http://${hostname}:8080`;
+}
+
+export const API_BASE = getApiBase();
 const AUTH_TOKEN_KEY = "jhi-authenticationToken";
 
 let pendingRequests = 0;

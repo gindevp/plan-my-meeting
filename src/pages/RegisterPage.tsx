@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { registerApi } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, PasswordInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserPlus, Loader2, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -52,13 +52,13 @@ export default function RegisterPage() {
   return (
     <AuthLayout
       title="Bắt đầu với"
-      subtitle="MeetFlow ngay hôm nay"
-      description="Tạo tài khoản miễn phí để lên lịch và quản lý cuộc họp hiệu quả."
+      subtitle="MeetViet ngay hôm nay"
+      description="Tạo tài khoản miễn phí để lên lịch và quản lý cuộc họp hiệu quả với MeetViet."
     >
       <Card className="border-0 shadow-2xl shadow-primary/10 overflow-hidden opacity-0 animate-auth-scale-in py-8 origin-top" style={{ animationDelay: "1.8s", animationFillMode: "forwards" }}>
             <CardHeader className="space-y-2 pb-6">
               <CardTitle className="text-2xl font-display font-bold tracking-tight">Tạo tài khoản</CardTitle>
-              <CardDescription>Đăng ký để sử dụng MeetFlow</CardDescription>
+              <CardDescription>Đăng ký để sử dụng MeetViet</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleRegister} className="space-y-4">
@@ -82,11 +82,26 @@ export default function RegisterPage() {
                 </div>
                 <div className="space-y-2 opacity-0 animate-auth-fade-in-up auth-stagger-4">
                   <Label htmlFor="password">Mật khẩu</Label>
-                  <Input id="password" type="password" placeholder="Tối thiểu 4 ký tự" value={password} onChange={(e) => setPassword(e.target.value)} className="h-11 transition-all duration-200 focus:scale-[1.01]" required minLength={4} />
+                  <PasswordInput
+                    id="password"
+                    placeholder="Tối thiểu 4 ký tự"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="h-11 transition-all duration-200 focus:scale-[1.01]"
+                    required
+                    minLength={4}
+                  />
                 </div>
                 <div className="space-y-2 opacity-0 animate-auth-fade-in-up auth-stagger-5">
                   <Label htmlFor="confirm">Xác nhận mật khẩu</Label>
-                  <Input id="confirm" type="password" placeholder="Nhập lại mật khẩu" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="h-11 transition-all duration-200 focus:scale-[1.01]" required />
+                  <PasswordInput
+                    id="confirm"
+                    placeholder="Nhập lại mật khẩu"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="h-11 transition-all duration-200 focus:scale-[1.01]"
+                    required
+                  />
                 </div>
                 <div className="opacity-0 animate-auth-fade-in-up auth-stagger-6">
                   <Button type="submit" className="w-full h-11 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]" disabled={loading}>

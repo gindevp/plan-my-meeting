@@ -160,6 +160,21 @@ export async function getAccount(): Promise<Account | null> {
   });
 }
 
+/**
+ * Register Expo push token for current user/device (used by embedded mobile WebView).
+ * Endpoint: POST /api/account/expo-push-token body: { token }
+ */
+export async function registerExpoPushToken(expoToken: string): Promise<void> {
+  const token = getStoredToken();
+  if (!token) throw new Error("Chưa đăng nhập");
+  const trimmed = (expoToken || "").trim();
+  if (!trimmed) throw new Error("Thiếu push token");
+  await fetchApi<void>("/api/account/expo-push-token", {
+    method: "POST",
+    body: JSON.stringify({ token: trimmed }),
+  });
+}
+
 /** URL for current user's avatar (append ?t=version for cache bust). */
 export function getAccountAvatarUrl(version?: number): string {
   const base = `${API_BASE}/api/account/avatar`;
@@ -171,7 +186,7 @@ export function getAccountAvatarUrl(version?: number): string {
 /** Upload current user's avatar (base64). */
 export async function uploadAccountAvatar(file: File): Promise<void> {
   const base64 = await fileToBase64(file);
-  await uploadAccountAvatarFromBlob(base64, file.type || "image/jpeg");
+  await uploadAccountAvatarFromBlob(base64);
 }
 
 /** Upload from blob (e.g. after crop). */

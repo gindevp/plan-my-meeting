@@ -49,6 +49,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timeout);
   }, []);
 
+  // Khi nhúng trong app mobile (WebView), gửi authorities sang RN để hiện tab Báo cáo cho admin
+  useEffect(() => {
+    if (typeof window === "undefined" || !(window as any).ReactNativeWebView) return;
+    const payload = user
+      ? { type: "user", authorities: user.authorities ?? [] }
+      : { type: "user", authorities: [] };
+    try {
+      (window as any).ReactNativeWebView.postMessage(JSON.stringify(payload));
+    } catch {
+      // ignore
+    }
+  }, [user]);
+
   const login = async (username: string, password: string, rememberMe = false): Promise<Account> => {
     const { token } = await loginApi({ username, password, rememberMe });
     setStoredToken(token, rememberMe);

@@ -99,6 +99,48 @@ export async function getMeetings(params?: { page?: number; size?: number }) {
   }));
 }
 
+/** Lấy chi tiết một cuộc họp theo id (dùng cho modal mobile) */
+export async function getMeetingById(id: number | string): Promise<MeetingListItem | null> {
+  try {
+    const [meeting, approvals] = await Promise.all([
+      fetchApi<any>(`/api/meetings/${id}`),
+      fetchApi<unknown[]>("/api/meeting-approvals"),
+    ]);
+    if (!meeting?.id) return null;
+    const rejectionReasons: Record<string, string> = {};
+    (approvals as any[]).forEach((a: any) => {
+      if (a.decision === "REJECTED" && a.meeting?.id) {
+        rejectionReasons[String(a.meeting.id)] = a.reason ?? "";
+      }
+    });
+    return {
+      id: String(meeting.id),
+      title: meeting.title ?? "",
+      type: meetingModeMap[meeting.mode] ?? "offline",
+      level: normalizeMeetingLevel(meeting.level?.name),
+      status: meetingStatusMap[meeting.status] ?? "draft",
+      startTime: meeting.startTime,
+      endTime: meeting.endTime,
+      roomId: meeting.room?.id != null ? String(meeting.room.id) : undefined,
+      roomName: meeting.room?.name,
+      meetingLink: meeting.onlineLink,
+      organizer: meeting.requester?.login ?? meeting.host?.login ?? "",
+      host: meeting.host,
+      chairperson: meeting.host?.login ?? meeting.requester?.login ?? "",
+      department: meeting.organizerDepartment?.name ?? "",
+      description: meeting.objectives ?? meeting.note ?? "",
+      rejectionReason: rejectionReasons[meeting.id] ?? "",
+      requesterId: meeting.requester?.id,
+      hostId: meeting.host?.id,
+      secretaryId: meeting.secretary?.id ?? undefined,
+      attendees: [] as string[],
+      agenda: [] as { order: number; title: string; presenter: string; duration: number }[],
+    };
+  } catch {
+    return null;
+  }
+}
+
 export interface CreateMeetingFormPayload {
   title: string;
   description: string;

@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, PasswordInput } from "@/components/ui/input";
@@ -122,7 +123,8 @@ const saveJson = (key: string, data: object) => {
 export default function SettingsPage() {
   const { toast } = useToast();
   const { t, setLanguage: setAppLanguage } = useI18n();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
   const { avatarVersion, incAvatarVersion } = useAvatarVersion();
   const queryClient = useQueryClient();
   const isAdmin = user?.authorities?.includes("ROLE_ADMIN") ?? false;
@@ -359,12 +361,22 @@ export default function SettingsPage() {
       </div>
 
       <Card className="card-elevated mb-6 opacity-0 animate-auth-fade-in-up auth-stagger-1">
-        <CardHeader>
+        <CardHeader className="relative">
           <CardTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
             Thông tin cá nhân
           </CardTitle>
           <CardDescription>Thông tin tài khoản của bạn. Nhấn vào ảnh đại diện để đổi hoặc xóa ảnh.</CardDescription>
+          <button
+            type="button"
+            onClick={async () => {
+              await signOut();
+              navigate("/login", { replace: true });
+            }}
+            className="absolute top-4 right-4 text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+          >
+            Đăng xuất
+          </button>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-6">
           <input

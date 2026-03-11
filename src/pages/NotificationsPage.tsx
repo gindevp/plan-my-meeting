@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Bell, Check, CheckCircle, Loader2, Trash2, XCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Bell, Check, CheckCircle, Loader2, Trash2, XCircle, Calendar, Clock, MapPin, Video, Users } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getNotifications,
@@ -12,7 +13,12 @@ import {
   deleteNotification,
   type NotificationDTO,
 } from "@/services/api/notifications";
+import { getMeetingById, getAgendaItemsByMeeting, getMeetingTasksByMeeting } from "@/services/api/meetings";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/contexts/AuthContext";
+import { statusLabels, typeLabels } from "@/data/mockData";
+import { ListTodo, ClipboardList } from "lucide-react";
 
 function formatTime(createdDate: string): string {
   try {
@@ -47,12 +53,33 @@ function typeIcon(n: NotificationDTO): { Icon: typeof Bell; iconClass: string } 
   return { Icon: Bell, iconClass: "bg-muted text-muted-foreground" };
 }
 
+function getMeetingIdFromLinkUrl(linkUrl: string | null | undefined): string | null {
+  if (!linkUrl || typeof linkUrl !== "string") return null;
+  try {
+    const path = linkUrl.startsWith("/") ? linkUrl : `/${linkUrl}`;
+    const search = path.includes("?") ? path.slice(path.indexOf("?")) : "";
+    const params = new URLSearchParams(search);
+    const id = params.get("meetingId");
+    return id ? id : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function NotificationsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const isMobile = useIsMobile();
   const [page, setPage] = useState(0);
+  const [meetingDetailId, setMeetingDetailId] = useState<string | null>(() => searchParams.get("meetingId"));
   const size = 20;
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (searchParams.get("meetingId")) setSearchParams({}, { replace: true });
+  }, []);
 
   const { data: pageData, isLoading } = useQuery({
     queryKey: ["notifications", page, size],
@@ -96,6 +123,36 @@ export default function NotificationsPage() {
   const notifications: NotificationDTO[] = pageData?.content ?? [];
   const totalPages = pageData?.totalPages ?? 0;
   const hasUnread = unreadCount > 0;
+
+  const { data: meetingDetail, isLoading: loadingMeeting } = useQuery({
+    queryKey: ["meeting-detail", meetingDetailId],
+    queryFn: () => getMeetingById(meetingDetailId!),
+    enabled: !!meetingDetailId && isMobile,
+  });
+
+  const { data: agendaItems = [] } = useQuery({
+    queryKey: ["meeting-agenda", meetingDetailId],
+    queryFn: () => getAgendaItemsByMeeting(meetingDetailId!),
+    enabled: !!meetingDetailId && isMobile,
+  });
+
+  const { data: meetingTasks = [] } = useQuery({
+    queryKey: ["meeting-tasks", meetingDetailId],
+    queryFn: () => getMeetingTasksByMeeting(meetingDetailId!),
+    enabled: !!meetingDetailId && isMobile,
+  });
+
+  const userTasks = useMemo(
+    () => (meetingTasks as any[]).filter((t) => t.assigneeId && String(t.assigneeId) === String(user?.id)),
+    [meetingTasks, user?.id]
+  );
+
+  const taskStatusLabel: Record<string, string> = {
+    TODO: "Chưa bắt đầu",
+    IN_PROGRESS: "Đang làm",
+    DONE: "Hoàn thành",
+    OVERDUE: "Quá hạn",
+  };
 
   const handleMarkRead = (n: NotificationDTO) => {
     if (n.readAt) return;
@@ -145,7 +202,14 @@ export default function NotificationsPage() {
                 const handleRowClick = (e: React.MouseEvent) => {
                   if ((e.target as HTMLElement).closest("button[data-delete]")) return;
                   handleMarkRead(n);
-                  if (n.linkUrl) navigate(n.linkUrl);
+                  if (n.linkUrl) {
+                    const meetingId = getMeetingIdFromLinkUrl(n.linkUrl);
+                    if (isMobile && meetingId) {
+                      setMeetingDetailId(meetingId);
+                    } else {
+                      navigate(n.linkUrl);
+                    }
+                  }
                 };
                 return (
                   <div
@@ -208,6 +272,145 @@ export default function NotificationsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal chi tiết cuộc họp (chỉ mobile) */}
+      <Dialog open={!!meetingDetailId} onOpenChange={(open) => !open && setMeetingDetailId(null)}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Chi tiết cuộc họp</DialogTitle>
+          </DialogHeader>
+          {loadingMeeting ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : meetingDetail ? (
+            <div className="space-y-4 text-sm">
+              <div>
+                <p className="font-semibold text-base text-foreground">{meetingDetail.title}</p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs font-medium">
+                    {typeLabels[meetingDetail.type] ?? meetingDetail.type}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs font-medium">
+                    {statusLabels[meetingDetail.status as keyof typeof statusLabels] ?? meetingDetail.status}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-start gap-2 text-muted-foreground">
+                <Calendar className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  {new Date(meetingDetail.startTime).toLocaleDateString("vi-VN", {
+                    weekday: "short",
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                  })}
+                </span>
+              </div>
+              <div className="flex items-start gap-2 text-muted-foreground">
+                <Clock className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  {new Date(meetingDetail.startTime).toLocaleTimeString("vi-VN", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                  {" – "}
+                  {new Date(meetingDetail.endTime).toLocaleTimeString("vi-VN", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </div>
+              {meetingDetail.roomName && (
+                <div className="flex items-start gap-2 text-muted-foreground">
+                  <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{meetingDetail.roomName}</span>
+                </div>
+              )}
+              {meetingDetail.meetingLink && (
+                <div className="flex items-start gap-2 text-muted-foreground">
+                  <Video className="h-4 w-4 shrink-0 mt-0.5" />
+                  <a
+                    href={meetingDetail.meetingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline break-all"
+                  >
+                    {meetingDetail.meetingLink}
+                  </a>
+                </div>
+              )}
+              {(meetingDetail.chairperson || meetingDetail.organizer) && (
+                <div className="flex items-start gap-2 text-muted-foreground">
+                  <Users className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>Chủ trì: {meetingDetail.chairperson || meetingDetail.organizer || "—"}</span>
+                </div>
+              )}
+              {meetingDetail.description && (
+                <div className="pt-2 border-t border-border">
+                  <p className="text-muted-foreground whitespace-pre-wrap">{meetingDetail.description}</p>
+                </div>
+              )}
+
+              {/* Chương trình họp */}
+              <div className="pt-3 border-t border-border space-y-2">
+                <p className="font-medium flex items-center gap-1.5">
+                  <ClipboardList className="h-4 w-4" />
+                  Chương trình họp
+                </p>
+                {agendaItems.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Chưa có nội dung.</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {(agendaItems as any[])
+                      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                      .map((item, idx) => (
+                        <li key={idx} className="text-xs">
+                          <span className="font-medium text-muted-foreground mr-1">{item.order || idx + 1}.</span>
+                          <span className="font-medium">{item.title}</span>
+                          {(item.presenter || item.duration) && (
+                            <span className="text-muted-foreground ml-1">
+                              — {[item.presenter, item.duration ? `${item.duration} phút` : ""].filter(Boolean).join(" • ")}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Nhiệm vụ của tôi */}
+              <div className="pt-3 border-t border-border space-y-2">
+                <p className="font-medium flex items-center gap-1.5">
+                  <ListTodo className="h-4 w-4" />
+                  Nhiệm vụ của tôi
+                </p>
+                {userTasks.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Không có nhiệm vụ được giao cho bạn.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {userTasks.map((task: any) => (
+                      <li key={task.id} className="text-xs flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                        <span className="font-medium">{task.title}</span>
+                        {task.dueAt && (
+                          <span className="text-muted-foreground">
+                            Hạn: {new Date(task.dueAt).toLocaleDateString("vi-VN")}
+                          </span>
+                        )}
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
+                          {taskStatusLabel[task.status] ?? task.status}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          ) : meetingDetailId && !loadingMeeting ? (
+            <p className="py-4 text-center text-muted-foreground text-sm">Không tải được thông tin cuộc họp.</p>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

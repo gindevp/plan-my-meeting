@@ -227,6 +227,7 @@ export default function CalendarPage() {
   const timelineHours = Array.from({ length: 24 }, (_, i) => i);
   const minutesPerDay = 24 * 60;
   const dayPixelHeight = 24 * 64;
+  const timeColWidth = 72;
 
   const dayLayoutMeetings = useMemo(() => {
     const toMinutes = (iso: string) => {
@@ -419,24 +420,24 @@ export default function CalendarPage() {
 
   return (
     <div className="page-content">
-      <div className="flex items-center justify-between opacity-0 animate-auth-fade-in-up">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 opacity-0 animate-auth-fade-in-up">
         <div>
-          <h1 className="text-2xl font-display font-bold tracking-tight">Lịch họp</h1>
-          <p className="text-sm text-muted-foreground mt-1">Xem lịch các cuộc họp theo ngày, tuần, tháng, năm</p>
+          <h1 className="text-xl sm:text-2xl font-display font-bold tracking-tight">Lịch họp</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">Xem lịch các cuộc họp theo ngày, tuần, tháng, năm</p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-4 text-sm">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm">
             <span className="flex items-center gap-1.5">
-              <span className="w-4 h-0.5 bg-blue-500 inline-block rounded" /> Trực tuyến
+              <span className="w-3 sm:w-4 h-0.5 bg-blue-500 inline-block rounded" /> Trực tuyến
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-4 h-0.5 bg-green-500 inline-block rounded" /> Trực tiếp
+              <span className="w-3 sm:w-4 h-0.5 bg-green-500 inline-block rounded" /> Trực tiếp
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-4 h-0.5 bg-orange-500 inline-block rounded" /> Kết hợp
+              <span className="w-3 sm:w-4 h-0.5 bg-orange-500 inline-block rounded" /> Kết hợp
             </span>
           </div>
-          <Button variant="outline" size="sm" className="gap-1.5 transition-all duration-200 hover:scale-[1.02]" onClick={() => setShowFilter(!showFilter)}>
+          <Button variant="outline" size="sm" className="gap-1.5 transition-all duration-200 hover:scale-[1.02] h-8 sm:h-9" onClick={() => setShowFilter(!showFilter)}>
             <Filter className="h-3.5 w-3.5" /> Bộ lọc
           </Button>
         </div>
@@ -489,13 +490,13 @@ export default function CalendarPage() {
         </div>
       )}
 
-      <div className="bg-card rounded-xl border border-border shadow-sm opacity-0 animate-auth-fade-in-up auth-stagger-1 transition-all duration-300 hover:shadow-md">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-          <div className="flex items-center gap-2">
+      <div className="bg-card rounded-lg sm:rounded-xl border border-border shadow-sm opacity-0 animate-auth-fade-in-up auth-stagger-1 transition-all duration-300 hover:shadow-md overflow-x-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 min-w-0 px-3 sm:px-5 py-3 border-b border-border">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <Button
               variant="outline"
               size="sm"
-              className="h-8"
+              className="h-7 sm:h-8 text-xs sm:text-sm"
               onClick={() => {
                 const now = new Date();
                 setCurrentDate(now);
@@ -506,13 +507,13 @@ export default function CalendarPage() {
             </Button>
             {viewMode === "day" && (
               <>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateDay(-1)}>
-                  <ChevronLeft className="h-4 w-4" />
+                <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 shrink-0" onClick={() => navigateDay(-1)}>
+                  <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Button>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateDay(1)}>
-                  <ChevronRight className="h-4 w-4" />
+                <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 shrink-0" onClick={() => navigateDay(1)}>
+                  <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Button>
-                <h2 className="text-base font-semibold ml-2">
+                <h2 className="text-sm sm:text-base font-semibold ml-1 sm:ml-2 truncate min-w-0">
                   {currentDate.toLocaleDateString("vi-VN", {
                     weekday: "long",
                     day: "2-digit",
@@ -527,57 +528,57 @@ export default function CalendarPage() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-7 w-7 sm:h-8 sm:w-8 shrink-0"
                   onClick={() => navigateWeek(-1)}
                   disabled={weekIndex === 0}
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Button>
                 <Button
                   variant="outline"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-7 w-7 sm:h-8 sm:w-8 shrink-0"
                   onClick={() => navigateWeek(1)}
                   disabled={weekIndex >= weeks.length - 1}
                 >
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Button>
-                <h2 className="text-base font-semibold ml-2">
+                <h2 className="text-sm sm:text-base font-semibold ml-1 sm:ml-2 truncate">
                   {capitalizedMonth} — Tuần {weekIndex + 1}
                 </h2>
               </>
             )}
             {viewMode === "month" && (
               <>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateMonth(-1)}>
-                  <ChevronLeft className="h-4 w-4" />
+                <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 shrink-0" onClick={() => navigateMonth(-1)}>
+                  <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Button>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateMonth(1)}>
-                  <ChevronRight className="h-4 w-4" />
+                <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 shrink-0" onClick={() => navigateMonth(1)}>
+                  <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Button>
-                <h2 className="text-base font-semibold ml-2">{capitalizedMonth}</h2>
+                <h2 className="text-sm sm:text-base font-semibold ml-1 sm:ml-2">{capitalizedMonth}</h2>
               </>
             )}
             {viewMode === "year" && (
               <>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateYear(-1)}>
-                  <ChevronLeft className="h-4 w-4" />
+                <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 shrink-0" onClick={() => navigateYear(-1)}>
+                  <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Button>
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => navigateYear(1)}>
-                  <ChevronRight className="h-4 w-4" />
+                <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 shrink-0" onClick={() => navigateYear(1)}>
+                  <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Button>
-                <h2 className="text-base font-semibold ml-2">Năm {currentDate.getFullYear()}</h2>
+                <h2 className="text-sm sm:text-base font-semibold ml-1 sm:ml-2">Năm {currentDate.getFullYear()}</h2>
               </>
             )}
           </div>
-          <div className="flex bg-secondary rounded-lg p-0.5">
+          <div className="flex bg-secondary rounded-lg p-0.5 shrink-0">
             {(["day", "week", "month", "year"] as ViewMode[]).map(mode => (
               <Button
                 key={mode}
                 variant={viewMode === mode ? "default" : "ghost"}
                 size="sm"
                 onClick={() => handleViewChange(mode)}
-                className="text-xs h-7 px-3"
+                className="text-[10px] sm:text-xs h-6 sm:h-7 px-2 sm:px-3"
               >
                 {mode === "day" ? "Ngày" : mode === "week" ? "Tuần" : mode === "month" ? "Tháng" : "Năm"}
               </Button>
@@ -596,7 +597,7 @@ export default function CalendarPage() {
                   className="absolute left-0 right-0 z-10 flex items-center pointer-events-none"
                   style={{ top: `${topPx}px` }}
                 >
-                  <div className="w-[72px] h-px bg-primary shrink-0" />
+                  <div className="w-14 sm:w-[72px] h-px bg-primary shrink-0" />
                   <div className="flex-1 h-px bg-primary" />
                   <div className="w-2 h-2 rounded-full bg-primary shrink-0 -ml-1" />
                 </div>
@@ -604,8 +605,8 @@ export default function CalendarPage() {
             })()}
             <div className="absolute inset-0 pointer-events-none divide-y divide-border">
               {timelineHours.map(hour => (
-                <div key={hour} className="grid grid-cols-[72px_1fr] h-16">
-                  <div className="px-3 py-3 text-xs text-muted-foreground border-r border-border bg-muted/10 pointer-events-auto">
+                <div key={hour} className="grid grid-cols-[56px_1fr] sm:grid-cols-[72px_1fr] h-16">
+                  <div className="px-1.5 sm:px-3 py-3 text-[10px] sm:text-xs text-muted-foreground border-r border-border bg-muted/10 pointer-events-auto">
                     {String(hour).padStart(2, "0")}:00
                   </div>
                   <div className="border-r-0" />
@@ -613,7 +614,7 @@ export default function CalendarPage() {
               ))}
             </div>
 
-            <div className="relative grid grid-cols-[72px_1fr]" style={{ height: `${dayPixelHeight}px` }}>
+            <div className="relative grid grid-cols-[56px_1fr] sm:grid-cols-[72px_1fr]" style={{ height: `${dayPixelHeight}px` }}>
               <div className="border-r border-border bg-muted/10" />
               <div className="relative">
                 {dayLayoutMeetings.map(item => {
@@ -660,7 +661,7 @@ export default function CalendarPage() {
               {dayNames.map(name => (
                 <div
                   key={name}
-                  className="px-3 py-2 text-center text-sm font-medium text-muted-foreground border-r border-border last:border-r-0"
+                  className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-sm font-medium text-muted-foreground border-r border-border last:border-r-0 text-center"
                 >
                   {name}
                 </div>
@@ -668,7 +669,7 @@ export default function CalendarPage() {
             </div>
             <div className="divide-y divide-border">
               {weeks.map((week, wi) => (
-                <div key={wi} className="grid grid-cols-7 min-h-[120px]">
+                <div key={wi} className="grid grid-cols-7 min-h-[80px] sm:min-h-[120px]">
                   {week.map((day, di) => {
                     const dayMeetings = day ? getMeetingsForDay(day) : [];
                     const isToday = day?.toDateString() === today.toDateString();
@@ -718,13 +719,13 @@ export default function CalendarPage() {
               {dayNames.map(name => (
                 <div
                   key={name}
-                  className="px-3 py-2 text-center text-sm font-medium text-muted-foreground border-r border-border last:border-r-0"
+                  className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-center text-[10px] sm:text-sm font-medium text-muted-foreground border-r border-border last:border-r-0"
                 >
                   {name}
                 </div>
               ))}
             </div>
-            <div className="grid grid-cols-7 min-h-[400px]">
+            <div className="grid grid-cols-7 min-h-[280px] sm:min-h-[400px]">
               {weeks[weekIndex].map((day, di) => {
                 const dayMeetings = day ? getMeetingsForDay(day) : [];
                 const isToday = day?.toDateString() === today.toDateString();
@@ -767,7 +768,7 @@ export default function CalendarPage() {
         )}
 
         {viewMode === "year" && (
-          <div className="p-5 grid grid-cols-3 md:grid-cols-4 gap-4">
+          <div className="p-3 sm:p-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
             {Array.from({ length: 12 }, (_, i) => renderMiniMonth(i))}
           </div>
         )}

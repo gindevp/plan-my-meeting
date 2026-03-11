@@ -67,7 +67,8 @@ export default function ReportsPage() {
   { label: "Phòng họp", value: rooms.length, icon: DoorOpen, color: "text-info" },
   { label: "Tỷ lệ hoàn thành NV", value: `${taskCompletionRate}%`, icon: CheckCircle2, color: "text-success" },
   { label: "Tỷ lệ hủy/từ chối", value: `${cancelRate}%`, icon: XCircle, color: "text-destructive" },
-];
+  ];
+  const staggerClasses = ["auth-stagger-1", "auth-stagger-2", "auth-stagger-3", "auth-stagger-4"];
 
   const [timePeriod, setTimePeriod] = useState("month");
   const [department, setDepartment] = useState("all");
@@ -113,18 +114,18 @@ export default function ReportsPage() {
       </PageHeader>
       </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Summary Stats - giống Dashboard */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 lg:gap-5">
         {summaryStats.map((stat, i) => (
-          <Card key={stat.label} className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up transition-all duration-300 hover:shadow-lg" style={{ animationDelay: `${0.1 + i * 0.05}s`, animationFillMode: "forwards" }}>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{stat.label}</p>
-                  <p className="text-2xl sm:text-3xl font-display font-bold mt-1 tracking-tight">{stat.value}</p>
+          <Card key={stat.label} className={`card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up ${staggerClasses[i]} transition-all duration-300 hover:scale-[1.02] hover:shadow-lg group`} style={{ animationDelay: `${0.1 + i * 0.05}s`, animationFillMode: "forwards" }}>
+            <CardContent className="p-3 sm:p-4 lg:p-5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide truncate">{stat.label}</p>
+                  <p className="text-xl sm:text-2xl lg:text-3xl font-display font-bold mt-0.5 sm:mt-1">{stat.value}</p>
                 </div>
-                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted/60 ${stat.color}`}>
-                  <stat.icon className="h-6 w-6" />
+                <div className={`flex h-8 w-8 sm:h-9 sm:w-9 lg:h-11 lg:w-11 shrink-0 items-center justify-center rounded-lg sm:rounded-xl bg-secondary ${stat.color} transition-transform duration-300 group-hover:scale-110`}>
+                  <stat.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 lg:h-5 lg:w-5" />
                 </div>
               </div>
             </CardContent>

@@ -14,6 +14,18 @@ import {
 } from "@/services/api/notifications";
 import { useMeetings } from "@/hooks/useMeetings";
 import { useRooms } from "@/hooks/useRooms";
+import { useIsMobile } from "@/hooks/use-mobile";
+
+function getMeetingIdFromLinkUrl(linkUrl: string | null | undefined): string | null {
+  if (!linkUrl || typeof linkUrl !== "string") return null;
+  try {
+    const path = linkUrl.startsWith("/") ? linkUrl : `/${linkUrl}`;
+    const search = path.includes("?") ? path.slice(path.indexOf("?")) : "";
+    return new URLSearchParams(search).get("meetingId");
+  } catch {
+    return null;
+  }
+}
 
 function formatTime(createdDate: string): string {
   try {
@@ -111,6 +123,7 @@ export default function AppHeader({ showMenuButton = false, onMenuClick }: AppHe
   });
 
   const notifications: NotificationDTO[] = pageData?.content ?? [];
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -269,7 +282,12 @@ export default function AppHeader({ showMenuButton = false, onMenuClick }: AppHe
                     if (!read) markAsRead(n.id);
                     if (n.linkUrl) {
                       setShowNotifications(false);
-                      navigate(n.linkUrl);
+                      const meetingId = getMeetingIdFromLinkUrl(n.linkUrl);
+                      if (isMobile && meetingId) {
+                        navigate(`/notifications?meetingId=${meetingId}`);
+                      } else {
+                        navigate(n.linkUrl);
+                      }
                     }
                   };
                   return (

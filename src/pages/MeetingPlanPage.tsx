@@ -1089,6 +1089,18 @@ export default function MeetingPlanPage() {
                 <Separator />
                 <div>
                   <p className="font-medium mb-2">Thành phần tham dự & công việc liên quan</p>
+                  {participants.length > 0 && (() => {
+                    const confirmedCount = (participants as any[]).filter((p: any) => p.confirmationStatus === "CONFIRMED").length;
+                    const preMeetingTasks = (meetingTasks as any[]).filter((t: any) => String(t.type || "").toUpperCase() === "PRE_MEETING");
+                    const docsUploaded = (meetingDocuments as any[]).length;
+                    const docsAssigned = preMeetingTasks.length;
+                    return (
+                      <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-3">
+                        <span>Tham dự: <span className="font-medium text-foreground">{confirmedCount}</span> đã xác nhận / <span className="font-medium text-foreground">{participants.length}</span> được mời</span>
+                        <span>Tài liệu: <span className="font-medium text-foreground">{docsUploaded}</span> đã tải lên / <span className="font-medium text-foreground">{docsAssigned}</span> được giao</span>
+                      </div>
+                    );
+                  })()}
                   <input
                     ref={taskFileInputRef}
                     type="file"

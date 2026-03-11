@@ -114,6 +114,7 @@ export interface Account {
   authorities?: string[];
   department?: string;
   departmentId?: number;
+  position?: string;
 }
 
 export interface RegisterRequest {

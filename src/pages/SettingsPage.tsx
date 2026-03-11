@@ -19,6 +19,7 @@ import { changePassword, uploadAccountAvatarFromBlob, deleteAccountAvatar } from
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { AvatarCropModal } from "@/components/ui/AvatarCropModal";
 import { useAvatarBlobUrl } from "@/hooks/useAvatarBlobUrl";
+import { useDepartments } from "@/hooks/useDepartments";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -98,6 +99,21 @@ const defaultSecuritySettings: SecuritySettings = {
   autoLogout: true,
 };
 
+const roleLabels: Record<string, string> = {
+  ROLE_ADMIN: "Quản trị viên",
+  ROLE_SECRETARY: "Thư ký",
+  ROLE_ROOM_MANAGER: "QL Phòng họp",
+  ROLE_USER: "Nhân viên",
+};
+
+function getRoleLabel(authorities?: string[]): string {
+  if (!authorities?.length) return "Nhân viên";
+  if (authorities.includes("ROLE_ADMIN")) return "Quản trị viên";
+  if (authorities.includes("ROLE_SECRETARY")) return "Thư ký";
+  if (authorities.includes("ROLE_ROOM_MANAGER")) return "QL Phòng họp";
+  return "Nhân viên";
+}
+
 const getSystemIsDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
 
 const applyThemeMode = (mode: ThemeMode) => {
@@ -151,6 +167,12 @@ export default function SettingsPage() {
     queryKey: ["user-settings"],
     queryFn: getCurrentUserSettings,
   });
+
+  const { data: departments = [] } = useDepartments();
+  const departmentName =
+    user?.departmentId != null
+      ? (departments as { id: string | number; name: string }[]).find((d) => Number(d.id) === Number(user.departmentId))?.name ?? ""
+      : user?.department ?? "";
 
   const { data: systemSettings = [] } = useQuery({
     queryKey: ["system-settings"],
@@ -423,6 +445,9 @@ export default function SettingsPage() {
             </p>
             {user?.email && <p className="text-sm text-muted-foreground">{user.email}</p>}
             <p className="text-xs text-muted-foreground">Đăng nhập: {user?.login ?? "—"}</p>
+            {departmentName && <p className="text-sm text-muted-foreground">Phòng ban: {departmentName}</p>}
+            {user?.position != null && user.position !== "" && <p className="text-sm text-muted-foreground">Chức vụ: {user.position}</p>}
+            <p className="text-sm text-muted-foreground">Vai trò: {getRoleLabel(user?.authorities)}</p>
           </div>
         </CardContent>
       </Card>

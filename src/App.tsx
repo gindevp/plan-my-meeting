@@ -12,6 +12,7 @@ import { I18nProvider } from "@/contexts/I18nContext";
 import { getIsApiLoading, subscribeApiLoading } from "@/lib/api";
 import { useRegisterExpoPushToken } from "@/hooks/useRegisterExpoPushToken";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { EmbedAuthGate } from "@/components/EmbedAuthGate";
 import AppLayout from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import CalendarPage from "./pages/CalendarPage";
@@ -70,6 +71,7 @@ const App = () => (
         <I18nProvider>
           <AuthProvider>
             <RegisterExpoPushTokenInEmbed />
+            <EmbedAuthGate>
             <AvatarVersionProvider>
             <Routes>
               <Route path="/login" element={<ErrorBoundary><LoginPage /></ErrorBoundary>} />
@@ -95,6 +97,7 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
             </AvatarVersionProvider>
+            </EmbedAuthGate>
           </AuthProvider>
         </I18nProvider>
       </BrowserRouter>

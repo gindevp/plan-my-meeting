@@ -35,6 +35,11 @@ function isCorporateLevel(level?: string): boolean {
   return ["CORPORATE", "COMPANY", "TONG_CONG_TY", "CAP_TONG_CONG_TY"].includes(n);
 }
 
+/** Cuộc họp đã quá thời gian kết thúc → không cho xác nhận/từ chối; chỉ được yêu cầu điểm danh bù. */
+function isMeetingOver(meeting: { endTime?: string } | null): boolean {
+  return meeting?.endTime != null && new Date() > new Date(meeting.endTime);
+}
+
 export default function InvitationsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -282,35 +287,41 @@ export default function InvitationsPage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   {!isDeclineMode ? (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 items-center">
                       <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openMeetingDetail(meeting.id)}>
                         <Eye className="h-4 w-4" />
                         Xem chi tiết
                       </Button>
-                      <Button
-                        size="sm"
-                        className="gap-1.5"
-                        onClick={() => respondMutation.mutate({ participantId: inv.id, status: "CONFIRMED" })}
-                        disabled={respondMutation.isPending}
-                      >
-                        <UserCheck className="h-4 w-4" />
-                        Xác nhận tham gia
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="gap-1.5"
-                        onClick={() => {
-                          if (inv.required === true) {
-                            setRequiredDeclineParticipantId(inv.id);
-                          } else {
-                            setDeclineParticipantId(inv.id);
-                          }
-                        }}
-                      >
-                        <UserX className="h-4 w-4" />
-                        Từ chối
-                      </Button>
+                      {isMeetingOver(meeting) ? (
+                        <span className="text-xs text-muted-foreground">Đã quá thời gian họp. Vào chi tiết cuộc họp để yêu cầu điểm danh bù.</span>
+                      ) : (
+                        <>
+                          <Button
+                            size="sm"
+                            className="gap-1.5"
+                            onClick={() => respondMutation.mutate({ participantId: inv.id, status: "CONFIRMED" })}
+                            disabled={respondMutation.isPending}
+                          >
+                            <UserCheck className="h-4 w-4" />
+                            Xác nhận tham gia
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="gap-1.5"
+                            onClick={() => {
+                              if (inv.required === true) {
+                                setRequiredDeclineParticipantId(inv.id);
+                              } else {
+                                setDeclineParticipantId(inv.id);
+                              }
+                            }}
+                          >
+                            <UserX className="h-4 w-4" />
+                            Từ chối
+                          </Button>
+                        </>
+                      )}
                     </div>
                   ) : (
                     <div className="rounded-lg border bg-muted/30 p-3 space-y-2">

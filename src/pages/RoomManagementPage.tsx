@@ -444,13 +444,13 @@ export default function RoomManagementPage() {
           <p className="text-sm text-muted-foreground mt-1">Xem thông tin phòng, thiết bị và trạng thái</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 opacity-0 animate-auth-fade-in-up auth-stagger-1">
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="relative w-full sm:w-64 h-9 flex items-center shrink-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none shrink-0" />
             <Input
               placeholder="Tìm theo tên, mã phòng..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 h-9"
+              className="pl-9 h-9 w-full"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -466,18 +466,34 @@ export default function RoomManagementPage() {
                 type="number"
                 placeholder="Từ"
                 value={filterMinCapacity}
-                onChange={(e) => setFilterMinCapacity(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "" || v === "-") {
+                    setFilterMinCapacity(v === "-" ? "" : v);
+                    return;
+                  }
+                  const n = parseInt(v, 10);
+                  if (!Number.isNaN(n) && n >= 0) setFilterMinCapacity(v);
+                }}
                 className="h-7 w-14 border-0 bg-transparent p-0 text-center text-sm tabular-nums shadow-none focus-visible:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                min={1}
+                min={0}
               />
               <span className="text-muted-foreground/60 text-xs">–</span>
               <Input
                 type="number"
                 placeholder="Đến"
                 value={filterMaxCapacity}
-                onChange={(e) => setFilterMaxCapacity(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "" || v === "-") {
+                    setFilterMaxCapacity(v === "-" ? "" : v);
+                    return;
+                  }
+                  const n = parseInt(v, 10);
+                  if (!Number.isNaN(n) && n >= 0) setFilterMaxCapacity(v);
+                }}
                 className="h-7 w-14 border-0 bg-transparent p-0 text-center text-sm tabular-nums shadow-none focus-visible:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                min={1}
+                min={0}
               />
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -962,7 +978,7 @@ export default function RoomManagementPage() {
 
       {/* Room Detail Modal */}
       <Dialog open={detailOpen} onOpenChange={handleCloseDetailRoom}>
-        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
+        <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0 gap-0">
           <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
             <DialogTitle className="font-display text-xl tracking-tight">
               {detailRoom?.name}

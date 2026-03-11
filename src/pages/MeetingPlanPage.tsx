@@ -670,6 +670,9 @@ export default function MeetingPlanPage() {
   );
   const hasConfirmedParticipation = myParticipant?.confirmationStatus === "CONFIRMED";
 
+  /** Cuộc họp đã quá thời gian kết thúc → không cho xác nhận tham gia, không cho điểm danh trực tiếp; chỉ được yêu cầu điểm danh bù. */
+  const isMeetingOver = (m: { endTime?: string } | null) => m?.endTime != null && new Date() > new Date(m.endTime);
+
   const postTaskAssigneeOptions = useMemo(() => {
     const list: { value: string; label: string }[] = [];
     (participants as any[]).forEach((p: any) => {
@@ -1326,7 +1329,20 @@ export default function MeetingPlanPage() {
                   const isPending = myParticipant?.confirmationStatus === "PENDING";
                   const isDeclineMode = declineParticipantId === myParticipant?.id;
                   const isApproved = selectedMeeting.status === "approved";
-                  if (!myParticipant || !isPending || !isApproved) return null;
+                  const meetingOver = isMeetingOver(selectedMeeting);
+                  if (!myParticipant || !isApproved) return null;
+                  if (meetingOver && isPending) {
+                    return (
+                      <>
+                        <Separator />
+                        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                          <p className="font-medium text-sm mb-1">Đã quá thời gian cuộc họp</p>
+                          <p className="text-xs text-muted-foreground">Bạn không thể xác nhận tham gia hay điểm danh trực tiếp. Chỉ có thể <strong>yêu cầu điểm danh bù</strong> bên dưới (chủ trì sẽ phê duyệt).</p>
+                        </div>
+                      </>
+                    );
+                  }
+                  if (!isPending) return null;
                   return (
                     <>
                       <Separator />
@@ -1394,18 +1410,24 @@ export default function MeetingPlanPage() {
                 {selectedMeeting.status === "approved" && (() => {
                   const isHostOrSecretary = selectedMeeting.host?.id === user?.id || selectedMeeting.secretaryId === user?.id;
                   const myParticipant = participants.find((p: any) => p.userId && String(p.userId) === String(user?.id));
+                  const meetingOver = isMeetingOver(selectedMeeting);
                   if (isHostOrSecretary) {
                     return (
                       <>
                         <Separator />
                         <div className="rounded-lg border border-border p-3">
                           <p className="font-medium text-sm mb-2">Điểm danh</p>
-                          <p className="text-xs text-muted-foreground mb-3">Chủ trì / Thư ký đánh dấu có mặt hoặc vắng mặt cho từng thành viên.</p>
+                          {meetingOver ? (
+                            <p className="text-xs text-muted-foreground mb-3">Đã quá thời gian họp. Chỉ có thể phê duyệt hoặc từ chối <strong>yêu cầu điểm danh bù</strong> của thành viên bên dưới.</p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground mb-3">Chủ trì / Thư ký đánh dấu có mặt hoặc vắng mặt cho từng thành viên.</p>
+                          )}
                           <div className="space-y-2 max-h-48 overflow-y-auto">
                             {participants.filter((p: any) => p.userId || p.departmentId).map((p: any) => (
                               <div key={p.id} className="flex flex-col gap-1.5 py-1.5 border-b border-border/50 last:border-0">
                                 <div className="flex items-center justify-between gap-2">
                                   <p className="text-sm font-medium">{p.name}</p>
+                                  {!meetingOver && (
                                   <div
                                     role="group"
                                     aria-label="Điểm danh"
@@ -1448,6 +1470,7 @@ export default function MeetingPlanPage() {
                                       Vắng
                                     </Button>
                                   </div>
+                                  )}
                                 </div>
                                 {p.lateCheckInRequestedAt && (
                                   <div className="flex items-center gap-2 pl-0 text-xs text-muted-foreground">
@@ -1481,14 +1504,20 @@ export default function MeetingPlanPage() {
                       </>
                     );
                   }
-                  if (myParticipant && myParticipant.attendance !== "PRESENT") {
+                  if (myParticipant && (myParticipant.attendance !== "PRESENT" || isMeetingOver(selectedMeeting))) {
+                    const meetingOver = isMeetingOver(selectedMeeting);
                     return (
                       <>
                         <Separator />
                         <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
                           <p className="font-medium text-sm mb-2">Điểm danh</p>
-                          <p className="text-xs text-muted-foreground mb-2">Xác nhận trạng thái có mặt của bạn.</p>
+                          {meetingOver ? (
+                            <p className="text-xs text-muted-foreground mb-2">Đã quá thời gian họp. Chỉ có thể yêu cầu điểm danh bù (chủ trì sẽ phê duyệt).</p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground mb-2">Xác nhận trạng thái có mặt của bạn.</p>
+                          )}
                           <div className="flex flex-wrap items-center gap-2">
+                            {!meetingOver && (
                             <div
                               role="group"
                               aria-label="Điểm danh"
@@ -1524,6 +1553,7 @@ export default function MeetingPlanPage() {
                                 Vắng
                               </Button>
                             </div>
+                            )}
                             {myParticipant.lateCheckInRequestedAt ? (
                               <span className="text-xs text-muted-foreground">Đã gửi yêu cầu điểm danh bù, chờ chủ trì phê duyệt.</span>
                             ) : (
@@ -1550,46 +1580,47 @@ export default function MeetingPlanPage() {
                   <>
                     <Separator />
                     <div className="rounded-lg border border-border p-3">
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <p className="font-medium text-sm">Báo cáo sự cố</p>
-                        {!showIncidentForm && (
+                      {!showIncidentForm ? (
+                        <div className="flex items-center justify-end">
                           <Button size="sm" variant="outline" className="gap-1" onClick={() => setShowIncidentForm(true)}>
                             <AlertTriangle className="h-4 w-4" />
                             Báo cáo sự cố
                           </Button>
-                        )}
-                      </div>
-                      {showIncidentForm ? (
-                        <div className="space-y-2 pt-2 border-t">
-                          <Input placeholder="Tiêu đề" value={incidentTitle} onChange={e => setIncidentTitle(e.target.value)} className="text-sm" />
-                          <Textarea placeholder="Mô tả" value={incidentDescription} onChange={e => setIncidentDescription(e.target.value)} rows={2} className="text-sm" />
-                          <div className="flex flex-wrap gap-2 items-center">
-                            <select value={incidentSeverity} onChange={e => setIncidentSeverity(e.target.value)} className="rounded-md border px-2 py-1.5 text-sm">
-                              <option value="LOW">Thấp</option>
-                              <option value="MEDIUM">Trung bình</option>
-                              <option value="HIGH">Cao</option>
-                            </select>
-                            <div className="flex items-center gap-2">
-                              <Label className="text-xs text-muted-foreground whitespace-nowrap">Gửi tới người phụ trách:</Label>
-                              <Select value={incidentAssignedToId || "none"} onValueChange={v => setIncidentAssignedToId(v === "none" ? "" : v)}>
-                                <SelectTrigger className="w-[200px] h-8 text-xs">
-                                  <SelectValue placeholder="Không chọn" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="none">Không chọn</SelectItem>
-                                  {(users as any[]).map((u: any) => (
-                                    <SelectItem key={u.id} value={String(u.id)}>
-                                      {u.name || u.login}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <Button size="sm" onClick={() => { if (incidentTitle.trim()) createIncidentMutation.mutate({ meetingId: selectedMeeting.id, reportedById: user?.id!, title: incidentTitle.trim(), description: incidentDescription.trim(), severity: incidentSeverity, assignedToId: incidentAssignedToId || undefined }); }} disabled={createIncidentMutation.isPending || !incidentTitle.trim()}>Gửi</Button>
-                            <Button size="sm" variant="ghost" onClick={() => { setShowIncidentForm(false); setIncidentTitle(""); setIncidentDescription(""); setIncidentAssignedToId(""); }}>Hủy</Button>
-                          </div>
                         </div>
-                      ) : null}
+                      ) : (
+                        <>
+                          <p className="font-medium text-sm mb-2">Báo cáo sự cố</p>
+                          <div className="space-y-2 pt-2 border-t">
+                            <Input placeholder="Tiêu đề" value={incidentTitle} onChange={e => setIncidentTitle(e.target.value)} className="text-sm" />
+                            <Textarea placeholder="Mô tả" value={incidentDescription} onChange={e => setIncidentDescription(e.target.value)} rows={2} className="text-sm" />
+                            <div className="flex flex-wrap gap-2 items-center">
+                              <select value={incidentSeverity} onChange={e => setIncidentSeverity(e.target.value)} className="rounded-md border px-2 py-1.5 text-sm">
+                                <option value="LOW">Thấp</option>
+                                <option value="MEDIUM">Trung bình</option>
+                                <option value="HIGH">Cao</option>
+                              </select>
+                              <div className="flex items-center gap-2">
+                                <Label className="text-xs text-muted-foreground whitespace-nowrap">Gửi tới người phụ trách:</Label>
+                                <Select value={incidentAssignedToId || "none"} onValueChange={v => setIncidentAssignedToId(v === "none" ? "" : v)}>
+                                  <SelectTrigger className="w-[200px] h-8 text-xs">
+                                    <SelectValue placeholder="Không chọn" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Không chọn</SelectItem>
+                                    {(users as any[]).map((u: any) => (
+                                      <SelectItem key={u.id} value={String(u.id)}>
+                                        {u.name || u.login}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <Button size="sm" onClick={() => { if (incidentTitle.trim()) createIncidentMutation.mutate({ meetingId: selectedMeeting.id, reportedById: user?.id!, title: incidentTitle.trim(), description: incidentDescription.trim(), severity: incidentSeverity, assignedToId: incidentAssignedToId || undefined }); }} disabled={createIncidentMutation.isPending || !incidentTitle.trim()}>Gửi</Button>
+                              <Button size="sm" variant="ghost" onClick={() => { setShowIncidentForm(false); setIncidentTitle(""); setIncidentDescription(""); setIncidentAssignedToId(""); }}>Hủy</Button>
+                            </div>
+                          </div>
+                        </>
+                      )}
                       {meetingIncidents.length > 0 && (
                         <div className="mt-2 space-y-1.5 max-h-32 overflow-y-auto">
                           <p className="text-xs text-muted-foreground">Đã báo cáo ({meetingIncidents.length})</p>

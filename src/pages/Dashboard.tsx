@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarDays, DoorOpen, ClipboardList, Clock, Building2 } from "lucide-react";
+import { CalendarDays, DoorOpen, ClipboardList, Clock, Building2, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { statusLabels, typeLabels } from "@/data/mockData";
@@ -9,6 +9,7 @@ import { useMeetings } from "@/hooks/useMeetings";
 import { useRooms } from "@/hooks/useRooms";
 import { useMeetingTasks } from "@/hooks/useMeetingTasks";
 import { useDepartments } from "@/hooks/useDepartments";
+import { useIncidents } from "@/hooks/useIncidents";
 import { useQuery } from "@tanstack/react-query";
 import { getAllParticipants } from "@/services/api/meetings";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -35,6 +36,7 @@ export default function Dashboard() {
   const { data: rooms = [] } = useRooms();
   const { data: tasks = [] } = useMeetingTasks();
   const { data: departments = [] } = useDepartments();
+  const { data: incidents = [] } = useIncidents();
   const { data: allParticipantsForPlan = [] } = useQuery({
     queryKey: ["all-participants"],
     queryFn: getAllParticipants,
@@ -153,6 +155,7 @@ export default function Dashboard() {
     { label: "Phòng trống", value: rooms.filter((r) => r.status === "available").length, icon: DoorOpen, color: "text-success" },
     { label: "Chờ duyệt", value: meetings.filter((m) => m.status === "pending").length, icon: Clock, color: "text-warning" },
     { label: "Nhiệm vụ đang làm", value: tasks.filter((t) => t.status === "in_progress").length, icon: ClipboardList, color: "text-accent" },
+    { label: "Sự cố", value: (incidents as any[]).length, icon: AlertTriangle, color: "text-destructive" },
   ];
 
   const meetingsByType = [
@@ -172,7 +175,7 @@ export default function Dashboard() {
     return { day, meetings: count };
   });
 
-  const staggerClasses = ["auth-stagger-1", "auth-stagger-2", "auth-stagger-3", "auth-stagger-4", "auth-stagger-1"];
+  const staggerClasses = ["auth-stagger-1", "auth-stagger-2", "auth-stagger-3", "auth-stagger-4", "auth-stagger-1", "auth-stagger-2"];
 
   return (
     <div className="page-content">
@@ -181,7 +184,7 @@ export default function Dashboard() {
         <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">Xin chào, {displayName}. Đây là tóm tắt hoạt động họp hôm nay.</p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4 lg:gap-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-4 lg:gap-5">
         {stats.map((stat, i) => (
           <Card key={stat.label} className={`card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up ${staggerClasses[i]} transition-all duration-300 hover:scale-[1.02] hover:shadow-lg group`}>
             <CardContent className="p-3 sm:p-4 lg:p-5">

@@ -16,12 +16,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDepartments } from "@/hooks/useDepartments";
 import { useUsers } from "@/hooks/useUsers";
 import { useMeetings } from "@/hooks/useMeetings";
 import { createDepartment, deleteDepartment, updateDepartment } from "@/services/api/departments";
 import type { DepartmentListItem } from "@/services/api/departments";
-import { Plus, Building2, Users, CalendarDays, Edit2, Trash2, Search } from "lucide-react";
+import { Plus, Building2, Users, CalendarDays, Edit2, Trash2, Search, Calendar } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -87,6 +88,11 @@ export default function DepartmentsPage() {
     if (!detailDept) return [];
     return users.filter((u: any) => u.departmentId != null && String(u.departmentId) === String(detailDept.id));
   }, [detailDept, users]);
+
+  const meetingsOfDetailDept = useMemo(() => {
+    if (!detailDept) return [];
+    return meetings.filter((m: any) => (m.department || "") === (detailDept.name || ""));
+  }, [detailDept, meetings]);
 
   const validateForm = (): string | null => {
     if (!form.name.trim()) return "Nhập tên phòng ban";
@@ -318,34 +324,84 @@ export default function DepartmentsPage() {
         ))}
       </div>
 
-      {/* Dialog danh sách nhân viên phòng ban */}
+      {/* Dialog chi tiết phòng ban: Tab 1 Nhân viên, Tab 2 Lịch họp */}
       <Dialog open={!!detailDept} onOpenChange={(open) => !open && setDetailDept(null)}>
-        <DialogContent className="max-w-md max-h-[85vh] flex flex-col">
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="font-display tracking-tight flex items-center gap-2">
               <Building2 className="h-5 w-5 text-primary" />
               {detailDept ? `${detailDept.name} (${detailDept.code})` : ""}
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground -mt-2">Danh sách nhân viên</p>
-          <div className="flex flex-col min-h-0 overflow-y-auto border rounded-lg divide-y max-h-[50vh]">
-            {detailDept && staffOfDetailDept.length === 0 && (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                Chưa có nhân viên nào trong phòng ban này.
-              </div>
-            )}
-            {detailDept && staffOfDetailDept.map((u: any) => (
-              <div key={u.id} className="flex items-center gap-3 px-3 py-2.5">
-                <UserAvatar userId={u.id} name={u.name || u.login} size={36} />
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm truncate">{u.name || u.login}</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {[u.login, u.position].filter(Boolean).join(" · ") || "—"}
-                  </p>
+          {detailDept && (
+            <Tabs defaultValue="staff" className="flex flex-col min-h-0 flex-1">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="staff" className="gap-1.5">
+                  <Users className="h-3.5 w-3.5" />
+                  Nhân viên ({staffOfDetailDept.length})
+                </TabsTrigger>
+                <TabsTrigger value="meetings" className="gap-1.5">
+                  <Calendar className="h-3.5 w-3.5" />
+                  Lịch họp ({meetingsOfDetailDept.length})
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="staff" className="mt-3 flex flex-col min-h-0">
+                <p className="text-sm text-muted-foreground mb-2">Danh sách nhân viên hiện có</p>
+                <div className="flex flex-col min-h-0 overflow-y-auto border rounded-lg divide-y max-h-[50vh]">
+                  {staffOfDetailDept.length === 0 ? (
+                    <div className="py-8 text-center text-sm text-muted-foreground">
+                      Chưa có nhân viên nào trong phòng ban này.
+                    </div>
+                  ) : (
+                    staffOfDetailDept.map((u: any) => (
+                      <div key={u.id} className="flex items-center gap-3 px-3 py-2.5">
+                        <UserAvatar userId={u.id} name={u.name || u.login} size={36} />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm truncate">{u.name || u.login}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {[u.login, u.position].filter(Boolean).join(" · ") || "—"}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
-              </div>
-            ))}
-          </div>
+              </TabsContent>
+              <TabsContent value="meetings" className="mt-3 flex flex-col min-h-0">
+                <p className="text-sm text-muted-foreground mb-2">Danh sách lịch họp của phòng ban</p>
+                <div className="flex flex-col min-h-0 overflow-y-auto border rounded-lg divide-y max-h-[50vh]">
+                  {meetingsOfDetailDept.length === 0 ? (
+                    <div className="py-8 text-center text-sm text-muted-foreground">
+                      Chưa có cuộc họp nào thuộc phòng ban này.
+                    </div>
+                  ) : (
+                    meetingsOfDetailDept.map((m: any) => (
+                      <div key={m.id} className="flex items-start gap-3 px-3 py-2.5">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                          <CalendarDays className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm truncate">{m.title || "—"}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {m.startTime
+                              ? new Date(m.startTime).toLocaleString("vi-VN", {
+                                  dateStyle: "short",
+                                  timeStyle: "short",
+                                })
+                              : "—"}
+                            {m.status ? ` · ${String(m.status).toLowerCase()}` : ""}
+                          </p>
+                          {m.roomName && (
+                            <p className="text-xs text-muted-foreground">Phòng: {m.roomName}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
         </DialogContent>
       </Dialog>
 

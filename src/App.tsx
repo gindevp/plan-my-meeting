@@ -10,6 +10,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { AvatarVersionProvider } from "@/contexts/AvatarVersionContext";
 import { I18nProvider } from "@/contexts/I18nContext";
 import { getIsApiLoading, subscribeApiLoading } from "@/lib/api";
+import { useRegisterExpoPushToken } from "@/hooks/useRegisterExpoPushToken";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppLayout from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
@@ -32,6 +33,11 @@ import ActivateAccountPage from "./pages/ActivateAccountPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+
+const RegisterExpoPushTokenInEmbed = () => {
+  useRegisterExpoPushToken(true);
+  return null;
+};
 
 const GlobalApiLoadingOverlay = () => {
   const [isLoading, setIsLoading] = useState<boolean>(getIsApiLoading());
@@ -63,6 +69,7 @@ const App = () => (
       <BrowserRouter>
         <I18nProvider>
           <AuthProvider>
+            <RegisterExpoPushTokenInEmbed />
             <AvatarVersionProvider>
             <Routes>
               <Route path="/login" element={<ErrorBoundary><LoginPage /></ErrorBoundary>} />

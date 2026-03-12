@@ -1,35 +1,83 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useMeetings } from "@/hooks/useMeetings";
 import { useRooms } from "@/hooks/useRooms";
 import { useMeetingTasks } from "@/hooks/useMeetingTasks";
 import { useDepartments } from "@/hooks/useDepartments";
+import { useIncidents } from "@/hooks/useIncidents";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from "recharts";
-import { Download, FileText, CalendarDays, DoorOpen, CheckCircle2, XCircle } from "lucide-react";
+import { CalendarDays, DoorOpen, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 
-const monthlyTrend = [
-  { month: "T1", meetings: 18, completed: 15 },
-  { month: "T2", meetings: 24, completed: 20 },
-  { month: "T3", meetings: 12, completed: 10 },
-  { month: "T4", meetings: 20, completed: 17 },
-  { month: "T5", meetings: 16, completed: 14 },
-  { month: "T6", meetings: 22, completed: 19 },
-  { month: "T7", meetings: 14, completed: 12 },
-  { month: "T8", meetings: 25, completed: 22 },
-  { month: "T9", meetings: 19, completed: 16 },
-  { month: "T10", meetings: 21, completed: 18 },
-  { month: "T11", meetings: 17, completed: 15 },
-  { month: "T12", meetings: 23, completed: 20 },
-];
+const MONTH_LABELS = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12"];
 
 export default function ReportsPage() {
   const { data: meetings = [] } = useMeetings();
   const { data: rooms = [] } = useRooms();
   const { data: tasks = [] } = useMeetingTasks();
   const { data: departments = [] } = useDepartments();
+  const { data: incidents = [] } = useIncidents();
+
+  const [timePeriod, setTimePeriod] = useState("month");
+  const [department, setDepartment] = useState("all");
+
+  const filteredMeetings = useMemo(() => {
+    let list = meetings as any[];
+    if (department !== "all") {
+      list = list.filter((m: any) => (m.department || "") === department);
+    }
+    return list;
+  }, [meetings, department]);
+
+  const monthlyTrend = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    if (timePeriod === "month") {
+      return MONTH_LABELS.map((month, i) => {
+        const monthNum = i + 1;
+        const inMonth = filteredMeetings.filter((m: any) => {
+          const d = m.startTime ? new Date(m.startTime) : null;
+          return d && d.getFullYear() === currentYear && d.getMonth() + 1 === monthNum;
+        });
+        return {
+          month,
+          meetings: inMonth.length,
+          completed: inMonth.filter((m: any) => m.status === "completed").length,
+        };
+      });
+    }
+    if (timePeriod === "quarter") {
+      return ["Q1", "Q2", "Q3", "Q4"].map((q, i) => {
+        const startMonth = i * 3 + 1;
+        const inQuarter = filteredMeetings.filter((m: any) => {
+          const d = m.startTime ? new Date(m.startTime) : null;
+          if (!d || d.getFullYear() !== currentYear) return false;
+          const mth = d.getMonth() + 1;
+          return mth >= startMonth && mth < startMonth + 3;
+        });
+        return {
+          month: q,
+          meetings: inQuarter.length,
+          completed: inQuarter.filter((m: any) => m.status === "completed").length,
+        };
+      });
+    }
+    if (timePeriod === "year") {
+      return [currentYear - 2, currentYear - 1, currentYear].map((y) => {
+        const inYear = filteredMeetings.filter((m: any) => {
+          const d = m.startTime ? new Date(m.startTime) : null;
+          return d && d.getFullYear() === y;
+        });
+        return {
+          month: String(y),
+          meetings: inYear.length,
+          completed: inYear.filter((m: any) => m.status === "completed").length,
+        };
+      });
+    }
+    return [];
+  }, [timePeriod, filteredMeetings]);
 
   const totalMeetings = meetings.length;
   const meetingsByType = [
@@ -70,8 +118,24 @@ export default function ReportsPage() {
   ];
   const staggerClasses = ["auth-stagger-1", "auth-stagger-2", "auth-stagger-3", "auth-stagger-4"];
 
-  const [timePeriod, setTimePeriod] = useState("month");
-  const [department, setDepartment] = useState("all");
+  const incidentByStatus = useMemo(() => {
+    const list = incidents as any[];
+    const statusLabels: Record<string, string> = { OPEN: "Mới", IN_PROGRESS: "Đang xử lý", RESOLVED: "Đã xử lý" };
+    const order = ["OPEN", "IN_PROGRESS", "RESOLVED"];
+    return order.map((status) => ({
+      name: statusLabels[status] ?? status,
+      count: list.filter((i: any) => (i.status || "") === status).length,
+    }));
+  }, [incidents]);
+
+  const incidentBySeverity = useMemo(() => {
+    const list = incidents as any[];
+    return [
+      { name: "Thấp", value: list.filter((i: any) => (i.severity || "") === "LOW").length, color: "hsl(152, 60%, 40%)" },
+      { name: "Trung bình", value: list.filter((i: any) => (i.severity || "") === "MEDIUM").length, color: "hsl(40, 90%, 50%)" },
+      { name: "Cao", value: list.filter((i: any) => (i.severity || "") === "HIGH").length, color: "hsl(0, 70%, 50%)" },
+    ];
+  }, [incidents]);
 
   return (
     <div className="page-content">
@@ -83,7 +147,7 @@ export default function ReportsPage() {
         <div className="flex flex-wrap items-center gap-2">
           <Select value={timePeriod} onValueChange={setTimePeriod}>
             <SelectTrigger className="w-[130px] h-11">
-              <SelectValue />
+              <SelectValue placeholder="Kỳ báo cáo" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="month">Theo tháng</SelectItem>
@@ -102,14 +166,6 @@ export default function ReportsPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" className="gap-2 h-11">
-            <Download className="h-4 w-4" />
-            Xuất PDF
-          </Button>
-          <Button variant="outline" size="sm" className="gap-2 h-11">
-            <FileText className="h-4 w-4" />
-            Xuất Excel
-          </Button>
         </div>
       </PageHeader>
       </div>
@@ -231,6 +287,73 @@ export default function ReportsPage() {
             </ResponsiveContainer>
             <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-3">
               {meetingsByLevel.map((item) => (
+                <div key={item.name} className="flex items-center gap-1.5 text-xs">
+                  <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                  <span className="text-muted-foreground">{item.name} ({item.value})</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Row: Thống kê sự cố */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-2 transition-all duration-300 hover:shadow-lg">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-display font-semibold tracking-tight flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Thống kê sự cố theo trạng thái
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={incidentByStatus}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 90%)" />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(0, 0%, 100%)",
+                    border: "1px solid hsl(220, 13%, 90%)",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                  }}
+                />
+                <Bar dataKey="count" name="Số sự cố" fill="hsl(0, 70%, 50%)" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-3 transition-all duration-300 hover:shadow-lg">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-display font-semibold tracking-tight flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Thống kê sự cố theo mức độ
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center">
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={incidentBySeverity}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  paddingAngle={4}
+                  dataKey="value"
+                >
+                  {incidentBySeverity.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-3">
+              {incidentBySeverity.map((item) => (
                 <div key={item.name} className="flex items-center gap-1.5 text-xs">
                   <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
                   <span className="text-muted-foreground">{item.name} ({item.value})</span>

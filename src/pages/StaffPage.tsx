@@ -53,6 +53,23 @@ const emptyForm: StaffForm = {
   position: "",
 };
 
+type FormErrors = Partial<Record<keyof StaffForm, string>>;
+
+function validateAddForm(form: StaffForm): FormErrors {
+  const err: FormErrors = {};
+  if (!form.login?.trim()) err.login = "Vui lòng nhập login";
+  if (!form.email?.trim()) err.email = "Vui lòng nhập email";
+  if (!form.firstName?.trim()) err.firstName = "Vui lòng nhập họ";
+  if (!form.lastName?.trim()) err.lastName = "Vui lòng nhập tên";
+  if (!form.department?.trim()) err.department = "Vui lòng chọn phòng ban";
+  if (!form.position?.trim()) err.position = "Vui lòng nhập chức vụ";
+  return err;
+}
+
+function validateEditForm(form: StaffForm): FormErrors {
+  return validateAddForm(form);
+}
+
 export default function StaffPage() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -82,6 +99,8 @@ export default function StaffPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [form, setForm] = useState<StaffForm>(emptyForm);
+  const [addErrors, setAddErrors] = useState<FormErrors>({});
+  const [editErrors, setEditErrors] = useState<FormErrors>({});
 
   const filtered = useMemo(
     () =>
@@ -150,10 +169,13 @@ export default function StaffPage() {
 
   const submitCreate = () => {
     if (!isAdmin) return;
-    if (!form.login.trim() || !form.email.trim()) {
-      toast({ variant: "destructive", title: "Lỗi", description: "Vui lòng nhập login và email" });
+    const errors = validateAddForm(form);
+    if (Object.keys(errors).length > 0) {
+      setAddErrors(errors);
+      toast({ variant: "destructive", title: "Vui lòng nhập đầy đủ", description: "Các trường bắt buộc chưa được điền." });
       return;
     }
+    setAddErrors({});
     setAddOpen(false);
     createMutation.mutate(form);
   };
@@ -161,10 +183,13 @@ export default function StaffPage() {
   const submitUpdate = () => {
     if (!isAdmin) return;
     if (!editingUserId) return;
-    if (!form.login.trim() || !form.email.trim()) {
-      toast({ variant: "destructive", title: "Lỗi", description: "Vui lòng nhập login và email" });
+    const errors = validateEditForm(form);
+    if (Object.keys(errors).length > 0) {
+      setEditErrors(errors);
+      toast({ variant: "destructive", title: "Vui lòng nhập đầy đủ", description: "Các trường bắt buộc chưa được điền." });
       return;
     }
+    setEditErrors({});
     setEditOpen(false);
     updateMutation.mutate({ id: editingUserId, data: form });
   };
@@ -180,6 +205,7 @@ export default function StaffPage() {
           <Button
             onClick={() => {
               setForm(emptyForm);
+              setAddErrors({});
               setAddOpen(true);
             }}
           >
@@ -268,6 +294,7 @@ export default function StaffPage() {
                               const [firstName = "", ...rest] = (u.name || "").split(" ");
                               const deptName = getDepartmentName(u.departmentId ? Number(u.departmentId) : undefined);
                               setEditingUserId(u.id);
+                              setEditErrors({});
                               setForm({
                                 login: u.login,
                                 firstName,
@@ -297,35 +324,84 @@ export default function StaffPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+      <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) setAddErrors({}); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Thêm nhân viên mới</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Login *</Label><Input value={form.login} onChange={(e) => setForm({ ...form, login: e.target.value })} /></div>
-              <div className="space-y-2"><Label>Email *</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+              <div className="space-y-2">
+                <Label>Login *</Label>
+                <Input
+                  value={form.login}
+                  onChange={(e) => { setForm({ ...form, login: e.target.value }); setAddErrors((prev) => ({ ...prev, login: "" })); }}
+                  className={addErrors.login ? "border-destructive" : ""}
+                />
+                {addErrors.login && <p className="text-xs text-destructive">{addErrors.login}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label>Email *</Label>
+                <Input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => { setForm({ ...form, email: e.target.value }); setAddErrors((prev) => ({ ...prev, email: "" })); }}
+                  className={addErrors.email ? "border-destructive" : ""}
+                />
+                {addErrors.email && <p className="text-xs text-destructive">{addErrors.email}</p>}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Họ</Label><Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
-              <div className="space-y-2"><Label>Tên</Label><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
+              <div className="space-y-2">
+                <Label>Họ *</Label>
+                <Input
+                  value={form.firstName}
+                  onChange={(e) => { setForm({ ...form, firstName: e.target.value }); setAddErrors((prev) => ({ ...prev, firstName: "" })); }}
+                  className={addErrors.firstName ? "border-destructive" : ""}
+                />
+                {addErrors.firstName && <p className="text-xs text-destructive">{addErrors.firstName}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label>Tên *</Label>
+                <Input
+                  value={form.lastName}
+                  onChange={(e) => { setForm({ ...form, lastName: e.target.value }); setAddErrors((prev) => ({ ...prev, lastName: "" })); }}
+                  className={addErrors.lastName ? "border-destructive" : ""}
+                />
+                {addErrors.lastName && <p className="text-xs text-destructive">{addErrors.lastName}</p>}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Phòng ban</Label>
-                <Select value={form.department || "none"} onValueChange={(v) => {
-                  const selectedDept = v === "none" ? undefined : getDepartmentId(v);
-                  setForm({ ...form, department: v === "none" ? "" : v, departmentId: selectedDept });
-                }}>
-                  <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
+              <div className="space-y-2">
+                <Label>Phòng ban *</Label>
+                <Select
+                  value={form.department || "none"}
+                  onValueChange={(v) => {
+                    const selectedDept = v === "none" ? undefined : getDepartmentId(v);
+                    setForm({ ...form, department: v === "none" ? "" : v, departmentId: selectedDept });
+                    setAddErrors((prev) => ({ ...prev, department: "" }));
+                  }}
+                >
+                  <SelectTrigger className={addErrors.department ? "border-destructive" : ""}><SelectValue placeholder="Chọn" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Không chọn</SelectItem>
                     {departments.map((d: { id: string; name: string }) => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {addErrors.department && <p className="text-xs text-destructive">{addErrors.department}</p>}
               </div>
-              <div className="space-y-2"><Label>Chức vụ</Label><Input placeholder="VD: Trưởng phòng, Nhân viên" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} /></div>
+              <div className="space-y-2">
+                <Label>Chức vụ *</Label>
+                <Input
+                  placeholder="VD: Trưởng phòng, Nhân viên"
+                  value={form.position}
+                  onChange={(e) => { setForm({ ...form, position: e.target.value }); setAddErrors((prev) => ({ ...prev, position: "" })); }}
+                  className={addErrors.position ? "border-destructive" : ""}
+                />
+                {addErrors.position && <p className="text-xs text-destructive">{addErrors.position}</p>}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Vai trò</Label>
+              <div className="space-y-2">
+                <Label>Vai trò</Label>
                 <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as UserRole })}>
                   <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
                   <SelectContent>{Object.entries(roleLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
@@ -340,35 +416,84 @@ export default function StaffPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+      <Dialog open={editOpen} onOpenChange={(open) => { setEditOpen(open); if (!open) setEditErrors({}); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Cập nhật nhân viên</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Login *</Label><Input value={form.login} onChange={(e) => setForm({ ...form, login: e.target.value })} /></div>
-              <div className="space-y-2"><Label>Email *</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+              <div className="space-y-2">
+                <Label>Login *</Label>
+                <Input
+                  value={form.login}
+                  onChange={(e) => { setForm({ ...form, login: e.target.value }); setEditErrors((prev) => ({ ...prev, login: "" })); }}
+                  className={editErrors.login ? "border-destructive" : ""}
+                />
+                {editErrors.login && <p className="text-xs text-destructive">{editErrors.login}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label>Email *</Label>
+                <Input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => { setForm({ ...form, email: e.target.value }); setEditErrors((prev) => ({ ...prev, email: "" })); }}
+                  className={editErrors.email ? "border-destructive" : ""}
+                />
+                {editErrors.email && <p className="text-xs text-destructive">{editErrors.email}</p>}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Họ</Label><Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
-              <div className="space-y-2"><Label>Tên</Label><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
+              <div className="space-y-2">
+                <Label>Họ *</Label>
+                <Input
+                  value={form.firstName}
+                  onChange={(e) => { setForm({ ...form, firstName: e.target.value }); setEditErrors((prev) => ({ ...prev, firstName: "" })); }}
+                  className={editErrors.firstName ? "border-destructive" : ""}
+                />
+                {editErrors.firstName && <p className="text-xs text-destructive">{editErrors.firstName}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label>Tên *</Label>
+                <Input
+                  value={form.lastName}
+                  onChange={(e) => { setForm({ ...form, lastName: e.target.value }); setEditErrors((prev) => ({ ...prev, lastName: "" })); }}
+                  className={editErrors.lastName ? "border-destructive" : ""}
+                />
+                {editErrors.lastName && <p className="text-xs text-destructive">{editErrors.lastName}</p>}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Phòng ban</Label>
-                <Select value={form.department || "none"} onValueChange={(v) => {
-                  const selectedDept = v === "none" ? undefined : getDepartmentId(v);
-                  setForm({ ...form, department: v === "none" ? "" : v, departmentId: selectedDept });
-                }}>
-                  <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
+              <div className="space-y-2">
+                <Label>Phòng ban *</Label>
+                <Select
+                  value={form.department || "none"}
+                  onValueChange={(v) => {
+                    const selectedDept = v === "none" ? undefined : getDepartmentId(v);
+                    setForm({ ...form, department: v === "none" ? "" : v, departmentId: selectedDept });
+                    setEditErrors((prev) => ({ ...prev, department: "" }));
+                  }}
+                >
+                  <SelectTrigger className={editErrors.department ? "border-destructive" : ""}><SelectValue placeholder="Chọn" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Không chọn</SelectItem>
                     {departments.map((d: { id: string; name: string }) => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {editErrors.department && <p className="text-xs text-destructive">{editErrors.department}</p>}
               </div>
-              <div className="space-y-2"><Label>Chức vụ</Label><Input placeholder="VD: Trưởng phòng, Nhân viên" value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} /></div>
+              <div className="space-y-2">
+                <Label>Chức vụ *</Label>
+                <Input
+                  placeholder="VD: Trưởng phòng, Nhân viên"
+                  value={form.position}
+                  onChange={(e) => { setForm({ ...form, position: e.target.value }); setEditErrors((prev) => ({ ...prev, position: "" })); }}
+                  className={editErrors.position ? "border-destructive" : ""}
+                />
+                {editErrors.position && <p className="text-xs text-destructive">{editErrors.position}</p>}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Vai trò</Label>
+              <div className="space-y-2">
+                <Label>Vai trò</Label>
                 <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as UserRole })}>
                   <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
                   <SelectContent>{Object.entries(roleLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>

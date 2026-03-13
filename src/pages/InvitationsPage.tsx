@@ -76,7 +76,9 @@ export default function InvitationsPage() {
       p.departmentId != null &&
       String(p.departmentId) === userDepartmentId &&
       (String(p.meeting?.status ?? "").toUpperCase() === "APPROVED") &&
-      isCorporateLevel(p.meeting?.level)
+      isCorporateLevel(p.meeting?.level) &&
+      // Sau khi thư ký chọn đại diện, participant phòng ban được set CONFIRMED → không còn hiển thị ở tab lời mời phòng ban.
+      (p.confirmationStatus === "PENDING" || p.confirmationStatus === undefined)
   );
 
   const { data: deptUsers = [], isLoading: loadingDeptUsers } = useQuery({

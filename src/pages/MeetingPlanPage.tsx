@@ -151,6 +151,7 @@ export default function MeetingPlanPage() {
   const [completeModalMinutesFiles, setCompleteModalMinutesFiles] = useState<File[]>([]);
   const [showPostTaskForm, setShowPostTaskForm] = useState(false);
   const [postTasks, setPostTasks] = useState<{ key: string; title: string; dueAt: string; assigneeKey: string }[]>(() => [{ key: `task-${Date.now()}`, title: "", dueAt: "", assigneeKey: "" }]);
+  const [representativesModal, setRepresentativesModal] = useState<{ departmentName: string; representativeNames: string[] } | null>(null);
 
   const { data: allParticipantsForPlan = [] } = useQuery({
     queryKey: ["all-participants"],
@@ -664,6 +665,30 @@ export default function MeetingPlanPage() {
     enabled: !!selectedMeeting,
   });
 
+  // Ẩn các participant cá nhân được thư ký chọn làm đại diện cho một participant phòng ban:
+  // - Vẫn giữ participant phòng ban trong danh sách chính.
+  // - Các cá nhân đại diện chỉ hiển thị trong modal "Xem đại diện", không nằm ở "Thành phần tham dự".
+  // - Ẩn luôn thư ký cuộc họp khỏi danh sách thành phần tham dự (chỉ quản lý, không hiện trong list).
+  const visibleParticipants = useMemo(() => {
+    const list = participants as any[];
+    const secretaryId = selectedMeeting ? String(selectedMeeting.secretaryId ?? "") : "";
+    const deptIdsWithDeptParticipant = new Set(
+      list.filter((p: any) => p.departmentId && !p.userId).map((p: any) => String(p.departmentId))
+    );
+    return list.filter((p: any) => {
+      if (p.userId && secretaryId && String(p.userId) === secretaryId) {
+        return false;
+      }
+      if (p.departmentId && !p.userId) {
+        return true;
+      }
+      if (p.userId && p.departmentId) {
+        return !deptIdsWithDeptParticipant.has(String(p.departmentId));
+      }
+      return true;
+    });
+  }, [participants, selectedMeeting]);
+
   const myParticipant = useMemo(
     () => (participants as any[]).find((p: any) => p.userId && String(p.userId) === String(user?.id)),
     [participants, user?.id]
@@ -1132,11 +1157,11 @@ export default function MeetingPlanPage() {
                       e.target.value = "";
                     }}
                   />
-                  {participants.length === 0 ? (
+                  {visibleParticipants.length === 0 ? (
                     <p className="text-muted-foreground text-xs">Chưa có thành phần tham dự.</p>
                   ) : (
                     <div className="space-y-3">
-                      {participants.map((p: any) => {
+                      {visibleParticipants.map((p: any) => {
                         const participantTasks = meetingTasks.filter((task: any) => {
                           if (p.userId) {
                             return task.assigneeId === String(p.userId);
@@ -1150,6 +1175,14 @@ export default function MeetingPlanPage() {
                         const confVariant = p.confirmationStatus === "CONFIRMED" ? "default" : p.confirmationStatus === "DECLINED" ? "destructive" : "secondary";
                         const ConfIcon = p.confirmationStatus === "CONFIRMED" ? UserCheck : p.confirmationStatus === "DECLINED" ? UserX : Clock;
                         const isMyTaskRow = !!p.userId && String(p.userId) === String(user?.id) && participantTasks.length > 0;
+                        const isDeptParticipant = !!p.departmentId && !p.userId;
+                        const departmentRepresentatives = isDeptParticipant
+                          ? (participants as any[]).filter(
+                              (pp: any) =>
+                                pp.userId &&
+                                String((users as any[]).find((u: any) => String(u.id) === String(pp.userId))?.departmentId) === String(p.departmentId)
+                            )
+                          : [];
                         return (
                           <div key={p.id} className={`rounded-lg border p-3 bg-card ${isMyTaskRow ? "ring-2 ring-primary/50 border-primary/30" : ""}`}>
                             <div className="flex items-center justify-between gap-2 mb-2">
@@ -1168,6 +1201,18 @@ export default function MeetingPlanPage() {
                                   {isMyTaskRow ? <ListTodo className="h-3.5 w-3.5 shrink-0" /> : null}
                                   {isMyTaskRow ? `Task của tôi (${participantTasks.length})` : `${participantTasks.length} task`}
                                 </Badge>
+                                {isDeptParticipant && departmentRepresentatives.length > 0 && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-1 text-[11px] h-7"
+                                    onClick={() => setRepresentativesModal({ departmentName: p.name, representativeNames: departmentRepresentatives.map((r: any) => r.name || "") })}
+                                  >
+                                    <Users className="h-3.5 w-3.5" />
+                                    Xem đại diện ({departmentRepresentatives.length})
+                                  </Button>
+                                )}
                               </div>
                             </div>
 
@@ -1295,7 +1340,7 @@ export default function MeetingPlanPage() {
                                             ))}
                                           </div>
                                         )}
-                                        {isMyTask && (
+                                        {(selectedMeeting.status === "approved" || selectedMeeting.status === "completed") && isMyTask && (
                                           <Button
                                             type="button"
                                             variant="outline"
@@ -1678,7 +1723,7 @@ export default function MeetingPlanPage() {
                   </>
                 )}
 
-                {selectedMeeting.status === "approved" && (selectedMeeting.host?.id === user?.id || selectedMeeting.requesterId === user?.id) && (
+                {selectedMeeting.status === "approved" && (String(selectedMeeting.host?.id) === String(user?.id) || String(selectedMeeting.requesterId) === String(user?.id) || String(selectedMeeting.secretaryId) === String(user?.id)) && (
                   <>
                     <Separator />
                     <div className="flex justify-end">
@@ -1690,7 +1735,7 @@ export default function MeetingPlanPage() {
                   </>
                 )}
 
-                {selectedMeeting.status === "completed" && (selectedMeeting.host?.id === user?.id || selectedMeeting.secretaryId === user?.id) && (
+                {(selectedMeeting.status === "approved" || selectedMeeting.status === "completed") && (String(selectedMeeting.host?.id) === String(user?.id) || String(selectedMeeting.requesterId) === String(user?.id) || String(selectedMeeting.secretaryId) === String(user?.id)) && (
                   <>
                     <Separator />
                     <div className="rounded-lg border border-border p-3">
@@ -2002,6 +2047,34 @@ export default function MeetingPlanPage() {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!representativesModal} onOpenChange={(open) => !open && setRepresentativesModal(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Đại diện tham dự
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              {representativesModal ? `Phòng ban: ${representativesModal.departmentName}` : ""}
+            </p>
+          </DialogHeader>
+          <div className="py-2">
+            {representativesModal?.representativeNames?.length ? (
+              <ul className="space-y-1.5 text-sm">
+                {representativesModal.representativeNames.map((name, idx) => (
+                  <li key={idx} className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium">{idx + 1}</span>
+                    {name || "(Không tên)"}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">Chưa có đại diện.</p>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -263,6 +263,16 @@ export default function CreateMeetingPage() {
     { num: 3, label: "Chương trình họp" },
   ];
 
+  const getMinNowString = () => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}T${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
+  };
+
+  const [minStartDateTime, setMinStartDateTime] = useState(() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}T${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
+  });
+
   const validateStep1 = (): boolean => {
     const newErrors: ValidationErrors = {};
     if (!title.trim()) newErrors.title = "Vui lòng nhập tiêu đề";
@@ -272,6 +282,19 @@ export default function CreateMeetingPage() {
     if ((meetingType === "offline" || meetingType === "hybrid") && !selectedRoom) newErrors.room = "Vui lòng chọn phòng họp";
     if ((meetingType === "online" || meetingType === "hybrid") && !meetingLink.trim()) newErrors.meetingLink = "Vui lòng nhập link họp";
 
+    const now = Date.now();
+    if (startDateTime) {
+      const start = new Date(startDateTime).getTime();
+      if (start < now - 60 * 1000) {
+        newErrors.startDateTime = "Không được chọn thời gian trong quá khứ";
+      }
+    }
+    if (endDateTime) {
+      const end = new Date(endDateTime).getTime();
+      if (end < now - 60 * 1000) {
+        newErrors.endDateTime = "Không được chọn thời gian kết thúc trong quá khứ";
+      }
+    }
     if (startDateTime && endDateTime) {
       const start = new Date(startDateTime);
       const end = new Date(endDateTime);
@@ -910,12 +933,10 @@ export default function CreateMeetingPage() {
                 <Label>Ngày giờ bắt đầu *</Label>
                 <Input
                   type="datetime-local"
-                  min={(() => {
-                    const n = new Date();
-                    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}T${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
-                  })()}
+                  min={minStartDateTime}
                   value={startDateTime}
                   onChange={e => setStartDateTime(e.target.value)}
+                  onFocus={() => setMinStartDateTime(getMinNowString())}
                   className={`mt-1.5 ${errorClass("startDateTime")}`}
                 />
                 {errors.startDateTime && <p className="text-xs text-destructive mt-1">{errors.startDateTime}</p>}
@@ -924,12 +945,10 @@ export default function CreateMeetingPage() {
                 <Label>Ngày giờ kết thúc *</Label>
                 <Input
                   type="datetime-local"
-                  min={startDateTime || (() => {
-                    const n = new Date();
-                    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}T${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
-                  })()}
+                  min={startDateTime || getMinNowString()}
                   value={endDateTime}
                   onChange={e => setEndDateTime(e.target.value)}
+                  onFocus={() => setMinStartDateTime(getMinNowString())}
                   className={`mt-1.5 ${errorClass("endDateTime")}`}
                 />
                 {errors.endDateTime && <p className="text-xs text-destructive mt-1">{errors.endDateTime}</p>}

@@ -529,7 +529,7 @@ export default function MeetingPlanPage() {
   });
 
   const createIncidentMutation = useMutation({
-    mutationFn: (payload: { meetingId: string; reportedById: number | string; title: string; description?: string; severity?: string }) =>
+    mutationFn: (payload: { reportedById: number | string; title: string; description?: string; severity?: string; assignedToId?: string | null }) =>
       createIncident(payload),
     onSuccess: () => {
       if (selectedMeeting?.id) queryClient.invalidateQueries({ queryKey: ["incidents", selectedMeeting.id] });
@@ -727,9 +727,7 @@ export default function MeetingPlanPage() {
   const postTaskAssigneeOptions = useMemo(() => {
     const list: { value: string; label: string }[] = [];
     (participants as any[]).forEach((p: any) => {
-      if (p.userId) {
-        list.push({ value: `user-${p.userId}`, label: p.name || p.userId });
-      } else if (p.departmentId) {
+      if (p.departmentId && !p.userId) {
         list.push({ value: `dept-${p.departmentId}`, label: p.name || `Phòng ban #${p.departmentId}` });
       }
     });
@@ -755,17 +753,17 @@ export default function MeetingPlanPage() {
     }
     try {
       for (const t of toCreate) {
-        const assigneeId = t.assigneeKey.startsWith("user-") ? t.assigneeKey.slice(5) : undefined;
-        const departmentId = t.assigneeKey.startsWith("dept-") ? t.assigneeKey.slice(5) : undefined;
-        const dept = departmentId ? (departments as any[]).find((d: any) => String(d.id) === String(departmentId)) : null;
+        const departmentIdStr = t.assigneeKey.startsWith("dept-") ? t.assigneeKey.slice(5) : undefined;
+        const departmentId = departmentIdStr != null && departmentIdStr !== "" ? Number(departmentIdStr) : undefined;
+        const dept = departmentId != null ? (departments as any[]).find((d: any) => Number(d.id) === Number(departmentId)) : null;
         await createPostTaskMutation.mutateAsync({
           meetingId: selectedMeeting.id,
           title: t.title.trim(),
           dueAt: t.dueAt || undefined,
-          assigneeId,
-          departmentId,
-          departmentCode: dept?.code,
-          departmentName: dept?.name,
+          assigneeId: undefined,
+          departmentId: departmentId != null ? departmentId : undefined,
+          departmentCode: dept?.code ?? (departmentId != null ? String(departmentId) : undefined),
+          departmentName: dept?.name ?? (departmentId != null ? `Phòng ban #${departmentId}` : undefined),
           assignedById: user.id,
         });
       }
@@ -1703,7 +1701,7 @@ export default function MeetingPlanPage() {
                                   </SelectContent>
                                 </Select>
                               </div>
-                              <Button size="sm" onClick={() => { if (incidentTitle.trim()) createIncidentMutation.mutate({ meetingId: selectedMeeting.id, reportedById: user?.id!, title: incidentTitle.trim(), description: incidentDescription.trim(), severity: incidentSeverity, assignedToId: incidentAssignedToId || undefined }); }} disabled={createIncidentMutation.isPending || !incidentTitle.trim()}>Gửi</Button>
+                              <Button size="sm" onClick={() => { if (incidentTitle.trim()) createIncidentMutation.mutate({ reportedById: user?.id!, title: incidentTitle.trim(), description: incidentDescription.trim(), severity: incidentSeverity, assignedToId: incidentAssignedToId || undefined }); }} disabled={createIncidentMutation.isPending || !incidentTitle.trim()}>Gửi</Button>
                               <Button size="sm" variant="ghost" onClick={() => { setShowIncidentForm(false); setIncidentTitle(""); setIncidentDescription(""); setIncidentAssignedToId(""); }}>Hủy</Button>
                             </div>
                           </div>
@@ -1778,14 +1776,15 @@ export default function MeetingPlanPage() {
                   </>
                 )}
 
-                {(selectedMeeting.status === "approved" || selectedMeeting.status === "completed") && (String(selectedMeeting.host?.id) === String(user?.id) || String(selectedMeeting.requesterId) === String(user?.id) || String(selectedMeeting.secretaryId) === String(user?.id)) && (
+                {selectedMeeting.status === "completed" && (String(selectedMeeting.host?.id) === String(user?.id) || String(selectedMeeting.requesterId) === String(user?.id) || String(selectedMeeting.secretaryId) === String(user?.id) || isAdmin) && (
                   <>
                     <Separator />
                     <div className="rounded-lg border border-border p-3">
                       <p className="font-medium text-sm mb-2 flex items-center gap-1.5">
                         <FileText className="h-4 w-4" />
-                        Upload biên bản cuộc họp
+                        Tải biên bản cuộc họp
                       </p>
+                      <p className="text-xs text-muted-foreground mb-3">Có thể bổ sung thêm biên bản đã tải (đã tải trong modal Hoàn thành vẫn hiển thị bên dưới).</p>
                       <div className="flex gap-2 flex-wrap items-center mb-3">
                         <Input
                           type="file"
@@ -1859,7 +1858,7 @@ export default function MeetingPlanPage() {
                                   <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => downloadMeetingDocument(d.id)}>
                                     <Download className="h-3 w-3" /> Tải xuống
                                   </Button>
-                                  {(selectedMeeting?.host?.id === user?.id || selectedMeeting?.secretaryId === user?.id) && (
+                                  {(selectedMeeting?.host?.id === user?.id || selectedMeeting?.secretaryId === user?.id || isAdmin) && (
                                     <Button
                                       variant="ghost"
                                       size="sm"
@@ -1899,7 +1898,7 @@ export default function MeetingPlanPage() {
                               <Input placeholder="Tiêu đề công việc" value={task.title} onChange={e => updatePostTaskRow(task.key, "title", e.target.value)} className="text-sm" />
                               <Input type="datetime-local" placeholder="Hạn" value={task.dueAt} onChange={e => updatePostTaskRow(task.key, "dueAt", e.target.value)} className="text-sm" />
                               <select value={task.assigneeKey} onChange={e => updatePostTaskRow(task.key, "assigneeKey", e.target.value)} className="rounded-md border px-2 py-1.5 text-sm w-full bg-background">
-                                <option value="">Chọn người nhận / phòng ban</option>
+                                <option value="">Chọn phòng ban</option>
                                 {postTaskAssigneeOptions.map(opt => (
                                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                                 ))}
@@ -2054,7 +2053,7 @@ export default function MeetingPlanPage() {
                         <Input placeholder="Tiêu đề công việc" value={task.title} onChange={e => updatePostTaskRow(task.key, "title", e.target.value)} className="text-sm" />
                         <Input type="datetime-local" placeholder="Hạn" value={task.dueAt} onChange={e => updatePostTaskRow(task.key, "dueAt", e.target.value)} className="text-sm" />
                         <select value={task.assigneeKey} onChange={e => updatePostTaskRow(task.key, "assigneeKey", e.target.value)} className="rounded-md border px-2 py-1.5 text-sm w-full bg-background">
-                          <option value="">Chọn người nhận / phòng ban</option>
+                          <option value="">Chọn phòng ban</option>
                           {postTaskAssigneeOptions.map(opt => (
                             <option key={opt.value} value={opt.value}>{opt.label}</option>
                           ))}

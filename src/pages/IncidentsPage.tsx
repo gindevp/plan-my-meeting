@@ -113,7 +113,6 @@ export default function IncidentsPage() {
 
   const validateForm = (): string | null => {
     if (!form.title.trim()) return "Vui lòng nhập tiêu đề";
-    if (!form.meetingId) return "Vui lòng chọn cuộc họp";
     if (!form.reportedById) return "Vui lòng chọn người báo cáo";
     return null;
   };
@@ -145,7 +144,7 @@ export default function IncidentsPage() {
           title: form.title.trim(),
           description: form.description.trim() || undefined,
           severity: form.severity,
-          meetingId: form.meetingId,
+          meetingId: form.meetingId || undefined,
           reportedById: form.reportedById,
           assignedToId: form.assignedToId || undefined,
         });
@@ -396,7 +395,7 @@ export default function IncidentsPage() {
               />
             </div>
             <div>
-              <Label>Cuộc họp *</Label>
+              <Label>Cuộc họp (tùy chọn)</Label>
               <Select
                 value={form.meetingId || "__none__"}
                 onValueChange={(v) => setForm({ ...form, meetingId: v === "__none__" ? "" : v })}

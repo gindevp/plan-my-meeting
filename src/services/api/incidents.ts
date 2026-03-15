@@ -69,24 +69,27 @@ export async function createIncident(data: {
   title: string;
   description?: string;
   severity?: string;
-  meetingId: string | number;
+  meetingId?: string | number | null;
   reportedById: string | number;
   assignedToId?: string | number | null;
 }) {
+  const body: Record<string, unknown> = {
+    title: data.title,
+    description: data.description ?? "",
+    severity: data.severity ?? "MEDIUM",
+    status: "OPEN",
+    reportedAt: new Date().toISOString(),
+    reportedBy: { id: Number(data.reportedById) },
+  };
+  if (data.meetingId != null && data.meetingId !== "") {
+    (body as any).meeting = { id: Number(data.meetingId) };
+  }
+  if (data.assignedToId != null && data.assignedToId !== "") {
+    (body as any).assignedTo = { id: Number(data.assignedToId) };
+  }
   const res = await fetchApi<any>("/api/incidents", {
     method: "POST",
-    body: JSON.stringify({
-      title: data.title,
-      description: data.description ?? "",
-      severity: data.severity ?? "MEDIUM",
-      status: "OPEN",
-      reportedAt: new Date().toISOString(),
-      meeting: { id: Number(data.meetingId) },
-      reportedBy: { id: Number(data.reportedById) },
-      ...(data.assignedToId != null && data.assignedToId !== ""
-        ? { assignedTo: { id: Number(data.assignedToId) } }
-        : {}),
-    }),
+    body: JSON.stringify(body),
   });
   return mapIncident(res);
 }
@@ -99,26 +102,29 @@ export async function updateIncident(
     severity?: string;
     status?: string;
     reportedAt?: string;
-    meetingId: string | number;
+    meetingId?: string | number | null;
     reportedById: string | number;
     assignedToId?: string | number | null;
   }
 ) {
+  const body: Record<string, unknown> = {
+    id: Number(id),
+    title: data.title,
+    description: data.description ?? "",
+    severity: data.severity ?? "MEDIUM",
+    status: data.status ?? "OPEN",
+    reportedAt: data.reportedAt ?? new Date().toISOString(),
+    reportedBy: { id: Number(data.reportedById) },
+    assignedTo: data.assignedToId != null && data.assignedToId !== "" ? { id: Number(data.assignedToId) } : null,
+  };
+  if (data.meetingId != null && data.meetingId !== "") {
+    (body as any).meeting = { id: Number(data.meetingId) };
+  } else {
+    (body as any).meeting = null;
+  }
   const res = await fetchApi<any>(`/api/incidents/${id}`, {
     method: "PUT",
-    body: JSON.stringify({
-      id: Number(id),
-      title: data.title,
-      description: data.description ?? "",
-      severity: data.severity ?? "MEDIUM",
-      status: data.status ?? "OPEN",
-      reportedAt: data.reportedAt ?? new Date().toISOString(),
-      meeting: { id: Number(data.meetingId) },
-      reportedBy: { id: Number(data.reportedById) },
-      ...(data.assignedToId != null && data.assignedToId !== ""
-        ? { assignedTo: { id: Number(data.assignedToId) } }
-        : { assignedTo: null }),
-    }),
+    body: JSON.stringify(body),
   });
   return mapIncident(res);
 }

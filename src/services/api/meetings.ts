@@ -636,7 +636,7 @@ export async function getAllIncidents(): Promise<any[]> {
 }
 
 export async function createIncident(payload: {
-  meetingId: number | string;
+  meetingId?: number | string | null;
   reportedById: number | string;
   title: string;
   description?: string;
@@ -649,9 +649,11 @@ export async function createIncident(payload: {
     severity: payload.severity ?? "MEDIUM",
     status: "OPEN",
     reportedAt: new Date().toISOString(),
-    meeting: { id: Number(payload.meetingId) },
     reportedBy: { id: Number(payload.reportedById) },
   };
+  if (payload.meetingId != null && payload.meetingId !== "") {
+    body.meeting = { id: Number(payload.meetingId) };
+  }
   if (payload.assignedToId != null && payload.assignedToId !== "") {
     body.assignedTo = { id: Number(payload.assignedToId) };
   }

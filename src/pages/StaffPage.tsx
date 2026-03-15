@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useUsers } from "@/hooks/useUsers";
@@ -242,15 +242,15 @@ export default function StaffPage() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Tìm nhân viên..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Select value={filterDept} onValueChange={setFilterDept}>
-          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tất cả phòng ban</SelectItem>
-            {departments.map((d: { id: string; name: string }) => (
-              <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          options={[{ value: "all", label: "Tất cả phòng ban" }, ...departments.map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))]}
+          value={filterDept}
+          onValueChange={setFilterDept}
+          placeholder="Phòng ban"
+          searchPlaceholder="Tìm phòng ban..."
+          emptyText="Không tìm thấy."
+          triggerClassName="w-48"
+        />
       </div>
 
       <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-3">
@@ -372,20 +372,20 @@ export default function StaffPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Phòng ban *</Label>
-                <Select
-                  value={form.department || "none"}
+                <SearchableSelect
+                  options={departments.map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))}
+                  value={form.department || ""}
                   onValueChange={(v) => {
-                    const selectedDept = v === "none" ? undefined : getDepartmentId(v);
-                    setForm({ ...form, department: v === "none" ? "" : v, departmentId: selectedDept });
+                    const selectedDept = v ? getDepartmentId(v) : undefined;
+                    setForm({ ...form, department: v, departmentId: selectedDept });
                     setAddErrors((prev) => ({ ...prev, department: "" }));
                   }}
-                >
-                  <SelectTrigger className={addErrors.department ? "border-destructive" : ""}><SelectValue placeholder="Chọn" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Không chọn</SelectItem>
-                    {departments.map((d: { id: string; name: string }) => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                  placeholder="Chọn phòng ban"
+                  searchPlaceholder="Tìm phòng ban..."
+                  emptyText="Không tìm thấy."
+                  clearable
+                  triggerClassName={addErrors.department ? "border-destructive" : ""}
+                />
                 {addErrors.department && <p className="text-xs text-destructive">{addErrors.department}</p>}
               </div>
               <div className="space-y-2">
@@ -402,10 +402,14 @@ export default function StaffPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Vai trò</Label>
-                <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as UserRole })}>
-                  <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
-                  <SelectContent>{Object.entries(roleLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={Object.entries(roleLabels).map(([k, v]) => ({ value: k, label: v }))}
+                  value={form.role}
+                  onValueChange={(v) => setForm({ ...form, role: v as UserRole })}
+                  placeholder="Chọn vai trò"
+                  searchPlaceholder="Tìm vai trò..."
+                  emptyText="Không tìm thấy."
+                />
               </div>
             </div>
           </div>
@@ -464,20 +468,20 @@ export default function StaffPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Phòng ban *</Label>
-                <Select
-                  value={form.department || "none"}
+                <SearchableSelect
+                  options={departments.map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))}
+                  value={form.department || ""}
                   onValueChange={(v) => {
-                    const selectedDept = v === "none" ? undefined : getDepartmentId(v);
-                    setForm({ ...form, department: v === "none" ? "" : v, departmentId: selectedDept });
+                    const selectedDept = v ? getDepartmentId(v) : undefined;
+                    setForm({ ...form, department: v, departmentId: selectedDept });
                     setEditErrors((prev) => ({ ...prev, department: "" }));
                   }}
-                >
-                  <SelectTrigger className={editErrors.department ? "border-destructive" : ""}><SelectValue placeholder="Chọn" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Không chọn</SelectItem>
-                    {departments.map((d: { id: string; name: string }) => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                  placeholder="Chọn phòng ban"
+                  searchPlaceholder="Tìm phòng ban..."
+                  emptyText="Không tìm thấy."
+                  clearable
+                  triggerClassName={editErrors.department ? "border-destructive" : ""}
+                />
                 {editErrors.department && <p className="text-xs text-destructive">{editErrors.department}</p>}
               </div>
               <div className="space-y-2">
@@ -494,10 +498,14 @@ export default function StaffPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Vai trò</Label>
-                <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as UserRole })}>
-                  <SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger>
-                  <SelectContent>{Object.entries(roleLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={Object.entries(roleLabels).map(([k, v]) => ({ value: k, label: v }))}
+                  value={form.role}
+                  onValueChange={(v) => setForm({ ...form, role: v as UserRole })}
+                  placeholder="Chọn vai trò"
+                  searchPlaceholder="Tìm vai trò..."
+                  emptyText="Không tìm thấy."
+                />
               </div>
             </div>
           </div>

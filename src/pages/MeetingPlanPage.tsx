@@ -37,7 +37,7 @@ import {
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit, UserCheck, UserX, AlertTriangle, FileText, Upload, Download, Loader2, ListTodo, PlayCircle, Circle, Calendar, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -899,21 +899,37 @@ export default function MeetingPlanPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Cấp họp</Label>
-              <select value={filterLevel} onChange={e => setFilterLevel(e.target.value)} className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                <option value="">Tất cả</option>
-                <option value="company">Tổng công ty</option>
-                <option value="department">Phòng ban</option>
-                <option value="team">Nhóm/Team</option>
-              </select>
+              <SearchableSelect
+                options={[
+                  { value: "", label: "Tất cả" },
+                  { value: "company", label: "Tổng công ty" },
+                  { value: "department", label: "Phòng ban" },
+                  { value: "team", label: "Nhóm/Team" },
+                ]}
+                value={filterLevel}
+                onValueChange={setFilterLevel}
+                placeholder="Tất cả"
+                searchPlaceholder="Tìm cấp họp..."
+                emptyText="Không tìm thấy."
+                triggerClassName="h-11"
+              />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">Loại họp</Label>
-              <select value={filterType} onChange={e => setFilterType(e.target.value)} className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                <option value="">Tất cả</option>
-                <option value="offline">Trực tiếp</option>
-                <option value="online">Trực tuyến</option>
-                <option value="hybrid">Kết hợp</option>
-              </select>
+              <SearchableSelect
+                options={[
+                  { value: "", label: "Tất cả" },
+                  { value: "offline", label: "Trực tiếp" },
+                  { value: "online", label: "Trực tuyến" },
+                  { value: "hybrid", label: "Kết hợp" },
+                ]}
+                value={filterType}
+                onValueChange={setFilterType}
+                placeholder="Tất cả"
+                searchPlaceholder="Tìm loại họp..."
+                emptyText="Không tìm thấy."
+                triggerClassName="h-11"
+              />
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={() => { setFilterStartDate(""); setFilterStartTime(""); setFilterEndDate(""); setFilterEndTime(""); setFilterLevel(""); setFilterType(""); }}>
@@ -1680,26 +1696,30 @@ export default function MeetingPlanPage() {
                             <Input placeholder="Tiêu đề" value={incidentTitle} onChange={e => setIncidentTitle(e.target.value)} className="text-sm" />
                             <Textarea placeholder="Mô tả" value={incidentDescription} onChange={e => setIncidentDescription(e.target.value)} rows={2} className="text-sm" />
                             <div className="flex flex-wrap gap-2 items-center">
-                              <select value={incidentSeverity} onChange={e => setIncidentSeverity(e.target.value)} className="rounded-md border px-2 py-1.5 text-sm">
-                                <option value="LOW">Thấp</option>
-                                <option value="MEDIUM">Trung bình</option>
-                                <option value="HIGH">Cao</option>
-                              </select>
+                              <SearchableSelect
+                                options={[
+                                  { value: "LOW", label: "Thấp" },
+                                  { value: "MEDIUM", label: "Trung bình" },
+                                  { value: "HIGH", label: "Cao" },
+                                ]}
+                                value={incidentSeverity}
+                                onValueChange={setIncidentSeverity}
+                                placeholder="Mức độ"
+                                searchPlaceholder="Tìm mức độ..."
+                                triggerClassName="w-[120px] h-8 text-xs"
+                              />
                               <div className="flex items-center gap-2">
                                 <Label className="text-xs text-muted-foreground whitespace-nowrap">Gửi tới người phụ trách:</Label>
-                                <Select value={incidentAssignedToId || "none"} onValueChange={v => setIncidentAssignedToId(v === "none" ? "" : v)}>
-                                  <SelectTrigger className="w-[200px] h-8 text-xs">
-                                    <SelectValue placeholder="Không chọn" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">Không chọn</SelectItem>
-                                    {(users as any[]).map((u: any) => (
-                                      <SelectItem key={u.id} value={String(u.id)}>
-                                        {u.name || u.login}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                <SearchableSelect
+                                  options={(users as any[]).map((u: any) => ({ value: String(u.id), label: u.name || u.login || "" }))}
+                                  value={incidentAssignedToId || ""}
+                                  onValueChange={v => setIncidentAssignedToId(v)}
+                                  placeholder="Không chọn"
+                                  searchPlaceholder="Tìm người..."
+                                  emptyText="Không tìm thấy."
+                                  clearable
+                                  triggerClassName="w-[200px] h-8 text-xs"
+                                />
                               </div>
                               <Button size="sm" onClick={() => { if (incidentTitle.trim()) createIncidentMutation.mutate({ reportedById: user?.id!, title: incidentTitle.trim(), description: incidentDescription.trim(), severity: incidentSeverity, assignedToId: incidentAssignedToId || undefined }); }} disabled={createIncidentMutation.isPending || !incidentTitle.trim()}>Gửi</Button>
                               <Button size="sm" variant="ghost" onClick={() => { setShowIncidentForm(false); setIncidentTitle(""); setIncidentDescription(""); setIncidentAssignedToId(""); }}>Hủy</Button>
@@ -1897,12 +1917,15 @@ export default function MeetingPlanPage() {
                               </div>
                               <Input placeholder="Tiêu đề công việc" value={task.title} onChange={e => updatePostTaskRow(task.key, "title", e.target.value)} className="text-sm" />
                               <Input type="datetime-local" placeholder="Hạn" value={task.dueAt} onChange={e => updatePostTaskRow(task.key, "dueAt", e.target.value)} className="text-sm" />
-                              <select value={task.assigneeKey} onChange={e => updatePostTaskRow(task.key, "assigneeKey", e.target.value)} className="rounded-md border px-2 py-1.5 text-sm w-full bg-background">
-                                <option value="">Chọn phòng ban</option>
-                                {postTaskAssigneeOptions.map(opt => (
-                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                ))}
-                              </select>
+                              <SearchableSelect
+                                options={postTaskAssigneeOptions}
+                                value={task.assigneeKey}
+                                onValueChange={v => updatePostTaskRow(task.key, "assigneeKey", v)}
+                                placeholder="Chọn phòng ban"
+                                searchPlaceholder="Tìm phòng ban..."
+                                emptyText="Không tìm thấy."
+                                triggerClassName="text-sm"
+                              />
                             </div>
                           ))}
                           <Button type="button" size="sm" variant="outline" onClick={addPostTaskRow}>
@@ -2052,12 +2075,15 @@ export default function MeetingPlanPage() {
                         </div>
                         <Input placeholder="Tiêu đề công việc" value={task.title} onChange={e => updatePostTaskRow(task.key, "title", e.target.value)} className="text-sm" />
                         <Input type="datetime-local" placeholder="Hạn" value={task.dueAt} onChange={e => updatePostTaskRow(task.key, "dueAt", e.target.value)} className="text-sm" />
-                        <select value={task.assigneeKey} onChange={e => updatePostTaskRow(task.key, "assigneeKey", e.target.value)} className="rounded-md border px-2 py-1.5 text-sm w-full bg-background">
-                          <option value="">Chọn phòng ban</option>
-                          {postTaskAssigneeOptions.map(opt => (
-                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                          ))}
-                        </select>
+                        <SearchableSelect
+                          options={postTaskAssigneeOptions}
+                          value={task.assigneeKey}
+                          onValueChange={v => updatePostTaskRow(task.key, "assigneeKey", v)}
+                          placeholder="Chọn phòng ban"
+                          searchPlaceholder="Tìm phòng ban..."
+                          emptyText="Không tìm thấy."
+                          triggerClassName="text-sm"
+                        />
                       </div>
                     ))}
                     <Button type="button" size="sm" variant="outline" onClick={addPostTaskRow}>

@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { useMeetings } from "@/hooks/useMeetings";
 import { useRooms } from "@/hooks/useRooms";
@@ -145,27 +145,28 @@ export default function ReportsPage() {
         description="Tổng hợp dữ liệu hoạt động họp và sử dụng tài nguyên"
       >
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={timePeriod} onValueChange={setTimePeriod}>
-            <SelectTrigger className="w-[130px] h-11">
-              <SelectValue placeholder="Kỳ báo cáo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="month">Theo tháng</SelectItem>
-              <SelectItem value="quarter">Theo quý</SelectItem>
-              <SelectItem value="year">Theo năm</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={department} onValueChange={setDepartment}>
-            <SelectTrigger className="w-[150px] h-11">
-              <SelectValue placeholder="Phòng ban" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả</SelectItem>
-              {departments.map((d: { id: string; name: string }) => (
-                <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            options={[
+              { value: "month", label: "Theo tháng" },
+              { value: "quarter", label: "Theo quý" },
+              { value: "year", label: "Theo năm" },
+            ]}
+            value={timePeriod}
+            onValueChange={setTimePeriod}
+            placeholder="Kỳ báo cáo"
+            searchPlaceholder="Tìm kỳ..."
+            emptyText="Không tìm thấy."
+            triggerClassName="w-[130px] h-11"
+          />
+          <SearchableSelect
+            options={[{ value: "all", label: "Tất cả" }, ...departments.map((d: { id: string; name: string }) => ({ value: d.name, label: d.name }))]}
+            value={department}
+            onValueChange={setDepartment}
+            placeholder="Phòng ban"
+            searchPlaceholder="Tìm phòng ban..."
+            emptyText="Không tìm thấy."
+            triggerClassName="w-[150px] h-11"
+          />
         </div>
       </PageHeader>
       </div>

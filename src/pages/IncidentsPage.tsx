@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -238,32 +238,24 @@ export default function IncidentsPage() {
             className="pl-9 h-11"
           />
         </div>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[160px] h-11">
-            <SelectValue placeholder="Trạng thái" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">Tất cả trạng thái</SelectItem>
-            {STATUS_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={filterSeverity} onValueChange={setFilterSeverity}>
-          <SelectTrigger className="w-[140px] h-11">
-            <SelectValue placeholder="Mức độ" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">Tất cả mức độ</SelectItem>
-            {SEVERITY_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          options={[{ value: "__all__", label: "Tất cả trạng thái" }, ...STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))]}
+          value={filterStatus}
+          onValueChange={setFilterStatus}
+          placeholder="Trạng thái"
+          searchPlaceholder="Tìm trạng thái..."
+          emptyText="Không tìm thấy."
+          triggerClassName="w-[160px] h-11"
+        />
+        <SearchableSelect
+          options={[{ value: "__all__", label: "Tất cả mức độ" }, ...SEVERITY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))]}
+          value={filterSeverity}
+          onValueChange={setFilterSeverity}
+          placeholder="Mức độ"
+          searchPlaceholder="Tìm mức độ..."
+          emptyText="Không tìm thấy."
+          triggerClassName="w-[140px] h-11"
+        />
       </div>
 
       <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-2">
@@ -396,97 +388,75 @@ export default function IncidentsPage() {
             </div>
             <div>
               <Label>Cuộc họp (tùy chọn)</Label>
-              <Select
-                value={form.meetingId || "__none__"}
-                onValueChange={(v) => setForm({ ...form, meetingId: v === "__none__" ? "" : v })}
-              >
-                <SelectTrigger className="mt-1.5 h-11">
-                  <SelectValue placeholder="Chọn cuộc họp" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">— Chọn cuộc họp —</SelectItem>
-                  {meetings.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="mt-1.5">
+                <SearchableSelect
+                  options={meetings.map((m) => ({ value: m.id, label: m.title || "" }))}
+                  value={form.meetingId || ""}
+                  onValueChange={(v) => setForm({ ...form, meetingId: v })}
+                  placeholder="Chọn cuộc họp"
+                  searchPlaceholder="Tìm cuộc họp..."
+                  emptyText="Không tìm thấy cuộc họp."
+                  clearable
+                  triggerClassName="h-11"
+                />
+              </div>
             </div>
             <div>
               <Label>Người báo cáo *</Label>
-              <Select
-                value={form.reportedById || "__none__"}
-                onValueChange={(v) => setForm({ ...form, reportedById: v === "__none__" ? "" : v })}
-              >
-                <SelectTrigger className="mt-1.5 h-11">
-                  <SelectValue placeholder="Chọn người báo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">— Chọn người báo —</SelectItem>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name || u.login}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="mt-1.5">
+                <SearchableSelect
+                  options={users.map((u) => ({ value: u.id, label: u.name || u.login || "" }))}
+                  value={form.reportedById || ""}
+                  onValueChange={(v) => setForm({ ...form, reportedById: v })}
+                  placeholder="Chọn người báo"
+                  searchPlaceholder="Tìm người báo cáo..."
+                  emptyText="Không tìm thấy."
+                />
+              </div>
             </div>
             <div>
               <Label>Người phụ trách (hỗ trợ)</Label>
-              <Select
-                value={form.assignedToId || "__none__"}
-                onValueChange={(v) => setForm({ ...form, assignedToId: v === "__none__" ? "" : v })}
-              >
-                <SelectTrigger className="mt-1.5 h-11">
-                  <SelectValue placeholder="Chọn người phụ trách" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">— Không chọn —</SelectItem>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name || u.login}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="mt-1.5">
+                <SearchableSelect
+                  options={users.map((u) => ({ value: u.id, label: u.name || u.login || "" }))}
+                  value={form.assignedToId || ""}
+                  onValueChange={(v) => setForm({ ...form, assignedToId: v })}
+                  placeholder="Chọn người phụ trách"
+                  searchPlaceholder="Tìm người..."
+                  emptyText="Không tìm thấy."
+                  clearable
+                  triggerClassName="h-11"
+                />
+              </div>
             </div>
             <div>
               <Label>Mức độ</Label>
-              <Select
-                value={form.severity}
-                onValueChange={(v) => setForm({ ...form, severity: v })}
-              >
-                <SelectTrigger className="mt-1.5 h-11">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SEVERITY_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="mt-1.5">
+                <SearchableSelect
+                  options={SEVERITY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                  value={form.severity}
+                  onValueChange={(v) => setForm({ ...form, severity: v })}
+                  placeholder="Chọn mức độ"
+                  searchPlaceholder="Tìm mức độ..."
+                  emptyText="Không tìm thấy."
+                  triggerClassName="h-11"
+                />
+              </div>
             </div>
             {editingId && (
               <div>
                 <Label>Trạng thái</Label>
-                <Select
-                  value={form.status}
-                  onValueChange={(v) => setForm({ ...form, status: v })}
-                >
-                  <SelectTrigger className="mt-1.5 h-11">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUS_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="mt-1.5">
+                  <SearchableSelect
+                    options={STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                    value={form.status}
+                    onValueChange={(v) => setForm({ ...form, status: v })}
+                    placeholder="Chọn trạng thái"
+                    searchPlaceholder="Tìm trạng thái..."
+                    emptyText="Không tìm thấy."
+                    triggerClassName="h-11"
+                  />
+                </div>
               </div>
             )}
             <div>

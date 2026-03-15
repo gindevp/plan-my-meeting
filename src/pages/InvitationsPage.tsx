@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
@@ -53,6 +54,7 @@ export default function InvitationsPage() {
   const [requiredDeclineParticipantId, setRequiredDeclineParticipantId] = useState<number | null>(null);
   const [selectModal, setSelectModal] = useState<{ participantId: number; meeting: any; departmentName: string } | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const [representativeSearch, setRepresentativeSearch] = useState("");
   const [deleteConfirmInvitationId, setDeleteConfirmInvitationId] = useState<number | null>(null);
 
   const isSecretary = user?.authorities?.includes("ROLE_SECRETARY") ?? false;
@@ -412,7 +414,7 @@ export default function InvitationsPage() {
       </AlertDialog>
 
       {/* Modal chọn đại diện */}
-      <Dialog open={!!selectModal} onOpenChange={(open) => !open && setSelectModal(null)}>
+      <Dialog open={!!selectModal} onOpenChange={(open) => { if (!open) { setSelectModal(null); setRepresentativeSearch(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display">Chọn đại diện tham dự</DialogTitle>
@@ -430,34 +432,52 @@ export default function InvitationsPage() {
                 {loadingDeptUsers ? (
                   <p className="text-sm text-muted-foreground py-4">Đang tải...</p>
                 ) : (
-                  <div className="mt-2 max-h-[240px] overflow-y-auto space-y-2 rounded-lg border p-2">
-                    {deptUsers.map((u: any) => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => toggleUser(Number(u.id))}
-                        className={`flex w-full items-center gap-3 rounded-lg border p-2 text-left text-sm transition-colors ${
-                          selectedUserIds.includes(Number(u.id))
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/30"
-                        }`}
-                      >
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold">
-                          {u.name?.split(" ")?.[0]?.[0] || "?"}
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium">{u.name || u.login}</p>
-                          {u.position && <p className="text-xs text-muted-foreground">{u.position}</p>}
-                        </div>
-                        {selectedUserIds.includes(Number(u.id)) && (
-                          <UserCheck className="h-4 w-4 text-primary shrink-0" />
-                        )}
-                      </button>
-                    ))}
-                    {deptUsers.length === 0 && (
-                      <p className="text-sm text-muted-foreground py-4 text-center">Không có nhân viên trong phòng</p>
-                    )}
+                  <>
+                    <Input
+                      placeholder="Tìm theo tên, chức vụ..."
+                      value={representativeSearch}
+                      onChange={(e) => setRepresentativeSearch(e.target.value)}
+                      className="mt-2"
+                    />
+                    <div className="mt-2 max-h-[240px] overflow-y-auto space-y-2 rounded-lg border p-2">
+                    {(() => {
+                      const q = representativeSearch.trim().toLowerCase();
+                      const filtered = q
+                        ? deptUsers.filter((u: any) => {
+                            const name = (u.name || "").toLowerCase();
+                            const login = (u.login || "").toLowerCase();
+                            const position = (u.position || "").toLowerCase();
+                            return name.includes(q) || login.includes(q) || position.includes(q);
+                          })
+                        : deptUsers;
+                      if (deptUsers.length === 0) return <p className="text-sm text-muted-foreground py-4 text-center">Không có nhân viên trong phòng</p>;
+                      if (filtered.length === 0) return <p className="text-sm text-muted-foreground py-4 text-center">Không tìm thấy kết quả</p>;
+                      return filtered.map((u: any) => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => toggleUser(Number(u.id))}
+                          className={`flex w-full items-center gap-3 rounded-lg border p-2 text-left text-sm transition-colors ${
+                            selectedUserIds.includes(Number(u.id))
+                              ? "border-primary bg-primary/5"
+                              : "border-border hover:border-primary/30"
+                          }`}
+                        >
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold">
+                            {u.name?.split(" ")?.[0]?.[0] || "?"}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium">{u.name || u.login}</p>
+                            {u.position && <p className="text-xs text-muted-foreground">{u.position}</p>}
+                          </div>
+                          {selectedUserIds.includes(Number(u.id)) && (
+                            <UserCheck className="h-4 w-4 text-primary shrink-0" />
+                          )}
+                        </button>
+                      ));
+                    })()}
                   </div>
+                  </>
                 )}
               </div>
             </>

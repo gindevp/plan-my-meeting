@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input, PasswordInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Save, Bell, Shield, Palette, Globe, Loader2, User, ImagePlus, Trash2 } from "lucide-react";
@@ -589,24 +589,34 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Chế độ hiển thị</Label>
-                <Select value={themeMode} onValueChange={(value) => setThemeMode(value as ThemeMode)}>
-                  <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="light">Sáng</SelectItem>
-                    <SelectItem value="dark">Tối</SelectItem>
-                    <SelectItem value="system">Theo hệ thống</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={[
+                    { value: "light", label: "Sáng" },
+                    { value: "dark", label: "Tối" },
+                    { value: "system", label: "Theo hệ thống" },
+                  ]}
+                  value={themeMode}
+                  onValueChange={(value) => setThemeMode(value as ThemeMode)}
+                  placeholder="Chế độ"
+                  searchPlaceholder="Tìm chế độ..."
+                  emptyText="Không tìm thấy."
+                  triggerClassName="w-48"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Ngôn ngữ</Label>
-                <Select value={language} onValueChange={(value) => setLanguage(value as UiSettings["language"])}>
-                  <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="vi">Tiếng Việt</SelectItem>
-                    <SelectItem value="en">English</SelectItem>
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={[
+                    { value: "vi", label: "Tiếng Việt" },
+                    { value: "en", label: "English" },
+                  ]}
+                  value={language}
+                  onValueChange={(value) => setLanguage(value as UiSettings["language"])}
+                  placeholder="Ngôn ngữ"
+                  searchPlaceholder="Tìm ngôn ngữ..."
+                  emptyText="Không tìm thấy."
+                  triggerClassName="w-48"
+                />
               </div>
               <Button onClick={handleSaveAppearance}><Save className="h-4 w-4 mr-2" />Lưu thay đổi</Button>
             </CardContent>

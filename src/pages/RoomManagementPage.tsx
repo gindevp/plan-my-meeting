@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import type { RoomListItem, LayoutItem } from "@/services/api/rooms";
 import { createRoom, updateRoom, deleteRoom, createRoomEquipment, deleteRoomEquipment, getRoomEquipmentsRaw, uploadRoomImage, deleteRoomImage, ROOM_TYPES } from "@/services/api/rooms";
@@ -496,17 +496,20 @@ export default function RoomManagementPage() {
                 min={0}
               />
             </div>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="h-9 w-[140px]">
-                <SelectValue placeholder="Trạng thái" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Tất cả</SelectItem>
-                <SelectItem value="ACTIVE">Hoạt động</SelectItem>
-                <SelectItem value="MAINTENANCE">Bảo trì</SelectItem>
-                <SelectItem value="DISABLED">Ngừng sử dụng</SelectItem>
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              options={[
+                { value: "__all__", label: "Tất cả" },
+                { value: "ACTIVE", label: "Hoạt động" },
+                { value: "MAINTENANCE", label: "Bảo trì" },
+                { value: "DISABLED", label: "Ngừng sử dụng" },
+              ]}
+              value={filterStatus}
+              onValueChange={setFilterStatus}
+              placeholder="Trạng thái"
+              searchPlaceholder="Tìm trạng thái..."
+              emptyText="Không tìm thấy."
+              triggerClassName="h-9 w-[140px]"
+            />
           </div>
           {canCrudRoom && (
             <Button onClick={openCreate} className="gap-2 shrink-0">
@@ -691,26 +694,31 @@ export default function RoomManagementPage() {
             </div>
             <div>
               <Label>Trạng thái</Label>
-              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as RoomListItem["status"] })}>
-                <SelectTrigger className="mt-1.5 h-11"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="available">Hoạt động</SelectItem>
-                  <SelectItem value="maintenance">Bảo trì</SelectItem>
-                  <SelectItem value="disabled">Ngừng sử dụng</SelectItem>
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={[
+                  { value: "available", label: "Hoạt động" },
+                  { value: "maintenance", label: "Bảo trì" },
+                  { value: "disabled", label: "Ngừng sử dụng" },
+                ]}
+                value={form.status}
+                onValueChange={(v) => setForm({ ...form, status: v as RoomListItem["status"] })}
+                placeholder="Trạng thái"
+                searchPlaceholder="Tìm trạng thái..."
+                emptyText="Không tìm thấy."
+                triggerClassName="mt-1.5 h-11"
+              />
             </div>
             <div>
               <Label>Loại phòng họp</Label>
-              <Select value={form.roomType || "__none__"} onValueChange={(v) => setForm({ ...form, roomType: v === "__none__" ? "" : v })}>
-                <SelectTrigger className="mt-1.5 h-11"><SelectValue placeholder="Chọn loại phòng" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">— Không chọn —</SelectItem>
-                  {ROOM_TYPES.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={[{ value: "", label: "— Không chọn —" }, ...ROOM_TYPES.map((t) => ({ value: t.value, label: t.label }))]}
+                value={form.roomType || ""}
+                onValueChange={(v) => setForm({ ...form, roomType: v })}
+                placeholder="Chọn loại phòng"
+                searchPlaceholder="Tìm loại phòng..."
+                emptyText="Không tìm thấy."
+                triggerClassName="mt-1.5 h-11"
+              />
             </div>
             <div>
               <Label>Hình ảnh phòng</Label>
@@ -890,16 +898,15 @@ export default function RoomManagementPage() {
                         </Button>
                       ) : (
                         <div className="space-y-2">
-                          <Select value={copyLayoutSourceId} onValueChange={setCopyLayoutSourceId}>
-                            <SelectTrigger className="w-full h-9">
-                              <SelectValue placeholder="Chọn phòng..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {roomList.filter((r) => !editingRoom || r.id !== editingRoom.id).map((r) => (
-                                <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <SearchableSelect
+                            options={roomList.filter((r) => !editingRoom || r.id !== editingRoom.id).map((r) => ({ value: r.id, label: r.name }))}
+                            value={copyLayoutSourceId}
+                            onValueChange={setCopyLayoutSourceId}
+                            placeholder="Chọn phòng..."
+                            searchPlaceholder="Tìm phòng..."
+                            emptyText="Không tìm thấy."
+                            triggerClassName="w-full h-9"
+                          />
                           <div className="flex gap-1">
                             <Button
                               type="button"

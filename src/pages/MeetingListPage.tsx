@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { meetings, statusLabels, typeLabels, levelLabels, type MeetingStatus, type MeetingType } from "@/data/mockData";
 import { Search, Filter, CalendarDays, MapPin, Video, Users, Eye } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -56,28 +56,24 @@ export default function MeetingListPage() {
                 className="pl-9"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Trạng thái" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                {Object.entries(statusLabels).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Hình thức" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả hình thức</SelectItem>
-                {Object.entries(typeLabels).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              options={[{ value: "all", label: "Tất cả trạng thái" }, ...Object.entries(statusLabels).map(([key, label]) => ({ value: key, label }))]}
+              value={statusFilter}
+              onValueChange={setStatusFilter}
+              placeholder="Trạng thái"
+              searchPlaceholder="Tìm trạng thái..."
+              emptyText="Không tìm thấy."
+              triggerClassName="w-[160px]"
+            />
+            <SearchableSelect
+              options={[{ value: "all", label: "Tất cả hình thức" }, ...Object.entries(typeLabels).map(([key, label]) => ({ value: key, label }))]}
+              value={typeFilter}
+              onValueChange={setTypeFilter}
+              placeholder="Hình thức"
+              searchPlaceholder="Tìm hình thức..."
+              emptyText="Không tìm thấy."
+              triggerClassName="w-[160px]"
+            />
           </div>
         </CardContent>
       </Card>

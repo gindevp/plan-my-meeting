@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -913,21 +913,29 @@ export default function CreateMeetingPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Hình thức họp *</Label>
-                <Select value={meetingType} onValueChange={v => setMeetingType(v as MeetingType)}>
-                  <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {meetingTypes.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="mt-1.5">
+                  <SearchableSelect
+                    options={meetingTypes.map(t => ({ value: t.value, label: t.label }))}
+                    value={meetingType}
+                    onValueChange={v => setMeetingType(v as MeetingType)}
+                    placeholder="Chọn hình thức"
+                    searchPlaceholder="Tìm hình thức..."
+                    emptyText="Không tìm thấy."
+                  />
+                </div>
               </div>
               <div>
                 <Label>Cấp họp *</Label>
-                <Select value={meetingLevel} onValueChange={v => setMeetingLevel(v as MeetingLevel)}>
-                  <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {meetingLevels.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="mt-1.5">
+                  <SearchableSelect
+                    options={meetingLevels.map(l => ({ value: l.value, label: l.label }))}
+                    value={meetingLevel}
+                    onValueChange={v => setMeetingLevel(v as MeetingLevel)}
+                    placeholder="Chọn cấp họp"
+                    searchPlaceholder="Tìm cấp họp..."
+                    emptyText="Không tìm thấy."
+                  />
+                </div>
               </div>
             </div>
 
@@ -1430,14 +1438,17 @@ export default function CreateMeetingPage() {
                   </div>
                     <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <Select value={item.presenter} onValueChange={v => updateAgendaItem(i, "presenter", v)}>
-                        <SelectTrigger className={errorClass(`agenda_presenter_${i}`)}><SelectValue placeholder={meetingLevel === "company" ? "Đơn vị trình bày" : "Người trình bày"} /></SelectTrigger>
-                        <SelectContent>
-                          {meetingLevel === "company"
-                            ? selectedDepartments.map((d: string) => <SelectItem key={d} value={d}>{d}</SelectItem>)
-                            : selectedAttendees.map((a: string) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        options={meetingLevel === "company"
+                          ? selectedDepartments.map((d: string) => ({ value: d, label: d }))
+                          : selectedAttendees.map((a: string) => ({ value: a, label: a }))}
+                        value={item.presenter}
+                        onValueChange={v => updateAgendaItem(i, "presenter", v)}
+                        placeholder={meetingLevel === "company" ? "Đơn vị trình bày" : "Người trình bày"}
+                        searchPlaceholder="Tìm..."
+                        emptyText="Không tìm thấy."
+                        triggerClassName={errorClass(`agenda_presenter_${i}`)}
+                      />
                       {errors[`agenda_presenter_${i}`] && <p className="text-xs text-destructive mt-1">{errors[`agenda_presenter_${i}`]}</p>}
                     </div>
                     <Input type="number" placeholder="Thời lượng (phút)" value={item.duration} onChange={e => updateAgendaItem(i, "duration", e.target.value)} />

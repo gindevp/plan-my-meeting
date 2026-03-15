@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -202,16 +202,19 @@ export default function EquipmentManagementPage() {
             className="pl-9 h-11"
           />
         </div>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[180px] h-11">
-            <SelectValue placeholder="Trạng thái" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">Tất cả trạng thái</SelectItem>
-            <SelectItem value="ACTIVE">Đang sử dụng</SelectItem>
-            <SelectItem value="DISABLED">Ngừng sử dụng</SelectItem>
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          options={[
+            { value: "__all__", label: "Tất cả trạng thái" },
+            { value: "ACTIVE", label: "Đang sử dụng" },
+            { value: "DISABLED", label: "Ngừng sử dụng" },
+          ]}
+          value={filterStatus}
+          onValueChange={setFilterStatus}
+          placeholder="Trạng thái"
+          searchPlaceholder="Tìm trạng thái..."
+          emptyText="Không tìm thấy."
+          triggerClassName="w-[180px] h-11"
+        />
       </div>
 
       <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-2">
@@ -325,28 +328,15 @@ export default function EquipmentManagementPage() {
             </div>
             <div>
               <Label>Loại thiết bị</Label>
-              <Select
-                value={form.equipmentType || "none"}
-                onValueChange={(v) => setForm({ ...form, equipmentType: v === "none" ? "" : v })}
-              >
-                <SelectTrigger className="mt-1.5 h-11">
-                  <SelectValue placeholder="Chọn loại thiết bị" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Không chọn</SelectItem>
-                  {EQUIPMENT_TYPES.map((t) => {
-                    const TypeIcon = getEquipmentTypeIcon(t.value);
-                    return (
-                      <SelectItem key={t.value} value={t.value}>
-                        <span className="flex items-center gap-2">
-                          <TypeIcon className="h-4 w-4 shrink-0" />
-                          {t.label}
-                        </span>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={[{ value: "", label: "Không chọn" }, ...EQUIPMENT_TYPES.map((t) => ({ value: t.value, label: t.label }))]}
+                value={form.equipmentType || ""}
+                onValueChange={(v) => setForm({ ...form, equipmentType: v })}
+                placeholder="Chọn loại thiết bị"
+                searchPlaceholder="Tìm loại thiết bị..."
+                emptyText="Không tìm thấy."
+                triggerClassName="mt-1.5 h-11"
+              />
             </div>
             {editingId && (
             <div>
@@ -388,18 +378,18 @@ export default function EquipmentManagementPage() {
             </div>
             <div>
               <Label>Trạng thái</Label>
-              <Select
+              <SearchableSelect
+                options={[
+                  { value: "ACTIVE", label: "Đang sử dụng" },
+                  { value: "DISABLED", label: "Ngừng sử dụng" },
+                ]}
                 value={form.status || "ACTIVE"}
                 onValueChange={(v) => setForm({ ...form, status: v })}
-              >
-                <SelectTrigger className="mt-1.5 h-11">
-                  <SelectValue placeholder="Trạng thái" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ACTIVE">Đang sử dụng</SelectItem>
-                  <SelectItem value="DISABLED">Ngừng sử dụng</SelectItem>
-                </SelectContent>
-              </Select>
+                placeholder="Trạng thái"
+                searchPlaceholder="Tìm trạng thái..."
+                emptyText="Không tìm thấy."
+                triggerClassName="mt-1.5 h-11"
+              />
             </div>
           </div>
           <DialogFooter>

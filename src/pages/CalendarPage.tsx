@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { typeLabels } from "@/data/mockData";
 import { useMeetings } from "@/hooks/useMeetings";
 import { useAuth } from "@/contexts/AuthContext";
@@ -467,21 +468,37 @@ export default function CalendarPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label className="text-xs">Cấp họp</Label>
-              <select value={filterLevel} onChange={e => setFilterLevel(e.target.value)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm">
-                <option value="">Tất cả</option>
-                <option value="company">Tổng công ty</option>
-                <option value="department">Phòng ban</option>
-                <option value="team">Nhóm/Team</option>
-              </select>
+              <SearchableSelect
+                options={[
+                  { value: "", label: "Tất cả" },
+                  { value: "company", label: "Tổng công ty" },
+                  { value: "department", label: "Phòng ban" },
+                  { value: "team", label: "Nhóm/Team" },
+                ]}
+                value={filterLevel}
+                onValueChange={setFilterLevel}
+                placeholder="Tất cả"
+                searchPlaceholder="Tìm cấp họp..."
+                emptyText="Không tìm thấy."
+                triggerClassName="h-9"
+              />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Loại họp</Label>
-              <select value={filterType} onChange={e => setFilterType(e.target.value)} className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm">
-                <option value="">Tất cả</option>
-                <option value="offline">Trực tiếp</option>
-                <option value="online">Trực tuyến</option>
-                <option value="hybrid">Kết hợp</option>
-              </select>
+              <SearchableSelect
+                options={[
+                  { value: "", label: "Tất cả" },
+                  { value: "offline", label: "Trực tiếp" },
+                  { value: "online", label: "Trực tuyến" },
+                  { value: "hybrid", label: "Kết hợp" },
+                ]}
+                value={filterType}
+                onValueChange={setFilterType}
+                placeholder="Tất cả"
+                searchPlaceholder="Tìm loại họp..."
+                emptyText="Không tìm thấy."
+                triggerClassName="h-9"
+              />
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={() => { setFilterStartDate(""); setFilterStartTime(""); setFilterEndDate(""); setFilterEndTime(""); setFilterLevel(""); setFilterType(""); }}>

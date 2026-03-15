@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -235,16 +235,19 @@ export default function DepartmentsPage() {
             className="pl-9 h-11"
           />
         </div>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[180px] h-11">
-            <SelectValue placeholder="Trạng thái" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">Tất cả trạng thái</SelectItem>
-            <SelectItem value="ACTIVE">Hoạt động</SelectItem>
-            <SelectItem value="DISABLED">Ngừng hoạt động</SelectItem>
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          options={[
+            { value: "__all__", label: "Tất cả trạng thái" },
+            { value: "ACTIVE", label: "Hoạt động" },
+            { value: "DISABLED", label: "Ngừng hoạt động" },
+          ]}
+          value={filterStatus}
+          onValueChange={setFilterStatus}
+          placeholder="Trạng thái"
+          searchPlaceholder="Tìm trạng thái..."
+          emptyText="Không tìm thấy."
+          triggerClassName="w-[180px] h-11"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 opacity-0 animate-auth-fade-in-up auth-stagger-3">
@@ -448,37 +451,30 @@ export default function DepartmentsPage() {
             </div>
             <div>
               <Label>Trưởng phòng</Label>
-              <Select
-                value={form.managerId || "__none__"}
-                onValueChange={(v) => setForm({ ...form, managerId: v === "__none__" ? "" : v })}
-              >
-                <SelectTrigger className="mt-1.5 h-11">
-                  <SelectValue placeholder="Chọn trưởng phòng" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">— Không chọn —</SelectItem>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name || u.login}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={[{ value: "", label: "— Không chọn —" }, ...users.map((u) => ({ value: String(u.id), label: u.name || u.login }))]}
+                value={form.managerId ?? ""}
+                onValueChange={(v) => setForm({ ...form, managerId: v })}
+                placeholder="Chọn trưởng phòng"
+                searchPlaceholder="Tìm trưởng phòng..."
+                emptyText="Không tìm thấy."
+                triggerClassName="mt-1.5 h-11"
+              />
             </div>
             <div>
               <Label>Trạng thái</Label>
-              <Select
+              <SearchableSelect
+                options={[
+                  { value: "ACTIVE", label: "Hoạt động" },
+                  { value: "DISABLED", label: "Ngừng hoạt động" },
+                ]}
                 value={form.status}
                 onValueChange={(v) => setForm({ ...form, status: v })}
-              >
-                <SelectTrigger className="mt-1.5 h-11">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ACTIVE">Hoạt động</SelectItem>
-                  <SelectItem value="DISABLED">Ngừng hoạt động</SelectItem>
-                </SelectContent>
-              </Select>
+                placeholder="Trạng thái"
+                searchPlaceholder="Tìm trạng thái..."
+                emptyText="Không tìm thấy."
+                triggerClassName="mt-1.5 h-11"
+              />
             </div>
             <div>
               <Label>Mô tả</Label>
@@ -525,37 +521,30 @@ export default function DepartmentsPage() {
             </div>
             <div>
               <Label>Trưởng phòng</Label>
-              <Select
-                value={form.managerId || "__none__"}
-                onValueChange={(v) => setForm({ ...form, managerId: v === "__none__" ? "" : v })}
-              >
-                <SelectTrigger className="mt-1.5 h-11">
-                  <SelectValue placeholder="Chọn trưởng phòng" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">— Không chọn —</SelectItem>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name || u.login}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={[{ value: "", label: "— Không chọn —" }, ...users.map((u) => ({ value: String(u.id), label: u.name || u.login }))]}
+                value={form.managerId ?? ""}
+                onValueChange={(v) => setForm({ ...form, managerId: v })}
+                placeholder="Chọn trưởng phòng"
+                searchPlaceholder="Tìm trưởng phòng..."
+                emptyText="Không tìm thấy."
+                triggerClassName="mt-1.5 h-11"
+              />
             </div>
             <div>
               <Label>Trạng thái</Label>
-              <Select
+              <SearchableSelect
+                options={[
+                  { value: "ACTIVE", label: "Hoạt động" },
+                  { value: "DISABLED", label: "Ngừng hoạt động" },
+                ]}
                 value={form.status}
                 onValueChange={(v) => setForm({ ...form, status: v })}
-              >
-                <SelectTrigger className="mt-1.5 h-11">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ACTIVE">Hoạt động</SelectItem>
-                  <SelectItem value="DISABLED">Ngừng hoạt động</SelectItem>
-                </SelectContent>
-              </Select>
+                placeholder="Trạng thái"
+                searchPlaceholder="Tìm trạng thái..."
+                emptyText="Không tìm thấy."
+                triggerClassName="mt-1.5 h-11"
+              />
             </div>
             <div>
               <Label>Mô tả</Label>

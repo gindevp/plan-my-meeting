@@ -705,12 +705,21 @@ export default function MeetingPlanPage() {
       (p: any) => p.departmentId && !p.userId && String(p.departmentId) === String(myDepartmentId)
     );
   }, [participants, myParticipant, myDepartmentId]);
+  const isHostOrSecretaryOrAdmin = useMemo(
+    () =>
+      !!selectedMeeting &&
+      (selectedMeeting.host?.id === user?.id ||
+        selectedMeeting.secretaryId === user?.id ||
+        isAdmin),
+    [selectedMeeting, user?.id, isAdmin]
+  );
   const visibleParticipantsForTaskSection = useMemo(() => {
     if (!isRepresentative || myDepartmentId == null) return visibleParticipants;
+    if (isHostOrSecretaryOrAdmin) return visibleParticipants;
     return visibleParticipants.filter(
       (p: any) => p.departmentId && !p.userId && String(p.departmentId) === String(myDepartmentId)
     );
-  }, [visibleParticipants, isRepresentative, myDepartmentId]);
+  }, [visibleParticipants, isRepresentative, myDepartmentId, isHostOrSecretaryOrAdmin]);
 
   /** Cuộc họp đã quá thời gian kết thúc → không cho xác nhận tham gia, không cho điểm danh trực tiếp; chỉ được yêu cầu điểm danh bù. */
   const isMeetingOver = (m: { endTime?: string } | null) => m?.endTime != null && new Date() > new Date(m.endTime);

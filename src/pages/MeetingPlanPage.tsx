@@ -695,6 +695,23 @@ export default function MeetingPlanPage() {
   );
   const hasConfirmedParticipation = myParticipant?.confirmationStatus === "CONFIRMED";
 
+  const myDepartmentId = useMemo(
+    () => (users as any[]).find((u: any) => String(u.id) === String(user?.id))?.departmentId,
+    [users, user?.id]
+  );
+  const isRepresentative = useMemo(() => {
+    if (!myParticipant || !myDepartmentId) return false;
+    return (participants as any[]).some(
+      (p: any) => p.departmentId && !p.userId && String(p.departmentId) === String(myDepartmentId)
+    );
+  }, [participants, myParticipant, myDepartmentId]);
+  const visibleParticipantsForTaskSection = useMemo(() => {
+    if (!isRepresentative || myDepartmentId == null) return visibleParticipants;
+    return visibleParticipants.filter(
+      (p: any) => p.departmentId && !p.userId && String(p.departmentId) === String(myDepartmentId)
+    );
+  }, [visibleParticipants, isRepresentative, myDepartmentId]);
+
   /** Cuộc họp đã quá thời gian kết thúc → không cho xác nhận tham gia, không cho điểm danh trực tiếp; chỉ được yêu cầu điểm danh bù. */
   const isMeetingOver = (m: { endTime?: string } | null) => m?.endTime != null && new Date() > new Date(m.endTime);
 
@@ -1157,11 +1174,11 @@ export default function MeetingPlanPage() {
                       e.target.value = "";
                     }}
                   />
-                  {visibleParticipants.length === 0 ? (
+                  {visibleParticipantsForTaskSection.length === 0 ? (
                     <p className="text-muted-foreground text-xs">Chưa có thành phần tham dự.</p>
                   ) : (
                     <div className="space-y-3">
-                      {visibleParticipants.map((p: any) => {
+                      {visibleParticipantsForTaskSection.map((p: any) => {
                         const participantTasks = meetingTasks.filter((task: any) => {
                           if (p.userId) {
                             return task.assigneeId === String(p.userId);
@@ -1223,6 +1240,8 @@ export default function MeetingPlanPage() {
                                 {participantTasks.map((task: any) => {
                                   const taskDocs = meetingDocuments.filter((doc: any) => doc.taskId === task.id);
                                   const isMyTask = !!task.assigneeId && String(task.assigneeId) === String(user?.id);
+                                  const isMyDeptTask = isRepresentative && myDepartmentId != null && String(task.departmentId) === String(myDepartmentId);
+                                  const canUploadForTask = isMyTask || (isMyDeptTask && hasConfirmedParticipation);
                                   const taskStatus = String(task.status || "").toUpperCase();
                                   const isDone = taskStatus === "DONE";
                                   return (
@@ -1322,7 +1341,7 @@ export default function MeetingPlanPage() {
                                                     <Download className="h-3 w-3" />
                                                     Tải xuống
                                                   </Button>
-                                                  {(selectedMeeting?.host?.id === user?.id || selectedMeeting?.secretaryId === user?.id || isMyTask) && (
+                                                  {(selectedMeeting?.host?.id === user?.id || selectedMeeting?.secretaryId === user?.id || isAdmin || isMyTask || (isMyDeptTask && isRepresentative)) && (
                                                     <Button
                                                       type="button"
                                                       variant="ghost"
@@ -1340,7 +1359,7 @@ export default function MeetingPlanPage() {
                                             ))}
                                           </div>
                                         )}
-                                        {(selectedMeeting.status === "approved" || selectedMeeting.status === "completed") && isMyTask && (
+                                        {(selectedMeeting.status === "approved" || selectedMeeting.status === "completed") && canUploadForTask && (
                                           <Button
                                             type="button"
                                             variant="outline"
@@ -1353,7 +1372,7 @@ export default function MeetingPlanPage() {
                                             }}
                                           >
                                             <Upload className="h-3.5 w-3.5" />
-                                            Tải tài liệu của bạn lên
+                                            {isMyDeptTask ? "Tải tài liệu phòng ban lên" : "Tải tài liệu của bạn lên"}
                                           </Button>
                                         )}
                                       </div>
@@ -1454,9 +1473,10 @@ export default function MeetingPlanPage() {
 
                 {selectedMeeting.status === "approved" && (() => {
                   const isHostOrSecretary = selectedMeeting.host?.id === user?.id || selectedMeeting.secretaryId === user?.id;
+                  const isHostOrSecretaryOrAdmin = isHostOrSecretary || isAdmin;
                   const myParticipant = participants.find((p: any) => p.userId && String(p.userId) === String(user?.id));
                   const meetingOver = isMeetingOver(selectedMeeting);
-                  if (isHostOrSecretary) {
+                  if (isHostOrSecretaryOrAdmin) {
                     return (
                       <>
                         <Separator />
@@ -1465,14 +1485,17 @@ export default function MeetingPlanPage() {
                           {meetingOver ? (
                             <p className="text-xs text-muted-foreground mb-3">Đã quá thời gian họp. Chỉ có thể phê duyệt hoặc từ chối <strong>yêu cầu điểm danh bù</strong> của thành viên bên dưới.</p>
                           ) : (
-                            <p className="text-xs text-muted-foreground mb-3">Chủ trì / Thư ký đánh dấu có mặt hoặc vắng mặt cho từng thành viên.</p>
+                            <p className="text-xs text-muted-foreground mb-3">Chủ trì / Thư ký / Admin đánh dấu có mặt hoặc vắng mặt cho từng thành viên. Đại diện đã xác nhận tham dự mới hiện nút điểm danh.</p>
                           )}
                           <div className="space-y-2 max-h-48 overflow-y-auto">
-                            {participants.filter((p: any) => p.userId || p.departmentId).map((p: any) => (
+                            {participants.filter((p: any) => p.userId || p.departmentId).map((p: any) => {
+                              const isDeptOnly = !!p.departmentId && !p.userId;
+                              const showAttendanceButtons = !meetingOver && !isDeptOnly && (p.confirmationStatus === "CONFIRMED" || isAdmin);
+                              return (
                               <div key={p.id} className="flex flex-col gap-1.5 py-1.5 border-b border-border/50 last:border-0">
                                 <div className="flex items-center justify-between gap-2">
-                                  <p className="text-sm font-medium">{p.name}</p>
-                                  {!meetingOver && (
+                                  <p className="text-sm font-medium">{p.name}{isDeptOnly ? " (phòng ban)" : ""}</p>
+                                  {showAttendanceButtons && (
                                   <div
                                     role="group"
                                     aria-label="Điểm danh"
@@ -1516,6 +1539,7 @@ export default function MeetingPlanPage() {
                                     </Button>
                                   </div>
                                   )}
+                                  {isDeptOnly && <span className="text-xs text-muted-foreground">Xem đại diện bên dưới</span>}
                                 </div>
                                 {p.lateCheckInRequestedAt && (
                                   <div className="flex items-center gap-2 pl-0 text-xs text-muted-foreground">
@@ -1543,13 +1567,13 @@ export default function MeetingPlanPage() {
                                   </div>
                                 )}
                               </div>
-                            ))}
+                            ); })}
                           </div>
                         </div>
                       </>
                     );
                   }
-                  if (myParticipant && (myParticipant.attendance !== "PRESENT" || isMeetingOver(selectedMeeting))) {
+                  if (myParticipant) {
                     const meetingOver = isMeetingOver(selectedMeeting);
                     const alreadyPresent = myParticipant.attendance === "PRESENT";
                     return (
@@ -2074,12 +2098,19 @@ export default function MeetingPlanPage() {
           <div className="py-2">
             {representativesModal?.representativeParticipants?.length ? (
               <ul className="space-y-1.5 text-sm">
-                {representativesModal.representativeParticipants.map((rep: any, idx: number) => (
-                  <li key={rep.id} className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium">{idx + 1}</span>
-                    {rep.name || "(Không tên)"}
-                  </li>
-                ))}
+                {representativesModal.representativeParticipants.map((rep: any, idx: number) => {
+                  const confLabel = rep.confirmationStatus === "CONFIRMED" ? "Đã xác nhận tham dự" : rep.confirmationStatus === "DECLINED" ? "Đã từ chối" : "Chưa xác nhận";
+                  const confVariant = rep.confirmationStatus === "CONFIRMED" ? "default" : rep.confirmationStatus === "DECLINED" ? "destructive" : "secondary";
+                  return (
+                    <li key={rep.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium">{idx + 1}</span>
+                        <span className="truncate">{rep.name || "(Không tên)"}</span>
+                      </div>
+                      <Badge variant={confVariant} className="text-[10px] shrink-0">{confLabel}</Badge>
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <p className="text-sm text-muted-foreground">Chưa có đại diện.</p>

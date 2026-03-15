@@ -75,10 +75,11 @@ export default function CreateMeetingPage() {
   const { data: departments = [] } = useDepartments();
 
   const isSecretary = account?.authorities?.includes("ROLE_SECRETARY") || false;
+  const isAdmin = account?.authorities?.includes("ROLE_ADMIN") ?? false;
 
   const meetingTypes = mockTypes;
   const meetingLevels = mockLevels.filter(l => {
-    if (l.value === "company" && !isSecretary) return false;
+    if (l.value === "company" && !isSecretary && !isAdmin) return false;
     return l.value === "company" || l.value === "department";
   });
 

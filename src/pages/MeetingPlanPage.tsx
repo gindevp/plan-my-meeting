@@ -665,29 +665,28 @@ export default function MeetingPlanPage() {
     enabled: !!selectedMeeting,
   });
 
-  // Ẩn các participant cá nhân được thư ký chọn làm đại diện cho một participant phòng ban:
-  // - Vẫn giữ participant phòng ban trong danh sách chính.
-  // - Các cá nhân đại diện chỉ hiển thị trong modal "Xem đại diện", không nằm ở "Thành phần tham dự".
-  // - Ẩn luôn thư ký cuộc họp khỏi danh sách thành phần tham dự (chỉ quản lý, không hiện trong list).
+  // Cấp Tổng công ty: thành phần tham dự CHỈ hiển thị phòng ban, không hiển thị người đại diện (đại diện chỉ trong modal).
+  // Cấp khác: ẩn thư ký và ẩn đại diện (user thuộc phòng đã có participant phòng ban).
   const visibleParticipants = useMemo(() => {
     const list = participants as any[];
+    const isCompanyLevel = selectedMeeting && normalizeLevel(selectedMeeting.level) === "company";
+    if (isCompanyLevel) {
+      return list.filter((p: any) => p.departmentId && !p.userId);
+    }
     const secretaryId = selectedMeeting ? String(selectedMeeting.secretaryId ?? "") : "";
     const deptIdsWithDeptParticipant = new Set(
       list.filter((p: any) => p.departmentId && !p.userId).map((p: any) => String(p.departmentId))
     );
     return list.filter((p: any) => {
-      if (p.userId && secretaryId && String(p.userId) === secretaryId) {
-        return false;
-      }
-      if (p.departmentId && !p.userId) {
-        return true;
-      }
-      if (p.userId && p.departmentId) {
-        return !deptIdsWithDeptParticipant.has(String(p.departmentId));
+      if (p.userId && secretaryId && String(p.userId) === secretaryId) return false;
+      if (p.departmentId && !p.userId) return true;
+      if (p.userId) {
+        const userDeptId = (users as any[]).find((u: any) => String(u.id) === String(p.userId))?.departmentId;
+        if (userDeptId != null && deptIdsWithDeptParticipant.has(String(userDeptId))) return false;
       }
       return true;
     });
-  }, [participants, selectedMeeting]);
+  }, [participants, selectedMeeting, users]);
 
   const myParticipant = useMemo(
     () => (participants as any[]).find((p: any) => p.userId && String(p.userId) === String(user?.id)),
@@ -2051,7 +2050,7 @@ export default function MeetingPlanPage() {
       </Dialog>
 
       <Dialog open={!!representativesModal} onOpenChange={(open) => !open && setRepresentativesModal(null)}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold flex items-center gap-2">
               <Users className="h-4 w-4" />
@@ -2061,140 +2060,16 @@ export default function MeetingPlanPage() {
               {representativesModal ? `Phòng ban: ${representativesModal.departmentName}` : ""}
             </p>
           </DialogHeader>
-          <div className="py-2 space-y-3">
+          <div className="py-2">
             {representativesModal?.representativeParticipants?.length ? (
-              representativesModal.representativeParticipants.map((rep: any) => {
-                const repTasks = (meetingTasks as any[]).filter((t: any) => t.assigneeId === String(rep.userId));
-                const confLabel = rep.confirmationStatus === "CONFIRMED" ? "Đã xác nhận" : rep.confirmationStatus === "DECLINED" ? "Đã từ chối" : "Chưa xác nhận";
-                const confVariant = rep.confirmationStatus === "CONFIRMED" ? "default" : rep.confirmationStatus === "DECLINED" ? "destructive" : "secondary";
-                const ConfIcon = rep.confirmationStatus === "CONFIRMED" ? UserCheck : rep.confirmationStatus === "DECLINED" ? UserX : Clock;
-                const isMyRep = String(rep.userId) === String(user?.id);
-                return (
-                  <div key={rep.id} className={`rounded-lg border p-3 bg-card ${isMyRep ? "ring-2 ring-primary/50 border-primary/30" : ""}`}>
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <p className="font-semibold text-sm">{rep.name || "(Không tên)"}</p>
-                      <div className="flex items-center gap-2">
-                        {(activeTab === "approved" || activeTab === "completed") && (
-                          <Badge variant={confVariant} className="text-[11px] gap-1">
-                            <ConfIcon className="h-3 w-3 shrink-0" />
-                            {confLabel}
-                          </Badge>
-                        )}
-                        <Badge variant={isMyRep ? "default" : "secondary"} className={`text-[11px] gap-1 ${isMyRep ? "bg-primary/90 font-medium" : ""}`}>
-                          {isMyRep ? <ListTodo className="h-3.5 w-3.5 shrink-0" /> : null}
-                          {isMyRep ? `Task của tôi (${repTasks.length})` : `${repTasks.length} task`}
-                        </Badge>
-                      </div>
-                    </div>
-                    {repTasks.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Chưa được giao task.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {repTasks.map((task: any) => {
-                          const taskDocs = meetingDocuments.filter((doc: any) => doc.taskId === task.id);
-                          const isMyTask = !!task.assigneeId && String(task.assigneeId) === String(user?.id);
-                          const taskStatus = String(task.status || "").toUpperCase();
-                          const isDone = taskStatus === "DONE";
-                          return (
-                            <div key={task.id} className="rounded-md border bg-secondary/30 p-3 text-xs">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="font-medium text-sm">{task.title}</p>
-                                <div className="flex items-center gap-2">
-                                  {(activeTab === "approved" || activeTab === "completed") && (
-                                    <>
-                                      {isMyTask && hasConfirmedParticipation ? (
-                                        <div className="inline-flex h-8 rounded-full bg-muted p-0.5 border border-border shrink-0">
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            disabled={updateTaskStatusMutation.isPending}
-                                            onClick={(e) => { e.stopPropagation(); if (task.id) updateTaskStatusMutation.mutate({ taskId: String(task.id), status: "IN_PROGRESS" }); }}
-                                            className={`h-7 min-w-[4.5rem] rounded-full px-3 text-xs font-medium gap-1.5 ${!isDone ? "bg-primary text-primary-foreground hover:bg-primary/90" : "text-muted-foreground hover:text-foreground"}`}
-                                          >
-                                            {updateTaskStatusMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin shrink-0" /> : <PlayCircle className="h-3 w-3 shrink-0" />}
-                                            IN_PROGRESS
-                                          </Button>
-                                          <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            disabled={updateTaskStatusMutation.isPending}
-                                            onClick={(e) => { e.stopPropagation(); if (task.id) updateTaskStatusMutation.mutate({ taskId: String(task.id), status: "DONE" }); }}
-                                            className={`h-7 min-w-[4.5rem] rounded-full px-3 text-xs font-medium gap-1.5 ${isDone ? "bg-primary text-primary-foreground hover:bg-primary/90" : "text-muted-foreground hover:text-foreground"}`}
-                                          >
-                                            <CheckCircle className="h-3 w-3 shrink-0" />
-                                            Done
-                                          </Button>
-                                        </div>
-                                      ) : isMyTask ? (
-                                        <Badge variant="outline" className="text-[11px] gap-1"><Circle className="h-3 w-3 shrink-0" /> TODO</Badge>
-                                      ) : (
-                                        <Badge variant="outline" className="text-[11px] gap-1">
-                                          {taskStatus === "DONE" ? <CheckCircle className="h-3 w-3 shrink-0" /> : taskStatus === "IN_PROGRESS" ? <PlayCircle className="h-3 w-3 shrink-0" /> : <Circle className="h-3 w-3 shrink-0" />}
-                                          {task.status}
-                                        </Badge>
-                                      )}
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="mt-1 grid grid-cols-1 md:grid-cols-3 gap-2 text-muted-foreground">
-                                <p>Hạn chót: <span className="text-foreground">{task.dueAt ? new Date(task.dueAt).toLocaleString("vi-VN") : "-"}</span></p>
-                                <p>Loại: <span className="text-foreground">{task.type || "-"}</span></p>
-                                <p>Nhắc trước: <span className="text-foreground">{task.remindBeforeMinutes ?? "-"} phút</span></p>
-                              </div>
-                              {task.description && (
-                                <div className="mt-1">
-                                  <p className="font-medium text-muted-foreground mb-0.5">Mô tả:</p>
-                                  <p className="text-muted-foreground">{task.description}</p>
-                                </div>
-                              )}
-                              <div className="mt-2 pt-2 border-t">
-                                <p className="font-medium mb-1">Tài liệu của task ({taskDocs.length})</p>
-                                {taskDocs.length === 0 ? (
-                                  <p className="text-muted-foreground">Không có tài liệu.</p>
-                                ) : (
-                                  <div className="space-y-1">
-                                    {taskDocs.map((doc: any) => (
-                                      <div key={doc.id} className="flex items-center justify-between gap-2 rounded bg-background px-2 py-1 border text-muted-foreground">
-                                        <span className="text-foreground">{doc.fileName || "(Không tên)"}</span>
-                                        <div className="flex items-center gap-1 shrink-0">
-                                          <Button type="button" variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => downloadMeetingDocument(doc.id)}>
-                                            <Download className="h-3 w-3" /> Tải xuống
-                                          </Button>
-                                          {(selectedMeeting?.host?.id === user?.id || selectedMeeting?.secretaryId === user?.id || isMyTask) && (
-                                            <Button type="button" variant="ghost" size="sm" className="h-7 text-xs gap-1 text-destructive hover:text-destructive" onClick={() => deleteDocumentMutation.mutate(doc.id)} disabled={deleteDocumentMutation.isPending}>
-                                              <Trash2 className="h-3 w-3" /> Xóa
-                                            </Button>
-                                          )}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                {(selectedMeeting?.status === "approved" || selectedMeeting?.status === "completed") && isMyTask && (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="gap-1.5 mt-2"
-                                    disabled={uploadTaskDocMutation.isPending}
-                                    onClick={() => { setPendingUploadTaskId(String(task.id)); taskFileInputRef.current?.click(); }}
-                                  >
-                                    <Upload className="h-3.5 w-3.5" />
-                                    Tải tài liệu của bạn lên
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+              <ul className="space-y-1.5 text-sm">
+                {representativesModal.representativeParticipants.map((rep: any, idx: number) => (
+                  <li key={rep.id} className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium">{idx + 1}</span>
+                    {rep.name || "(Không tên)"}
+                  </li>
+                ))}
+              </ul>
             ) : (
               <p className="text-sm text-muted-foreground">Chưa có đại diện.</p>
             )}

@@ -728,7 +728,7 @@ export async function createPostMeetingTask(payload: {
   assignedById: number | string;
 }) {
   const body: Record<string, unknown> = {
-    meeting: { id: Number(payload.meetingId) },
+    meetingId: Number(payload.meetingId),
     type: "POST_MEETING",
     title: payload.title,
     description: payload.description ?? "",

@@ -836,7 +836,9 @@ export default function CreateMeetingPage() {
     }
   };
 
-  const filteredUsers = usersByDepartment.filter((u: any) => u.name.toLowerCase().includes(attendeeSearch.toLowerCase()));
+  const filteredUsers = usersByDepartment
+    .filter((u: any) => !secretaryId || String(u.id) !== String(secretaryId))
+    .filter((u: any) => (u.name || u.login || "").toLowerCase().includes(attendeeSearch.toLowerCase()));
   const errorClass = (field: string) => (errors[field] ? "border-destructive" : "");
 
   return (

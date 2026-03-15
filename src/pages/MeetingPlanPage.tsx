@@ -663,6 +663,7 @@ export default function MeetingPlanPage() {
     queryKey: ["participants", selectedMeeting?.id],
     queryFn: () => getParticipantsByMeeting(selectedMeeting!.id),
     enabled: !!selectedMeeting,
+    refetchInterval: selectedMeeting?.endTime && new Date() > new Date(selectedMeeting.endTime) ? 8000 : false,
   });
 
   // Cấp Tổng công ty: thành phần tham dự CHỈ hiển thị phòng ban, không hiển thị người đại diện (đại diện chỉ trong modal).
@@ -1550,69 +1551,79 @@ export default function MeetingPlanPage() {
                   }
                   if (myParticipant && (myParticipant.attendance !== "PRESENT" || isMeetingOver(selectedMeeting))) {
                     const meetingOver = isMeetingOver(selectedMeeting);
+                    const alreadyPresent = myParticipant.attendance === "PRESENT";
                     return (
                       <>
                         <Separator />
                         <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
                           <p className="font-medium text-sm mb-2">Điểm danh</p>
-                          {meetingOver ? (
-                            <p className="text-xs text-muted-foreground mb-2">Đã quá thời gian họp. Chỉ có thể yêu cầu điểm danh bù (chủ trì sẽ phê duyệt).</p>
-                          ) : (
-                            <p className="text-xs text-muted-foreground mb-2">Xác nhận trạng thái có mặt của bạn.</p>
-                          )}
-                          <div className="flex flex-wrap items-center gap-2">
-                            {!meetingOver && (
-                            <div
-                              role="group"
-                              aria-label="Điểm danh"
-                              className="inline-flex h-8 rounded-full bg-muted p-0.5 border border-border"
-                            >
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                disabled={attendanceMutation.isPending}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  attendanceMutation.mutate({ participantId: myParticipant.id, attendance: "PRESENT" });
-                                }}
-                                className="h-7 min-w-[4.5rem] rounded-full px-3 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"
-                              >
-                                <UserCheck className="h-3 w-3 shrink-0 mr-1" />
-                                Có mặt
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                disabled={attendanceMutation.isPending}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  e.preventDefault();
-                                  attendanceMutation.mutate({ participantId: myParticipant.id, attendance: "ABSENT" });
-                                }}
-                                className="h-7 min-w-[4rem] rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-                              >
-                                Vắng
-                              </Button>
+                          {meetingOver && alreadyPresent ? (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="default" className="gap-1">
+                                <UserCheck className="h-3 w-3 shrink-0" />
+                                Trạng thái điểm danh: Đã có mặt
+                              </Badge>
                             </div>
-                            )}
-                            {myParticipant.lateCheckInRequestedAt ? (
-                              <span className="text-xs text-muted-foreground">Đã gửi yêu cầu điểm danh bù, chờ chủ trì phê duyệt.</span>
-                            ) : (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="h-8 text-xs"
-                                disabled={requestLateCheckInMutation.isPending}
-                                onClick={() => requestLateCheckInMutation.mutate(myParticipant.id)}
+                          ) : meetingOver ? (
+                            <>
+                              <p className="text-xs text-muted-foreground mb-2">Đã quá thời gian họp. Chỉ có thể yêu cầu điểm danh bù (chủ trì sẽ phê duyệt).</p>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {myParticipant.lateCheckInRequestedAt ? (
+                                  <span className="text-xs text-muted-foreground">Đã gửi yêu cầu điểm danh bù, chờ chủ trì phê duyệt.</span>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 text-xs"
+                                    disabled={requestLateCheckInMutation.isPending}
+                                    onClick={() => requestLateCheckInMutation.mutate(myParticipant.id)}
+                                  >
+                                    Yêu cầu điểm danh bù
+                                  </Button>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-xs text-muted-foreground mb-2">Xác nhận trạng thái có mặt của bạn.</p>
+                              <div
+                                role="group"
+                                aria-label="Điểm danh"
+                                className="inline-flex h-8 rounded-full bg-muted p-0.5 border border-border"
                               >
-                                Yêu cầu điểm danh bù
-                              </Button>
-                            )}
-                          </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={attendanceMutation.isPending}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    attendanceMutation.mutate({ participantId: myParticipant.id, attendance: "PRESENT" });
+                                  }}
+                                  className="h-7 min-w-[4.5rem] rounded-full px-3 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"
+                                >
+                                  <UserCheck className="h-3 w-3 shrink-0 mr-1" />
+                                  Có mặt
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={attendanceMutation.isPending}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    attendanceMutation.mutate({ participantId: myParticipant.id, attendance: "ABSENT" });
+                                  }}
+                                  className="h-7 min-w-[4rem] rounded-full px-3 text-xs font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                                >
+                                  Vắng
+                                </Button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </>
                     );

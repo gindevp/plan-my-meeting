@@ -540,6 +540,11 @@ export async function respondToInvitation(
   });
 }
 
+/** Xóa lời mời (chỉ được gọi khi cuộc họp đã quá giờ; hoặc admin xóa bất kỳ lúc nào). */
+export async function deleteMeetingParticipant(participantId: number | string): Promise<void> {
+  await fetchApi(`/api/meeting-participants/${participantId}`, { method: "DELETE" });
+}
+
 export async function updateParticipantAttendance(
   participantId: number | string,
   attendance: "PRESENT" | "ABSENT" | "NOT_MARKED" | "EXCUSED"

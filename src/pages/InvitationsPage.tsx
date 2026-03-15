@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { getAllParticipants, respondToInvitation, selectRepresentatives } from "@/services/api/meetings";
+import { getAllParticipants, respondToInvitation, selectRepresentatives, deleteMeetingParticipant } from "@/services/api/meetings";
 import { getUsersByDepartment } from "@/services/api/users";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Eye, UserCheck, UserX, Calendar, Clock, Building2, Users } from "lucide-react";
+import { Mail, Eye, UserCheck, UserX, Calendar, Clock, Building2, Users, Trash2 } from "lucide-react";
 
 function formatTime(dateStr: string): string {
   const d = new Date(dateStr);
@@ -53,6 +53,7 @@ export default function InvitationsPage() {
   const [requiredDeclineParticipantId, setRequiredDeclineParticipantId] = useState<number | null>(null);
   const [selectModal, setSelectModal] = useState<{ participantId: number; meeting: any; departmentName: string } | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const [deleteConfirmInvitationId, setDeleteConfirmInvitationId] = useState<number | null>(null);
 
   const isSecretary = user?.authorities?.includes("ROLE_SECRETARY") ?? false;
   const userDepartmentId = user?.departmentId != null ? String(user.departmentId) : null;
@@ -140,6 +141,19 @@ export default function InvitationsPage() {
     }
     selectMutation.mutate({ participantId: selectModal.participantId, userIds: selectedUserIds });
   };
+
+  const deleteInvitationMutation = useMutation({
+    mutationFn: (participantId: number) => deleteMeetingParticipant(participantId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["all-participants"] });
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      setDeleteConfirmInvitationId(null);
+      toast({ title: "Đã xóa", description: "Lời mời đã được xóa khỏi danh sách." });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể xóa lời mời." });
+    },
+  });
 
   return (
     <div className="page-content">
@@ -295,7 +309,18 @@ export default function InvitationsPage() {
                         Xem chi tiết
                       </Button>
                       {isMeetingOver(meeting) ? (
-                        <span className="text-xs text-muted-foreground">Đã quá thời gian họp. Vào chi tiết cuộc họp để yêu cầu điểm danh bù.</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Đã quá thời gian họp. Vào chi tiết cuộc họp để yêu cầu điểm danh bù.</span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 text-destructive border-destructive/50 hover:bg-destructive/10"
+                            onClick={() => setDeleteConfirmInvitationId(inv.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Xóa lời mời
+                          </Button>
+                        </div>
                       ) : (
                         <>
                           <Button
@@ -362,6 +387,29 @@ export default function InvitationsPage() {
           })}
         </div>
       )}
+
+      <AlertDialog open={deleteConfirmInvitationId != null} onOpenChange={(open) => !open && setDeleteConfirmInvitationId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa lời mời</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc muốn xóa lời mời này? Lời mời sẽ không còn hiển thị trong danh sách của bạn.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (deleteConfirmInvitationId != null) deleteInvitationMutation.mutate(deleteConfirmInvitationId);
+              }}
+              disabled={deleteInvitationMutation.isPending}
+            >
+              {deleteInvitationMutation.isPending ? "Đang xử lý..." : "Xóa"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Modal chọn đại diện */}
       <Dialog open={!!selectModal} onOpenChange={(open) => !open && setSelectModal(null)}>

@@ -70,6 +70,18 @@ function validateEditForm(form: StaffForm): FormErrors {
   return validateAddForm(form);
 }
 
+const POSITION_OPTIONS = [
+  "Nhân viên",
+  "Thư ký",
+  "Trưởng phòng",
+  "Phó phòng",
+  "Quản lý",
+  "Giám đốc",
+  "Phó giám đốc",
+  "Tổng giám đốc",
+  "Phó tổng giám đốc",
+];
+
 export default function StaffPage() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -390,11 +402,17 @@ export default function StaffPage() {
               </div>
               <div className="space-y-2">
                 <Label>Chức vụ *</Label>
-                <Input
-                  placeholder="VD: Trưởng phòng, Nhân viên"
+                <SearchableSelect
+                  options={POSITION_OPTIONS.map((p) => ({ value: p, label: p }))}
                   value={form.position}
-                  onChange={(e) => { setForm({ ...form, position: e.target.value }); setAddErrors((prev) => ({ ...prev, position: "" })); }}
-                  className={addErrors.position ? "border-destructive" : ""}
+                  onValueChange={(v) => {
+                    setForm({ ...form, position: v });
+                    setAddErrors((prev) => ({ ...prev, position: "" }));
+                  }}
+                  placeholder="Chọn chức vụ"
+                  searchPlaceholder="Tìm chức vụ..."
+                  emptyText="Không tìm thấy."
+                  triggerClassName={addErrors.position ? "border-destructive" : ""}
                 />
                 {addErrors.position && <p className="text-xs text-destructive">{addErrors.position}</p>}
               </div>
@@ -486,11 +504,17 @@ export default function StaffPage() {
               </div>
               <div className="space-y-2">
                 <Label>Chức vụ *</Label>
-                <Input
-                  placeholder="VD: Trưởng phòng, Nhân viên"
+                <SearchableSelect
+                  options={POSITION_OPTIONS.map((p) => ({ value: p, label: p }))}
                   value={form.position}
-                  onChange={(e) => { setForm({ ...form, position: e.target.value }); setEditErrors((prev) => ({ ...prev, position: "" })); }}
-                  className={editErrors.position ? "border-destructive" : ""}
+                  onValueChange={(v) => {
+                    setForm({ ...form, position: v });
+                    setEditErrors((prev) => ({ ...prev, position: "" }));
+                  }}
+                  placeholder="Chọn chức vụ"
+                  searchPlaceholder="Tìm chức vụ..."
+                  emptyText="Không tìm thấy."
+                  triggerClassName={editErrors.position ? "border-destructive" : ""}
                 />
                 {editErrors.position && <p className="text-xs text-destructive">{editErrors.position}</p>}
               </div>

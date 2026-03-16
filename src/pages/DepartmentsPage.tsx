@@ -251,7 +251,12 @@ export default function DepartmentsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 opacity-0 animate-auth-fade-in-up auth-stagger-3">
-        {filtered.map((dept, i) => (
+        {filtered.map((dept, i) => {
+          const isBanLanhDao =
+            String(dept.code).toUpperCase() === "PB003" ||
+            String(dept.name).toLowerCase() === "ban lãnh đạo" ||
+            String(dept.name).toLowerCase() === "ban lanh dao";
+          return (
           <Card
             key={dept.id}
             className="card-elevated transition-all duration-300 hover:shadow-lg cursor-pointer"
@@ -270,7 +275,7 @@ export default function DepartmentsPage() {
                   </div>
                 </div>
                 <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                  {isAdmin && (
+                  {isAdmin && !isBanLanhDao && (
                     <>
                       <Button
                         variant="ghost"
@@ -324,7 +329,7 @@ export default function DepartmentsPage() {
               </div>
             </CardContent>
           </Card>
-        ))}
+        );})}
       </div>
 
       {/* Dialog chi tiết phòng ban: Tab 1 Nhân viên, Tab 2 Lịch họp */}

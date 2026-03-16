@@ -115,6 +115,55 @@ export default function CreateMeetingPage() {
   const { data: meetings = [] } = useMeetings();
   const existingMeeting = isEditMode ? meetings.find((m: any) => String(m.id) === String(meetingId)) : null;
 
+  const userDepartmentId = account?.departmentId != null ? String(account.departmentId) : null;
+
+  const banLanhDaoDepartmentId = useMemo(() => {
+    const dept = (departments as any[]).find(
+      (d: any) =>
+        String(d.code).toUpperCase() === "PB003" ||
+        String(d.name).toLowerCase() === "ban lãnh đạo" ||
+        String(d.name).toLowerCase() === "ban lanh dao"
+    );
+    return dept ? String(dept.id) : null;
+  }, [departments]);
+
+  const chairpersonCandidates = useMemo(() => {
+    const list = users as any[];
+    const lower = (s?: string) => (s || "").toLowerCase();
+    const nonStaffNonSecretary = (u: any) => {
+      const pos = lower(u.position);
+      if (!pos) return true;
+      return !pos.includes("nhân viên") && !pos.includes("thư ký");
+    };
+    if (meetingLevel === "department" && userDepartmentId) {
+      return list.filter(
+        (u: any) => String(u.departmentId) === userDepartmentId && nonStaffNonSecretary(u)
+      );
+    }
+    if (meetingLevel === "company" && banLanhDaoDepartmentId) {
+      return list.filter((u: any) => String(u.departmentId) === banLanhDaoDepartmentId && nonStaffNonSecretary(u));
+    }
+    return list;
+  }, [users, meetingLevel, userDepartmentId, banLanhDaoDepartmentId]);
+
+  const secretaryCandidates = useMemo(() => {
+    const list = users as any[];
+    const lower = (s?: string) => (s || "").toLowerCase();
+    const isSecretaryPosition = (u: any) => lower(u.position).includes("thư ký");
+    if (meetingLevel === "department" && userDepartmentId) {
+      return list.filter(
+        (u: any) => String(u.departmentId) === userDepartmentId && isSecretaryPosition(u)
+      );
+    }
+    if (meetingLevel === "company" && banLanhDaoDepartmentId) {
+      return list.filter(
+        (u: any) => String(u.departmentId) === banLanhDaoDepartmentId && isSecretaryPosition(u)
+      );
+    }
+    // fallback: dùng ROLE_SECRETARY hiện tại
+    return list.filter((u: any) => u.role === "secretary");
+  }, [users, meetingLevel, userDepartmentId, banLanhDaoDepartmentId]);
+
   const { data: existingAgendaItems = [] } = useQuery({
     queryKey: ["edit-meeting-agenda", meetingId],
     queryFn: () => getAgendaItemsByMeeting(meetingId!),
@@ -1190,7 +1239,7 @@ export default function CreateMeetingPage() {
                     <CommandList>
                       <CommandEmpty>Không tìm thấy người dùng.</CommandEmpty>
                       <CommandGroup>
-                        {(users as any[]).map((u: any) => (
+                        {chairpersonCandidates.map((u: any) => (
                           <CommandItem
                             key={u.id}
                             value={`${u.name || u.login} ${u.email || ""} ${u.position || ""}`}
@@ -1249,7 +1298,7 @@ export default function CreateMeetingPage() {
                         >
                           Không chọn
                         </CommandItem>
-                        {(users as any[]).filter((u: any) => u.role === "secretary").map((u: any) => (
+                        {secretaryCandidates.map((u: any) => (
                           <CommandItem
                             key={u.id}
                             value={`${u.name || u.login} ${u.email || ""} ${u.position || ""}`}

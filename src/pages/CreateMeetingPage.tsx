@@ -77,6 +77,7 @@ export default function CreateMeetingPage() {
 
   const isSecretary = account?.authorities?.includes("ROLE_SECRETARY") || false;
   const isAdmin = account?.authorities?.includes("ROLE_ADMIN") ?? false;
+  const isRoomManager = account?.authorities?.includes("ROLE_ROOM_MANAGER") ?? false;
 
   const meetingTypes = mockTypes;
   const meetingLevels = mockLevels.filter(l => {
@@ -87,6 +88,7 @@ export default function CreateMeetingPage() {
   const [step, setStep] = useState(1);
   const [meetingType, setMeetingType] = useState<MeetingType>("offline");
   const [meetingLevel, setMeetingLevel] = useState<MeetingLevel>("department");
+  const isAutoApprovedFlow = meetingLevel === "company" || (isRoomManager && !isAdmin);
   const [selectedDepartment, setSelectedDepartment] = useState<string>("");
   const [selectedRoom, setSelectedRoom] = useState("");
   const [title, setTitle] = useState("");
@@ -813,6 +815,7 @@ export default function CreateMeetingPage() {
     mutationFn: (data: { id: string; payload: any }) => updateMeeting(data.id, data.payload),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      if (variables.payload.approveAfterUpdate) return;
       toast({ title: "Đã cập nhật", description: "Cuộc họp đã được cập nhật thành công." });
       const currentStatus = existingMeeting?.status ?? "draft";
       redirectToPlansTab(currentStatus === "pending" ? "pending" : "draft");
@@ -841,6 +844,12 @@ export default function CreateMeetingPage() {
       const organizerDepartmentId = resolveOrganizerDepartmentId();
 
       if (isEditMode && meetingId) {
+        const isPendingSecretaryLevelChange =
+          submitAfterUpdate &&
+          existingMeeting?.status === "pending" &&
+          isSecretary &&
+          meetingLevel === "company";
+
         await updateMutation.mutateAsync({
           id: meetingId,
           payload: {
@@ -859,14 +868,17 @@ export default function CreateMeetingPage() {
             agendaItems: agendaPayload,
             tasks,
             documents,
+            approveAfterUpdate: isPendingSecretaryLevelChange,
           },
         });
 
         if (submitAfterUpdate) {
-          await submitMeeting(meetingId);
+          if (!isPendingSecretaryLevelChange) {
+            await submitMeeting(meetingId);
+          }
           queryClient.invalidateQueries({ queryKey: ["meetings"] });
-          if (meetingLevel === "company") {
-            toast({ title: "Tạo cuộc họp thành công", description: "Cuộc họp cấp tổng công ty đã được tự động duyệt." });
+          if (isAutoApprovedFlow || isPendingSecretaryLevelChange) {
+            toast({ title: "Tạo cuộc họp thành công", description: meetingLevel === "company" ? "Cuộc họp cấp tổng công ty đã được tự động duyệt." : "Cuộc họp đã được tạo và tự động duyệt." });
             redirectToPlansTab("approved");
           } else {
             toast({ title: "Đã gửi duyệt", description: "Cuộc họp đã được cập nhật và gửi phê duyệt." });
@@ -893,8 +905,8 @@ export default function CreateMeetingPage() {
           submitAfterCreate: true,
         });
         if (created?.id != null) {
-          if (meetingLevel === "company") {
-            toast({ title: "Tạo cuộc họp thành công", description: "Cuộc họp cấp tổng công ty đã được tự động duyệt." });
+          if (isAutoApprovedFlow) {
+            toast({ title: "Tạo cuộc họp thành công", description: meetingLevel === "company" ? "Cuộc họp cấp tổng công ty đã được tự động duyệt." : "Cuộc họp đã được tạo và tự động duyệt." });
             redirectToPlansTab("approved");
           } else {
             toast({ title: "Đã gửi duyệt", description: "Cuộc họp đã được tạo và gửi phê duyệt." });
@@ -1599,15 +1611,15 @@ export default function CreateMeetingPage() {
               <Button variant="outline" onClick={() => handleSubmit(false)}>
                 <Save className="h-4 w-4 mr-1.5" /> Cập nhật
               </Button>
-              {existingMeeting?.status !== "pending" && (
+              {(existingMeeting?.status !== "pending" || (existingMeeting?.status === "pending" && isSecretary && meetingLevel === "company")) && (
                 <Button onClick={() => handleSubmit(true)}>
-                  <Send className="h-4 w-4 mr-1.5" /> {meetingLevel === "company" ? "Tạo cuộc họp" : "Gửi duyệt"}
+                  <Send className="h-4 w-4 mr-1.5" /> {isAutoApprovedFlow || (existingMeeting?.status === "pending" && isSecretary && meetingLevel === "company") ? "Cập nhật và duyệt" : "Gửi duyệt"}
                 </Button>
               )}
             </>
           ) : (
             <Button onClick={() => handleSubmit(false)}>
-              {meetingLevel === "company" ? (
+              {isAutoApprovedFlow ? (
                 <>
                   <Send className="h-4 w-4 mr-1.5" /> Tạo cuộc họp
                 </>

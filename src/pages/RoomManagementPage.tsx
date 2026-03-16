@@ -31,7 +31,7 @@ const statusConfig: Record<string, { label: string; class: string; dot: string }
 
 type RoomEquipmentEntry = { equipmentId: string; quantity: number };
 const emptyRoom: Omit<RoomListItem, "id"> & { equipment?: { name: string; quantity: number }[]; equipmentEntries?: RoomEquipmentEntry[]; imageUrl?: string; description?: string; roomType?: string; layoutData?: string } = {
-  name: "", code: "", capacity: 10, floor: "", equipment: [], equipmentEntries: [], status: "available", imageUrl: "", description: "", roomType: "", layoutData: "",
+  name: "", code: "", capacity: "" as any, floor: "", equipment: [], equipmentEntries: [], status: "available", imageUrl: "", description: "", roomType: "", layoutData: "",
 };
 
 export default function RoomManagementPage() {
@@ -295,10 +295,11 @@ export default function RoomManagementPage() {
   const validateForm = (): string | null => {
     if (!form.name.trim()) return "Vui lòng nhập tên phòng";
     if (!form.floor.trim()) return "Vui lòng nhập vị trí (tầng)";
-    if (!form.capacity || form.capacity < 1) return "Sức chứa phải lớn hơn 0";
-    if (form.capacity > 500) return "Sức chứa không được vượt quá 500";
+    const cap = typeof form.capacity === "number" ? form.capacity : parseInt(String(form.capacity), 10);
+    if (form.capacity === "" || form.capacity === undefined || form.capacity === null || !Number.isFinite(cap) || cap < 1) return "Sức chứa phải lớn hơn 0";
+    if (cap > 500) return "Sức chứa không được vượt quá 500";
     const chairs = countChairsInLayout(form.layoutData);
-    if (chairs > (form.capacity ?? 0)) return `Số ghế trong layout (${chairs}) vượt quá sức chứa phòng (${form.capacity}).`;
+    if (chairs > cap) return `Số ghế trong layout (${chairs}) vượt quá sức chứa phòng (${cap}).`;
     return null;
   };
 
@@ -348,11 +349,12 @@ export default function RoomManagementPage() {
       return;
     }
     setSaving(true);
+    const capNum = typeof form.capacity === "number" ? form.capacity : parseInt(String(form.capacity), 10) || 0;
     const payload = {
       code: form.code?.trim() || (editingRoom ? editingRoom.code : `ROOM_${Date.now()}`),
       name: form.name,
       location: form.floor,
-      capacity: form.capacity,
+      capacity: capNum,
       active: form.status === "available",
       imageUrl: imageFile ? undefined : (form.imageUrl?.trim() || undefined),
       description: form.description?.trim() || undefined,
@@ -677,8 +679,12 @@ export default function RoomManagementPage() {
                   type="number"
                   min={1}
                   max={500}
-                  value={form.capacity}
-                  onChange={(e) => setForm({ ...form, capacity: parseInt(e.target.value) || 0 })}
+                  placeholder="Nhập sức chứa"
+                  value={form.capacity === "" || form.capacity === undefined ? "" : form.capacity}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setForm({ ...form, capacity: v === "" ? ("" as any) : (parseInt(v, 10) || 0) });
+                  }}
                   className="mt-1.5 h-11"
                 />
               </div>
@@ -965,7 +971,7 @@ export default function RoomManagementPage() {
                   <RoomLayoutEditor
                     key={layoutEditorKey}
                     layoutData={form.layoutData ?? "[]"}
-                    capacity={form.capacity ?? 10}
+                    capacity={typeof form.capacity === "number" && form.capacity > 0 ? form.capacity : 0}
                     onChange={(layoutData) => setForm((f) => ({ ...f, layoutData }))}
                     disabled={saving}
                     defaultCanvasWidth={layoutCanvasSize.w}

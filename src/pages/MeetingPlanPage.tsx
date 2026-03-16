@@ -98,6 +98,7 @@ export default function MeetingPlanPage() {
   const { data: users = [] } = useUsers();
   const { user } = useAuth();
   const isAdmin = user?.authorities?.includes("ROLE_ADMIN") ?? false;
+  const isRoomManager = user?.authorities?.includes("ROLE_ROOM_MANAGER") ?? false;
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -177,6 +178,16 @@ export default function MeetingPlanPage() {
     return ids;
   }, [allParticipantsForPlan, user?.id]);
 
+  const participantInAnyStatusMeetingIds = useMemo(() => {
+    const ids = new Set<string>();
+    (allParticipantsForPlan as any[]).forEach((p: any) => {
+      if (p.userId != null && String(p.userId) === String(user?.id) && p.meeting?.id != null) {
+        ids.add(String(p.meeting.id));
+      }
+    });
+    return ids;
+  }, [allParticipantsForPlan, user?.id]);
+
   const secretaryDepartmentMeetingIds = useMemo(() => {
     const ids = new Set<string>();
     if (!isSecretary || !userDepartmentId) return ids;
@@ -191,6 +202,30 @@ export default function MeetingPlanPage() {
     return ids;
   }, [allParticipantsForPlan, isSecretary, userDepartmentId]);
 
+  const secretaryDepartmentMeetingIdsAllStatuses = useMemo(() => {
+    const ids = new Set<string>();
+    if (!isSecretary || !userDepartmentId) return ids;
+    (allParticipantsForPlan as any[]).forEach((p: any) => {
+      if (p.userId == null && p.departmentId != null && String(p.departmentId) === userDepartmentId && p.meeting?.id != null) {
+        ids.add(String(p.meeting.id));
+      }
+      if (p.userId != null && p.departmentId != null && String(p.departmentId) === userDepartmentId && p.meeting?.id != null) {
+        ids.add(String(p.meeting.id));
+      }
+    });
+    return ids;
+  }, [allParticipantsForPlan, isSecretary, userDepartmentId]);
+
+  const secretaryOfMeetingIds = useMemo(() => {
+    const ids = new Set<string>();
+    (meetings as any[]).forEach((m: any) => {
+      if (m.secretaryId != null && String(m.secretaryId) === String(user?.id)) {
+        ids.add(String(m.id));
+      }
+    });
+    return ids;
+  }, [meetings, user?.id]);
+
   const participantMeetingsAsList = useMemo(() => {
     const list: any[] = [];
     const seen = new Set<string>();
@@ -200,6 +235,8 @@ export default function MeetingPlanPage() {
       if (seen.has(id)) return;
       seen.add(id);
       const m = p.meeting;
+      const sec = m.secretary;
+      const secretaryName = sec ? [sec.firstName, sec.lastName].filter(Boolean).join(" ").trim() || sec.login : undefined;
       list.push({
         id,
         title: m.title ?? "",
@@ -214,7 +251,8 @@ export default function MeetingPlanPage() {
         chairperson: m.chairperson ?? "",
         host: undefined,
         hostId: undefined,
-        secretaryId: undefined,
+        secretaryId: sec?.id ?? undefined,
+        secretaryName,
         department: m.department ?? "",
         description: "",
         requesterId: undefined,
@@ -237,6 +275,8 @@ export default function MeetingPlanPage() {
       if (seen.has(id)) return;
       seen.add(id);
       const m = p.meeting;
+      const sec = m.secretary;
+      const secretaryName = sec ? [sec.firstName, sec.lastName].filter(Boolean).join(" ").trim() || sec.login : undefined;
       list.push({
         id,
         title: m.title ?? "",
@@ -251,7 +291,8 @@ export default function MeetingPlanPage() {
         chairperson: m.chairperson ?? "",
         host: undefined,
         hostId: undefined,
-        secretaryId: undefined,
+        secretaryId: sec?.id ?? undefined,
+        secretaryName,
         department: m.department ?? "",
         description: "",
         requesterId: undefined,
@@ -307,6 +348,8 @@ export default function MeetingPlanPage() {
     );
     if (fromParticipant?.meeting) {
       const m = fromParticipant.meeting;
+      const sec = m.secretary;
+      const secretaryName = sec ? [sec.firstName, sec.lastName].filter(Boolean).join(" ").trim() || sec.login : undefined;
       setSelectedMeeting({
         id: String(m.id),
         title: m.title ?? "",
@@ -321,7 +364,8 @@ export default function MeetingPlanPage() {
         chairperson: m.chairperson ?? "",
         host: undefined,
         hostId: undefined,
-        secretaryId: undefined,
+        secretaryId: sec?.id ?? undefined,
+        secretaryName,
         department: m.department ?? "",
         description: "",
         requesterId: undefined,
@@ -336,10 +380,21 @@ export default function MeetingPlanPage() {
     return meetingsForTabs.filter((m: any) => {
       const matchStatus = m.status === activeTab;
       const matchSearch = m.title?.toLowerCase().includes(search.toLowerCase());
-      const isOwner = activeTab === "draft" ? m.requesterId === user?.id : m.requesterId === user?.id || m.hostId === user?.id;
-      const isParticipantInApproved = activeTab === "approved" && participantMeetingIds.has(String(m.id));
-      const isSecretaryDepartmentInvited = activeTab === "approved" && secretaryDepartmentMeetingIds.has(String(m.id));
-      const visibleToUser = isAdmin || isOwner || isParticipantInApproved || isSecretaryDepartmentInvited;
+      const isRequester = m.requesterId != null && String(m.requesterId) === String(user?.id);
+      const isHost = m.hostId != null && String(m.hostId) === String(user?.id);
+      const isSecretary =
+        (m.secretaryId != null && String(m.secretaryId) === String(user?.id)) || secretaryOfMeetingIds.has(String(m.id));
+      const isParticipant = participantInAnyStatusMeetingIds.has(String(m.id));
+      const isSecretaryDeptInvited = secretaryDepartmentMeetingIdsAllStatuses.has(String(m.id));
+
+      let visibleToUser: boolean;
+      if (activeTab === "draft" || activeTab === "cancelled") {
+        visibleToUser = isRequester;
+      } else if ((activeTab === "approved" || activeTab === "pending" || activeTab === "rejected" || activeTab === "completed") && isRoomManager) {
+        visibleToUser = true;
+      } else {
+        visibleToUser = isRequester || isHost || isSecretary || isParticipant || isSecretaryDeptInvited;
+      }
 
       if (!matchStatus || !matchSearch || !visibleToUser) return false;
 
@@ -359,21 +414,22 @@ export default function MeetingPlanPage() {
 
       return true;
     });
-  }, [meetingsForTabs, activeTab, search, user?.id, isAdmin, participantMeetingIds, filterStartDate, filterStartTime, filterEndDate, filterEndTime, filterLevel, filterType]);
+  }, [meetingsForTabs, activeTab, search, user?.id, isRoomManager, secretaryOfMeetingIds, participantInAnyStatusMeetingIds, secretaryDepartmentMeetingIdsAllStatuses, filterStartDate, filterStartTime, filterEndDate, filterEndTime, filterLevel, filterType]);
+
+  const isMeetingVisibleToUser = (m: any, status: string) => {
+    if ((status === "approved" || status === "pending" || status === "rejected" || status === "completed") && isRoomManager) return true;
+    const isRequester = m.requesterId != null && String(m.requesterId) === String(user?.id);
+    const isHost = m.hostId != null && String(m.hostId) === String(user?.id);
+    const isSecretary =
+      (m.secretaryId != null && String(m.secretaryId) === String(user?.id)) || secretaryOfMeetingIds.has(String(m.id));
+    const isParticipant = participantInAnyStatusMeetingIds.has(String(m.id));
+    const isSecretaryDeptInvited = secretaryDepartmentMeetingIdsAllStatuses.has(String(m.id));
+    if (status === "draft" || status === "cancelled") return isRequester;
+    return isRequester || isHost || isSecretary || isParticipant || isSecretaryDeptInvited;
+  };
 
   const getTabCount = (status: string) => {
-    if (isAdmin) {
-      return meetingsForTabs.filter((m: any) => m.status === status).length;
-    }
-    if (status === "draft") {
-      return meetings.filter(m => m.status === status && m.requesterId === user?.id).length;
-    }
-    if (status === "approved") {
-      return meetingsForTabs.filter(
-        (m: any) => m.status === status && (m.requesterId === user?.id || m.hostId === user?.id || participantMeetingIds.has(String(m.id)))
-      ).length;
-    }
-    return meetings.filter(m => m.status === status && (m.requesterId === user?.id || m.hostId === user?.id)).length;
+    return meetingsForTabs.filter((m: any) => m.status === status && isMeetingVisibleToUser(m, status)).length;
   };
 
   const canApproveRoom = user?.authorities?.includes("ROLE_ROOM_MANAGER") || user?.authorities?.includes("ROLE_ADMIN");
@@ -1117,6 +1173,7 @@ export default function MeetingPlanPage() {
                   <div><span className="text-muted-foreground">Thời gian:</span><br />{new Date(selectedMeeting.startTime).toLocaleString("vi-VN")}</div>
                   <div><span className="text-muted-foreground">Kết thúc:</span><br />{new Date(selectedMeeting.endTime).toLocaleString("vi-VN")}</div>
                   <div><span className="text-muted-foreground">Chủ trì:</span><br />{selectedMeeting.chairperson}</div>
+                  <div><span className="text-muted-foreground">Thư ký:</span><br />{selectedMeeting.secretaryName || (selectedMeeting.secretaryId ? (() => { const u = (users as any[]).find((x: any) => String(x.id) === String(selectedMeeting.secretaryId)); return u?.name || u?.login; })() : null) || "-"}</div>
                   <div><span className="text-muted-foreground">Đơn vị:</span><br />{selectedMeeting.department}</div>
                   {selectedMeeting.roomName && <div><span className="text-muted-foreground">Phòng họp:</span><br />{selectedMeeting.roomName}</div>}
                   {selectedMeeting.meetingLink && (

@@ -71,6 +71,13 @@ export function RoomLayoutEditor({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState<{ id: string; startX: number; startY: number; item: LayoutItem } | null>(null);
   const [resizeStart, setResizeStart] = useState<{ startX: number; startY: number; startW: number; startH: number } | null>(null);
+  const [itemResizeStart, setItemResizeStart] = useState<{
+    id: string;
+    startX: number;
+    startY: number;
+    startW: number;
+    startH: number;
+  } | null>(null);
   const sizeDuringResize = useRef({ w: canvasW, h: canvasH });
 
   useEffect(() => {
@@ -149,7 +156,7 @@ export function RoomLayoutEditor({
   };
 
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (resizeStart) return;
+    if (resizeStart || itemResizeStart) return;
     if (!dragStart) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -228,6 +235,40 @@ export function RoomLayoutEditor({
     };
   }, [resizeStart, items, onChange]);
 
+  // Kéo góc phần tử để đổi kích thước icon / đối tượng
+  useEffect(() => {
+    if (!itemResizeStart) return;
+    if (disabled || readOnly) {
+      setItemResizeStart(null);
+      return;
+    }
+    const onMove = (e: MouseEvent) => {
+      const dx = e.clientX - itemResizeStart.startX;
+      const dy = e.clientY - itemResizeStart.startY;
+      setItems((prev) => {
+        const next = prev.map((i) => {
+          if (i.id !== itemResizeStart.id) return i;
+          const minSize = 20;
+          let newW = Math.max(minSize, Math.round(itemResizeStart.startW + dx));
+          let newH = Math.max(minSize, Math.round(itemResizeStart.startH + dy));
+          // Không cho vượt ra ngoài canvas
+          newW = Math.min(newW, canvasW - i.x);
+          newH = Math.min(newH, canvasH - i.y);
+          return { ...i, width: newW, height: newH };
+        });
+        onChange(serializeLayoutData(canvasW, canvasH, next));
+        return next;
+      });
+    };
+    const onUp = () => setItemResizeStart(null);
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+  }, [itemResizeStart, canvasW, canvasH, disabled, readOnly, onChange]);
+
   const chairsCount = countChairsInLayout(JSON.stringify(items));
   const overCapacity = chairsCount > capacity;
   const noChairs = items.length > 0 && chairsCount === 0;
@@ -305,6 +346,30 @@ export function RoomLayoutEditor({
                 title={item.type}
               >
                 <Icon className="h-[60%] w-[60%] text-muted-foreground" />
+                {!disabled && !readOnly && selectedId === item.id && (
+                  <button
+                    type="button"
+                    className="absolute bottom-[1px] right-[1px] h-3 w-3 rounded-sm bg-primary text-primary-foreground flex items-center justify-center cursor-se-resize"
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      const rect = (e.currentTarget.parentElement?.parentElement as HTMLDivElement | undefined)?.getBoundingClientRect();
+                      const canvasRect = rect;
+                      if (!canvasRect) return;
+                      const startX = e.clientX;
+                      const startY = e.clientY;
+                      setItemResizeStart({
+                        id: item.id,
+                        startX,
+                        startY,
+                        startW: item.width,
+                        startH: item.height,
+                      });
+                    }}
+                    title="Kéo để thay đổi kích thước"
+                  >
+                    <span className="block h-1 w-1 bg-primary-foreground" />
+                  </button>
+                )}
               </div>
             );
           })}

@@ -94,6 +94,7 @@ export async function getMeetings(params?: { page?: number; size?: number }) {
     requesterId: m.requester?.id,
     hostId: m.host?.id,
     secretaryId: m.secretary?.id ?? undefined,
+    secretaryName: m.secretary ? [m.secretary.firstName, m.secretary.lastName].filter(Boolean).join(" ").trim() || m.secretary.login : undefined,
     attendees: [] as string[],
     agenda: [] as { order: number; title: string; presenter: string; duration: number }[],
   }));
@@ -133,6 +134,7 @@ export async function getMeetingById(id: number | string): Promise<MeetingListIt
       requesterId: meeting.requester?.id,
       hostId: meeting.host?.id,
       secretaryId: meeting.secretary?.id ?? undefined,
+      secretaryName: meeting.secretary ? [meeting.secretary.firstName, meeting.secretary.lastName].filter(Boolean).join(" ").trim() || meeting.secretary.login : undefined,
       attendees: [] as string[],
       agenda: [] as { order: number; title: string; presenter: string; duration: number }[],
     };
@@ -457,6 +459,7 @@ export async function updateMeeting(id: number | string, payload: Partial<Create
       tasks,
       documents,
       submitAfterCreate: false,
+      approveAfterUpdate: payload.approveAfterUpdate === true,
     }),
   });
 }
@@ -513,6 +516,7 @@ export async function getAllParticipants(): Promise<any[]> {
           level: p.meeting.level?.name ?? "",
           chairperson: p.meeting.host?.login ?? p.meeting.requester?.login ?? "",
           department: p.meeting.organizerDepartment?.name ?? "",
+          secretary: p.meeting.secretary,
         }
       : null,
   }));

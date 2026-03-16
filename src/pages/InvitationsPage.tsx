@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { getAllParticipants, respondToInvitation, selectRepresentatives, deleteMeetingParticipant } from "@/services/api/meetings";
+import { useMeetings } from "@/hooks/useMeetings";
 import { getUsersByDepartment } from "@/services/api/users";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,13 +66,44 @@ export default function InvitationsPage() {
     queryFn: getAllParticipants,
   });
 
-  const invitations = allParticipants.filter(
+  const { data: meetings = [] } = useMeetings();
+
+  const secretaryInvitations = useMemo(() => {
+    return (meetings as any[])
+      .filter(
+        (m: any) =>
+          m.secretaryId != null &&
+          String(m.secretaryId) === String(user?.id) &&
+          String(m.status ?? "").toLowerCase() === "approved"
+      )
+      .map((m: any) => ({
+        id: `secretary-${m.id}`,
+        isSecretaryInvitation: true,
+        meeting: {
+          id: String(m.id),
+          title: m.title,
+          startTime: m.startTime,
+          endTime: m.endTime,
+          chairperson: m.chairperson ?? m.organizer ?? "",
+          department: m.department ?? "",
+          level: m.level,
+        },
+      }));
+  }, [meetings, user?.id]);
+
+  const participantInvitations = allParticipants.filter(
     (p: any) =>
       p.userId != null &&
       String(p.userId) === String(user?.id) &&
       (p.confirmationStatus === "PENDING" || p.confirmationStatus === undefined) &&
       (String(p.meeting?.status ?? "").toUpperCase() === "APPROVED")
   );
+
+  const invitations = useMemo(() => {
+    const participantIds = new Set(participantInvitations.map((p: any) => String(p.meeting?.id)));
+    const onlySecretary = secretaryInvitations.filter((s: any) => !participantIds.has(String(s.meeting?.id)));
+    return [...participantInvitations, ...onlySecretary];
+  }, [participantInvitations, secretaryInvitations]);
 
   const departmentInvitations = allParticipants.filter(
     (p: any) =>
@@ -162,7 +194,7 @@ export default function InvitationsPage() {
       <div className="opacity-0 animate-auth-fade-in-up">
         <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">Lời mời</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Các cuộc họp đã phê duyệt mà bạn được mời tham dự hoặc phòng ban của bạn được mời
+          Các cuộc họp đã phê duyệt mà bạn được mời tham dự, làm thư ký cuộc họp, hoặc phòng ban của bạn được mời
         </p>
       </div>
 
@@ -279,7 +311,8 @@ export default function InvitationsPage() {
           {invitations.map((inv: any) => {
             const meeting = inv.meeting;
             if (!meeting) return null;
-            const isDeclineMode = declineParticipantId === inv.id;
+            const isSecretaryInv = inv.isSecretaryInvitation === true;
+            const isDeclineMode = !isSecretaryInv && declineParticipantId === inv.id;
             return (
               <Card key={inv.id} className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up transition-all duration-300 hover:shadow-lg" style={{ animationDelay: `${0.2 + invitations.indexOf(inv) * 0.05}s`, animationFillMode: "forwards" }}>
                 <CardHeader className="pb-2">
@@ -300,11 +333,21 @@ export default function InvitationsPage() {
                         )}
                       </div>
                     </div>
-                    <Badge variant="secondary" className="shrink-0">Chờ xác nhận</Badge>
+                    <Badge variant="secondary" className="shrink-0">
+                      {isSecretaryInv ? "Thư ký cuộc họp" : "Chờ xác nhận"}
+                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  {!isDeclineMode ? (
+                  {isSecretaryInv ? (
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openMeetingDetail(meeting.id)}>
+                        <Eye className="h-4 w-4" />
+                        Xem chi tiết
+                      </Button>
+                      <span className="text-xs text-muted-foreground">Bạn được chỉ định làm thư ký cuộc họp. Vào chi tiết để xem và quản lý.</span>
+                    </div>
+                  ) : !isDeclineMode ? (
                     <div className="flex flex-wrap gap-2 items-center">
                       <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openMeetingDetail(meeting.id)}>
                         <Eye className="h-4 w-4" />

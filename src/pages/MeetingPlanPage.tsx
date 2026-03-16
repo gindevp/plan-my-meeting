@@ -742,15 +742,32 @@ export default function MeetingPlanPage() {
     m?.startTime != null && m?.endTime != null && new Date() >= new Date(m.startTime) && new Date() <= new Date(m.endTime);
   const isMeetingOver = (m: { endTime?: string } | null) => m?.endTime != null && new Date() > new Date(m.endTime);
 
+  /** Cấp công ty: giao cho phòng ban. Cấp phòng ban: giao cho nhân viên. */
+  const isCompanyLevelMeeting = selectedMeeting && normalizeLevel(selectedMeeting.level) === "company";
   const postTaskAssigneeOptions = useMemo(() => {
     const list: { value: string; label: string }[] = [];
-    (participants as any[]).forEach((p: any) => {
-      if (p.departmentId && !p.userId) {
-        list.push({ value: `dept-${p.departmentId}`, label: p.name || `Phòng ban #${p.departmentId}` });
-      }
-    });
+    const parts = participants as any[];
+    const userList = users as any[];
+    if (isCompanyLevelMeeting) {
+      parts.forEach((p: any) => {
+        if (p.departmentId && !p.userId) {
+          list.push({ value: `dept-${p.departmentId}`, label: p.name || `Phòng ban #${p.departmentId}` });
+        }
+      });
+    } else {
+      const seen = new Set<string>();
+      parts.forEach((p: any) => {
+        if (p.userId != null) {
+          const idStr = String(p.userId);
+          if (seen.has(idStr)) return;
+          seen.add(idStr);
+          const u = userList.find((u: any) => String(u.id) === idStr);
+          list.push({ value: idStr, label: p.name || u?.name || u?.login || `#${p.userId}` });
+        }
+      });
+    }
     return list;
-  }, [participants]);
+  }, [participants, users, isCompanyLevelMeeting]);
 
   const addPostTaskRow = () => {
     setPostTasks(prev => [...prev, { key: `task-${Date.now()}-${Math.random().toString(36).slice(2)}`, title: "", dueAt: "", assigneeKey: "" }]);
@@ -771,15 +788,16 @@ export default function MeetingPlanPage() {
     }
     try {
       for (const t of toCreate) {
-        const departmentIdStr = t.assigneeKey.startsWith("dept-") ? t.assigneeKey.slice(5) : undefined;
-        const departmentId = departmentIdStr != null && departmentIdStr !== "" ? Number(departmentIdStr) : undefined;
-        const dept = departmentId != null ? (departments as any[]).find((d: any) => Number(d.id) === Number(departmentId)) : null;
+        const isDept = t.assigneeKey.startsWith("dept-");
+        const departmentId = isDept && t.assigneeKey.length > 5 ? Number(t.assigneeKey.slice(5)) : undefined;
+        const assigneeId = !isDept && t.assigneeKey ? Number(t.assigneeKey) : undefined;
+        const dept = departmentId != null && !Number.isNaN(departmentId) ? (departments as any[]).find((d: any) => Number(d.id) === Number(departmentId)) : null;
         await createPostTaskMutation.mutateAsync({
           meetingId: selectedMeeting.id,
           title: t.title.trim(),
           dueAt: t.dueAt || undefined,
-          assigneeId: undefined,
-          departmentId: departmentId != null ? departmentId : undefined,
+          assigneeId: assigneeId != null && !Number.isNaN(assigneeId) ? assigneeId : undefined,
+          departmentId: departmentId != null && !Number.isNaN(departmentId) ? departmentId : undefined,
           departmentCode: dept?.code ?? (departmentId != null ? String(departmentId) : undefined),
           departmentName: dept?.name ?? (departmentId != null ? `Phòng ban #${departmentId}` : undefined),
           assignedById: user.id,
@@ -2003,8 +2021,8 @@ export default function MeetingPlanPage() {
                                 options={postTaskAssigneeOptions}
                                 value={task.assigneeKey}
                                 onValueChange={v => updatePostTaskRow(task.key, "assigneeKey", v)}
-                                placeholder="Chọn phòng ban"
-                                searchPlaceholder="Tìm phòng ban..."
+                                placeholder={isCompanyLevelMeeting ? "Chọn phòng ban" : "Chọn nhân viên"}
+                                searchPlaceholder={isCompanyLevelMeeting ? "Tìm phòng ban..." : "Tìm nhân viên..."}
                                 emptyText="Không tìm thấy."
                                 triggerClassName="text-sm"
                               />
@@ -2161,8 +2179,8 @@ export default function MeetingPlanPage() {
                           options={postTaskAssigneeOptions}
                           value={task.assigneeKey}
                           onValueChange={v => updatePostTaskRow(task.key, "assigneeKey", v)}
-                          placeholder="Chọn phòng ban"
-                          searchPlaceholder="Tìm phòng ban..."
+                          placeholder={isCompanyLevelMeeting ? "Chọn phòng ban" : "Chọn nhân viên"}
+                          searchPlaceholder={isCompanyLevelMeeting ? "Tìm phòng ban..." : "Tìm nhân viên..."}
                           emptyText="Không tìm thấy."
                           triggerClassName="text-sm"
                         />

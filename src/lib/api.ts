@@ -317,14 +317,19 @@ export async function fetchApi<T>(
       const err = await res.json().catch(() => ({}));
       const rawMessage = err?.message || err?.detail || err?.title || "";
       const combined = `${rawMessage} ${JSON.stringify(err)}`.toLowerCase();
+      const isMeetingCreateOrUpdate =
+        path.startsWith("/api/meetings") &&
+        (init?.method === "POST" || init?.method === "PUT" || init?.method === "PATCH");
 
+      // Chỉ hiển thị "xung đột lịch/phòng" cho request tạo/sửa cuộc họp, không áp cho giao task hay API khác (tránh nhầm khi lỗi có chữ "phòng ban").
       if (
-        res.status === 409 ||
-        combined.includes("conflict") ||
-        combined.includes("xung đột") ||
-        combined.includes("room") ||
-        combined.includes("phòng") ||
-        combined.includes("trùng")
+        isMeetingCreateOrUpdate &&
+        (res.status === 409 ||
+          combined.includes("conflict") ||
+          combined.includes("xung đột") ||
+          combined.includes("room") ||
+          combined.includes("phòng") ||
+          combined.includes("trùng"))
       ) {
         throw new Error(
           "Không thể gửi duyệt do xung đột lịch/phòng. Vui lòng kiểm tra lại: thời gian họp, phòng họp, người tham dự hoặc thiết bị đang bị trùng." +

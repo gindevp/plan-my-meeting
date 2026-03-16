@@ -761,3 +761,8 @@ export async function updateMeetingTaskStatus(
     body: JSON.stringify({ status }),
   });
 }
+
+/** Xóa task (host, secretary, admin). */
+export async function deleteMeetingTask(taskId: number | string): Promise<void> {
+  await fetchApi(`/api/meeting-tasks/${taskId}`, { method: "DELETE" });
+}

@@ -26,12 +26,13 @@ import {
   getMeetingTasksByMeeting,
 } from "@/services/api/meetings";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft, Building2, Users, MapPin, ChevronDown } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft, Building2, Users, MapPin, ChevronDown, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { countChairsInLayout } from "@/lib/roomLayoutTemplates";
 import { API_BASE } from "@/lib/api";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { ROOM_TYPES } from "@/services/api/rooms";
 
 interface AgendaForm {
   title: string;
@@ -107,6 +108,7 @@ export default function CreateMeetingPage() {
   const [taskModalAttendee, setTaskModalAttendee] = useState<string | null>(null);
   const [taskModalErrors, setTaskModalErrors] = useState<Record<string, string>>({});
   const [taskAssignmentsSnapshot, setTaskAssignmentsSnapshot] = useState<TaskAssignmentForm[] | null>(null);
+  const [roomDetailDialog, setRoomDetailDialog] = useState<any>(null);
   const skipNextFilterRef = useRef(false);
   const queryClient = useQueryClient();
 
@@ -979,27 +981,45 @@ export default function CreateMeetingPage() {
                       ? (r.imageUrl.startsWith("/api/") ? API_BASE + r.imageUrl : r.imageUrl)
                       : "/placeholder.svg";
                     return (
-                      <button
+                      <div
                         key={r.id}
-                        type="button"
-                        onClick={() => available && setSelectedRoom(r.id)}
-                        disabled={!available}
                         className={`relative text-left rounded-xl border-2 overflow-hidden transition-all duration-200 hover:shadow-md ${
                           selected
                             ? "border-primary bg-primary/5 shadow-sm ring-2 ring-primary/20"
                             : available
                             ? "border-border hover:border-primary/40 bg-card"
-                            : "border-border bg-muted/30 opacity-60 cursor-not-allowed"
-                        }`}
+                            : "border-border bg-muted/30 opacity-60"
+                        } ${!available ? "cursor-not-allowed" : "cursor-pointer"}`}
                       >
-                        <div className="aspect-[4/3] w-full overflow-hidden bg-muted">
+                        <button
+                          type="button"
+                          onClick={() => available && setSelectedRoom(r.id)}
+                          disabled={!available}
+                          className="absolute inset-0 z-0 w-full h-full"
+                          aria-label={r.name}
+                        />
+                        <div className="aspect-[4/3] w-full overflow-hidden bg-muted relative">
                           <img
                             src={imgSrc}
                             alt={r.name}
                             className="h-full w-full object-cover"
                           />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="icon"
+                            className="absolute top-1.5 right-1.5 h-8 w-8 rounded-full shadow-md z-10 opacity-90 hover:opacity-100"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setRoomDetailDialog(r);
+                            }}
+                            title="Xem chi tiết phòng"
+                          >
+                            <Info className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <div className="p-2.5">
+                        <div className="p-2.5 relative z-0">
                           <p className="font-semibold text-sm truncate pr-6">{r.name}</p>
                           <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground">
                             <MapPin className="h-3 w-3 shrink-0" />
@@ -1027,16 +1047,107 @@ export default function CreateMeetingPage() {
                               {r.status === "occupied" ? "Đang sử dụng" : r.status === "maintenance" ? "Bảo trì" : "Ngừng sử dụng"}
                             </p>
                           )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="mt-1.5 h-7 text-xs text-muted-foreground hover:text-foreground relative z-10"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setRoomDetailDialog(r);
+                            }}
+                          >
+                            <Info className="h-3 w-3 mr-1" />
+                            Xem chi tiết
+                          </Button>
                         </div>
                         {selected && (
-                          <div className="absolute top-2 right-2 rounded-full bg-primary text-primary-foreground p-1">
+                          <div className="absolute top-2 right-2 rounded-full bg-primary text-primary-foreground p-1 z-10 pointer-events-none">
                             <CheckCircle2 className="h-4 w-4" />
                           </div>
                         )}
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
+                {/* Dialog chi tiết phòng họp */}
+                <Dialog open={!!roomDetailDialog} onOpenChange={(open) => !open && setRoomDetailDialog(null)}>
+                  <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="font-display">Thông tin phòng họp</DialogTitle>
+                    </DialogHeader>
+                    {roomDetailDialog && (
+                      <div className="space-y-4">
+                        <div className="aspect-video w-full overflow-hidden rounded-lg bg-muted">
+                          <img
+                            src={
+                              roomDetailDialog.imageUrl
+                                ? roomDetailDialog.imageUrl.startsWith("/api/")
+                                  ? API_BASE + roomDetailDialog.imageUrl
+                                  : roomDetailDialog.imageUrl
+                                : "/placeholder.svg"
+                            }
+                            alt={roomDetailDialog.name}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-lg">{roomDetailDialog.name}</p>
+                          {roomDetailDialog.code && (
+                            <p className="text-xs text-muted-foreground">Mã: {roomDetailDialog.code}</p>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <span>Vị trí: {roomDetailDialog.floor || "—"}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <span>Sức chứa: {roomDetailDialog.capacity} người</span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-muted-foreground">Trạng thái: </span>
+                            <Badge variant={roomDetailDialog.status === "available" ? "default" : "secondary"}>
+                              {roomDetailDialog.status === "occupied"
+                                ? "Đang sử dụng"
+                                : roomDetailDialog.status === "maintenance"
+                                ? "Bảo trì"
+                                : roomDetailDialog.status === "disabled"
+                                ? "Ngừng sử dụng"
+                                : "Sẵn sàng"}
+                            </Badge>
+                          </div>
+                          {roomDetailDialog.roomType && (
+                            <div className="col-span-2">
+                              <span className="text-muted-foreground">Loại phòng: </span>
+                              <span>{ROOM_TYPES.find((t) => t.value === roomDetailDialog.roomType)?.label ?? roomDetailDialog.roomType}</span>
+                            </div>
+                          )}
+                        </div>
+                        {roomDetailDialog.description && (
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground mb-1">Mô tả</p>
+                            <p className="text-sm whitespace-pre-wrap">{roomDetailDialog.description}</p>
+                          </div>
+                        )}
+                        {(roomDetailDialog.equipment?.length ?? 0) > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-muted-foreground mb-2">Thiết bị</p>
+                            <div className="flex flex-wrap gap-2">
+                              {roomDetailDialog.equipment.map((eq: { name: string; quantity?: number }, i: number) => (
+                                <Badge key={i} variant="outline" className="font-normal">
+                                  {eq.name}{eq.quantity > 1 ? ` ×${eq.quantity}` : ""}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </DialogContent>
+                </Dialog>
                 {roomsWithEquipment.length === 0 && (
                   <p className="text-sm text-muted-foreground py-4 text-center">Chưa có phòng họp nào. Vui lòng liên hệ quản trị để thêm phòng.</p>
                 )}

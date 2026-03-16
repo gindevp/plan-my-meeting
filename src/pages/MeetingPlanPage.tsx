@@ -33,6 +33,7 @@ import {
   downloadMeetingDocument,
   deleteMeetingDocument,
   updateMeetingTaskStatus,
+  deleteMeetingTask,
 } from "@/services/api/meetings";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit, UserCheck, UserX, AlertTriangle, FileText, Upload, Download, Loader2, ListTodo, PlayCircle, Circle, Calendar, X } from "lucide-react";
@@ -152,6 +153,8 @@ export default function MeetingPlanPage() {
   const [showPostTaskForm, setShowPostTaskForm] = useState(false);
   const [postTasks, setPostTasks] = useState<{ key: string; title: string; dueAt: string; assigneeKey: string }[]>(() => [{ key: `task-${Date.now()}`, title: "", dueAt: "", assigneeKey: "" }]);
   const [representativesModal, setRepresentativesModal] = useState<{ departmentName: string; representativeParticipants: any[] } | null>(null);
+  const [taskDetailDialog, setTaskDetailDialog] = useState<any>(null);
+  const [taskDeleteConfirmId, setTaskDeleteConfirmId] = useState<string | null>(null);
 
   const { data: allParticipantsForPlan = [] } = useQuery({
     queryKey: ["all-participants"],
@@ -653,6 +656,18 @@ export default function MeetingPlanPage() {
     },
   });
 
+  const deleteTaskMutation = useMutation({
+    mutationFn: (taskId: number | string) => deleteMeetingTask(taskId),
+    onSuccess: () => {
+      if (selectedMeeting?.id) queryClient.invalidateQueries({ queryKey: ["meeting-tasks", selectedMeeting.id] });
+      setTaskDeleteConfirmId(null);
+      toast({ title: "Đã xóa", description: "Task đã được xóa." });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể xóa task." });
+    },
+  });
+
   const { data: agendaItems = [] } = useQuery({
     queryKey: ["agenda-items", selectedMeeting?.id],
     queryFn: () => getAgendaItemsByMeeting(selectedMeeting!.id),
@@ -721,7 +736,10 @@ export default function MeetingPlanPage() {
     );
   }, [visibleParticipants, isRepresentative, myDepartmentId, isHostOrSecretaryOrAdmin]);
 
-  /** Cuộc họp đã quá thời gian kết thúc → không cho xác nhận tham gia, không cho điểm danh trực tiếp; chỉ được yêu cầu điểm danh bù. */
+  /** Thời gian cuộc họp: chưa bắt đầu / đang diễn ra / đã kết thúc */
+  const isMeetingNotStarted = (m: { startTime?: string } | null) => m?.startTime != null && new Date() < new Date(m.startTime);
+  const isMeetingInProgress = (m: { startTime?: string; endTime?: string } | null) =>
+    m?.startTime != null && m?.endTime != null && new Date() >= new Date(m.startTime) && new Date() <= new Date(m.endTime);
   const isMeetingOver = (m: { endTime?: string } | null) => m?.endTime != null && new Date() > new Date(m.endTime);
 
   const postTaskAssigneeOptions = useMemo(() => {
@@ -1270,8 +1288,38 @@ export default function MeetingPlanPage() {
                                   return (
                                     <div key={task.id} className="rounded-md border bg-secondary/30 p-3 text-xs">
                                       <div className="flex items-center justify-between gap-2">
-                                        <p className="font-medium text-sm">{task.title}</p>
-                                        <div className="flex items-center gap-2">
+                                        <p className="font-medium text-sm flex-1 min-w-0 truncate">{task.title}</p>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              e.preventDefault();
+                                              setTaskDetailDialog({ task, taskDocs: meetingDocuments.filter((doc: any) => doc.taskId === task.id) });
+                                            }}
+                                            title="Xem chi tiết task"
+                                          >
+                                            <Eye className="h-3.5 w-3.5" />
+                                          </Button>
+                                          {(selectedMeeting?.host?.id === user?.id || selectedMeeting?.secretaryId === user?.id || isAdmin) && (
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                                setTaskDeleteConfirmId(String(task.id));
+                                              }}
+                                              title="Xóa task"
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" />
+                                            </Button>
+                                          )}
                                           {(activeTab === "approved" || activeTab === "completed") && (
                                             <>
                                               {isMyTask && hasConfirmedParticipation ? (
@@ -1498,22 +1546,29 @@ export default function MeetingPlanPage() {
                   const isHostOrSecretary = selectedMeeting.host?.id === user?.id || selectedMeeting.secretaryId === user?.id;
                   const isHostOrSecretaryOrAdmin = isHostOrSecretary || isAdmin;
                   const myParticipant = participants.find((p: any) => p.userId && String(p.userId) === String(user?.id));
+                  const meetingNotStarted = isMeetingNotStarted(selectedMeeting);
+                  const meetingInProgress = isMeetingInProgress(selectedMeeting);
                   const meetingOver = isMeetingOver(selectedMeeting);
                   if (isHostOrSecretaryOrAdmin) {
                     return (
                       <>
                         <Separator />
-                        <div className="rounded-lg border border-border p-3">
+                        <div className={`rounded-lg border p-3 ${meetingInProgress ? "border-border" : "border-border/70 bg-muted/30 opacity-90"}`}>
                           <p className="font-medium text-sm mb-2">Điểm danh</p>
-                          {meetingOver ? (
-                            <p className="text-xs text-muted-foreground mb-3">Đã quá thời gian họp. Chỉ có thể phê duyệt hoặc từ chối <strong>yêu cầu điểm danh bù</strong> của thành viên bên dưới.</p>
-                          ) : (
+                          {meetingNotStarted && (
+                            <p className="text-xs text-muted-foreground mb-3">Chưa đến giờ họp. Điểm danh chỉ khả dụng khi cuộc họp đang diễn ra.</p>
+                          )}
+                          {meetingInProgress && (
                             <p className="text-xs text-muted-foreground mb-3">Chủ trì / Thư ký / Admin đánh dấu có mặt hoặc vắng mặt cho từng thành viên. Đại diện đã xác nhận tham dự mới hiện nút điểm danh.</p>
+                          )}
+                          {meetingOver && (
+                            <p className="text-xs text-muted-foreground mb-3">Đã quá thời gian họp. Chỉ có thể phê duyệt hoặc từ chối <strong>yêu cầu điểm danh bù</strong> của thành viên bên dưới. Trạng thái điểm danh hiển thị làm mờ (chỉ xem).</p>
                           )}
                           <div className="space-y-2 max-h-48 overflow-y-auto">
                             {participants.filter((p: any) => p.userId || p.departmentId).map((p: any) => {
                               const isDeptOnly = !!p.departmentId && !p.userId;
-                              const showAttendanceButtons = !meetingOver && !isDeptOnly && (p.confirmationStatus === "CONFIRMED" || isAdmin);
+                              const showAttendanceButtons = meetingInProgress && !isDeptOnly && (p.confirmationStatus === "CONFIRMED" || isAdmin);
+                              const showReadOnlyAttendance = !meetingInProgress && !isDeptOnly && (p.attendance === "PRESENT" || p.attendance === "ABSENT");
                               return (
                               <div key={p.id} className="flex flex-col gap-1.5 py-1.5 border-b border-border/50 last:border-0">
                                 <div className="flex items-center justify-between gap-2">
@@ -1562,6 +1617,11 @@ export default function MeetingPlanPage() {
                                     </Button>
                                   </div>
                                   )}
+                                  {showReadOnlyAttendance && (
+                                    <span className="text-xs text-muted-foreground shrink-0">
+                                      {p.attendance === "PRESENT" ? "Đã có mặt" : "Vắng"}
+                                    </span>
+                                  )}
                                   {isDeptOnly && <span className="text-xs text-muted-foreground">Xem đại diện bên dưới</span>}
                                 </div>
                                 {p.lateCheckInRequestedAt && (
@@ -1597,41 +1657,33 @@ export default function MeetingPlanPage() {
                     );
                   }
                   if (myParticipant) {
+                    const meetingNotStarted = isMeetingNotStarted(selectedMeeting);
+                    const meetingInProgress = isMeetingInProgress(selectedMeeting);
                     const meetingOver = isMeetingOver(selectedMeeting);
                     const alreadyPresent = myParticipant.attendance === "PRESENT";
                     return (
                       <>
                         <Separator />
-                        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+                        <div className={`rounded-lg border p-3 ${meetingInProgress && !alreadyPresent ? "border-primary/30 bg-primary/5" : "border-border/70 bg-muted/30 opacity-90"}`}>
                           <p className="font-medium text-sm mb-2">Điểm danh</p>
-                          {meetingOver && alreadyPresent ? (
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Badge variant="default" className="gap-1">
-                                <UserCheck className="h-3 w-3 shrink-0" />
-                                Trạng thái điểm danh: Đã có mặt
-                              </Badge>
-                            </div>
-                          ) : meetingOver ? (
+                          {meetingNotStarted && (
                             <>
-                              <p className="text-xs text-muted-foreground mb-2">Đã quá thời gian họp. Chỉ có thể yêu cầu điểm danh bù (chủ trì sẽ phê duyệt).</p>
-                              <div className="flex flex-wrap items-center gap-2">
-                                {myParticipant.lateCheckInRequestedAt ? (
-                                  <span className="text-xs text-muted-foreground">Đã gửi yêu cầu điểm danh bù, chờ chủ trì phê duyệt.</span>
-                                ) : (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 text-xs"
-                                    disabled={requestLateCheckInMutation.isPending}
-                                    onClick={() => requestLateCheckInMutation.mutate(myParticipant.id)}
-                                  >
-                                    Yêu cầu điểm danh bù
-                                  </Button>
-                                )}
+                              <p className="text-xs text-muted-foreground mb-2">Chưa đến giờ họp. Điểm danh chỉ khả dụng khi cuộc họp đang diễn ra.</p>
+                              <div className="inline-flex h-8 rounded-full bg-muted/80 p-0.5 border border-border opacity-75 pointer-events-none" aria-hidden>
+                                <span className="h-7 min-w-[4.5rem] rounded-full px-3 text-xs font-medium text-muted-foreground flex items-center justify-center">Có mặt</span>
+                                <span className="h-7 min-w-[4rem] rounded-full px-3 text-xs font-medium text-muted-foreground flex items-center justify-center">Vắng</span>
                               </div>
                             </>
-                          ) : (
+                          )}
+                          {meetingInProgress && alreadyPresent && (
+                            <div className="flex flex-wrap items-center gap-2 text-muted-foreground opacity-90">
+                              <Badge variant="secondary" className="gap-1">
+                                <UserCheck className="h-3 w-3 shrink-0" />
+                                Đã có mặt
+                              </Badge>
+                            </div>
+                          )}
+                          {meetingInProgress && !alreadyPresent && (
                             <>
                               <p className="text-xs text-muted-foreground mb-2">Xác nhận trạng thái có mặt của bạn.</p>
                               <div
@@ -1668,6 +1720,36 @@ export default function MeetingPlanPage() {
                                 >
                                   Vắng
                                 </Button>
+                              </div>
+                            </>
+                          )}
+                          {(meetingOver && alreadyPresent) && (
+                            <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                              <Badge variant="secondary" className="gap-1 opacity-90">
+                                <UserCheck className="h-3 w-3 shrink-0" />
+                                Trạng thái điểm danh: Đã có mặt
+                              </Badge>
+                              <span className="text-xs">(chỉ xem, không chỉnh sửa)</span>
+                            </div>
+                          )}
+                          {meetingOver && !alreadyPresent && (
+                            <>
+                              <p className="text-xs text-muted-foreground mb-2">Đã quá thời gian họp. Chỉ có thể yêu cầu điểm danh bù (chủ trì sẽ phê duyệt).</p>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {myParticipant.lateCheckInRequestedAt ? (
+                                  <span className="text-xs text-muted-foreground">Đã gửi yêu cầu điểm danh bù, chờ chủ trì phê duyệt.</span>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 text-xs"
+                                    disabled={requestLateCheckInMutation.isPending}
+                                    onClick={() => requestLateCheckInMutation.mutate(myParticipant.id)}
+                                  >
+                                    Yêu cầu điểm danh bù
+                                  </Button>
+                                )}
                               </div>
                             </>
                           )}
@@ -2152,6 +2234,104 @@ export default function MeetingPlanPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!taskDetailDialog} onOpenChange={(open) => !open && setTaskDetailDialog(null)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Chi tiết task
+            </DialogTitle>
+          </DialogHeader>
+          {taskDetailDialog?.task && (
+            <div className="space-y-4">
+              <div>
+                <p className="font-semibold text-base">{taskDetailDialog.task.title}</p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <Badge variant="outline">{taskDetailDialog.task.type || "-"}</Badge>
+                  <Badge variant={taskDetailDialog.task.status === "DONE" ? "default" : "secondary"}>
+                    {taskDetailDialog.task.status === "DONE" ? "Hoàn thành" : taskDetailDialog.task.status === "IN_PROGRESS" ? "Đang thực hiện" : "Chưa làm"}
+                  </Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <p><span className="text-muted-foreground">Hạn chót:</span> {taskDetailDialog.task.dueAt ? new Date(taskDetailDialog.task.dueAt).toLocaleString("vi-VN") : "-"}</p>
+                <p><span className="text-muted-foreground">Nhắc trước:</span> {taskDetailDialog.task.remindBeforeMinutes ?? "-"} phút</p>
+                {taskDetailDialog.task.assigneeId && (
+                  <p><span className="text-muted-foreground">Người nhận:</span> {(users as any[]).find((u: any) => String(u.id) === String(taskDetailDialog.task.assigneeId))?.name || taskDetailDialog.task.assignee || "-"}</p>
+                )}
+                {taskDetailDialog.task.departmentName && (
+                  <p><span className="text-muted-foreground">Phòng ban:</span> {taskDetailDialog.task.departmentName}</p>
+                )}
+              </div>
+              {taskDetailDialog.task.description && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">Mô tả</p>
+                  <p className="text-sm whitespace-pre-wrap">{taskDetailDialog.task.description}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Tài liệu ({taskDetailDialog.taskDocs?.length ?? 0})</p>
+                {(!taskDetailDialog.taskDocs || taskDetailDialog.taskDocs.length === 0) ? (
+                  <p className="text-sm text-muted-foreground">Không có tài liệu.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {taskDetailDialog.taskDocs.map((doc: any) => (
+                      <div key={doc.id} className="flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2">
+                        <span className="text-sm truncate">{doc.fileName || "(Không tên)"}</span>
+                        <Button type="button" variant="ghost" size="sm" className="h-8 text-xs gap-1 shrink-0" onClick={() => downloadMeetingDocument(doc.id)}>
+                          <Download className="h-3 w-3" /> Tải xuống
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!taskDeleteConfirmId} onOpenChange={(open) => !open && setTaskDeleteConfirmId(null)}>
+        <AlertDialogContent className="max-w-md rounded-xl border-border shadow-lg">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                <Trash2 className="h-6 w-6 text-destructive" />
+              </div>
+              <div>
+                <AlertDialogTitle className="text-lg font-display font-semibold tracking-tight">
+                  Xóa task
+                </AlertDialogTitle>
+                <AlertDialogDescription className="mt-1">
+                  Bạn có chắc chắn muốn xóa task này? Hành động không thể hoàn tác.
+                </AlertDialogDescription>
+              </div>
+            </div>
+            {taskDeleteConfirmId && (() => {
+              const t = (meetingTasks as any[]).find((x: any) => String(x.id) === String(taskDeleteConfirmId));
+              return t ? (
+                <div className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+                  <p className="font-medium text-foreground">{t.title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Hạn: {t.dueAt ? new Date(t.dueAt).toLocaleString("vi-VN") : "-"}</p>
+                </div>
+              ) : null;
+            })()}
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel onClick={() => setTaskDeleteConfirmId(null)}>Hủy</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={deleteTaskMutation.isPending}
+              onClick={() => {
+                if (taskDeleteConfirmId) deleteTaskMutation.mutate(taskDeleteConfirmId);
+              }}
+            >
+              {deleteTaskMutation.isPending ? "Đang xóa..." : "Xóa task"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
         <DialogContent className="max-w-md">

@@ -707,13 +707,18 @@ export async function deleteMeetingDocument(documentId: number | string): Promis
   await fetchApi(`/api/meeting-documents/${documentId}`, { method: "DELETE" });
 }
 
+/** Chuẩn hóa dueAt sang ISO-8601 có timezone (Z) để backend Jackson parse Instant được. */
 function normalizeDueAt(dueAt?: string): string | null {
   if (!dueAt || !dueAt.trim()) return null;
   const s = dueAt.trim();
   if (s.length === 16 && s.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)) {
-    return s + ":00";
+    return s + ":00.000Z";
   }
-  return s;
+  if (s.length === 19 && s.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/)) {
+    return s + ".000Z";
+  }
+  if (s.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(s)) return s;
+  return s + ".000Z";
 }
 
 export async function createPostMeetingTask(payload: {
@@ -727,23 +732,34 @@ export async function createPostMeetingTask(payload: {
   departmentName?: string;
   assignedById: number | string;
 }) {
+  const meetingId = Number(payload.meetingId);
+  const assignedById = Number(payload.assignedById);
+  if (Number.isNaN(meetingId) || Number.isNaN(assignedById)) {
+    throw new Error("meetingId và assignedById phải là số hợp lệ.");
+  }
   const body: Record<string, unknown> = {
-    meetingId: Number(payload.meetingId),
+    meetingId,
     type: "POST_MEETING",
     title: payload.title,
     description: payload.description ?? "",
     status: "TODO",
-    assignedBy: { id: Number(payload.assignedById) },
+    assignedBy: { id: assignedById },
   };
   const dueAt = normalizeDueAt(payload.dueAt);
   if (dueAt) body.dueAt = dueAt;
-  if (payload.assigneeId != null) body.assignee = { id: Number(payload.assigneeId) };
-  if (payload.departmentId != null) {
-    body.department = {
-      id: Number(payload.departmentId),
-      code: payload.departmentCode ?? String(payload.departmentId),
-      name: payload.departmentName ?? `Phòng ban #${payload.departmentId}`,
-    };
+  if (payload.assigneeId != null && payload.assigneeId !== "") {
+    const aid = Number(payload.assigneeId);
+    if (!Number.isNaN(aid) && aid > 0) body.assignee = { id: aid };
+  }
+  if (payload.departmentId != null && payload.departmentId !== "") {
+    const did = Number(payload.departmentId);
+    if (!Number.isNaN(did) && did > 0) {
+      body.department = {
+        id: did,
+        code: payload.departmentCode ?? String(payload.departmentId),
+        name: payload.departmentName ?? `Phòng ban #${payload.departmentId}`,
+      };
+    }
   }
   return fetchApi<any>("/api/meeting-tasks", {
     method: "POST",

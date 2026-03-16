@@ -106,6 +106,7 @@ export default function StaffPage() {
   
   const [search, setSearch] = useState("");
   const [filterDept, setFilterDept] = useState("all");
+  const [filterPosition, setFilterPosition] = useState<string>("all");
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -123,9 +124,13 @@ export default function StaffPage() {
           u.login.toLowerCase().includes(search.toLowerCase());
         const deptName = getDepartmentName(u.departmentId);
         const matchDept = filterDept === "all" || deptName === filterDept;
-        return matchSearch && matchDept;
+        const posLower = (u.position || "").toLowerCase();
+        const filterPosLower = filterPosition === "all" ? "" : filterPosition.toLowerCase();
+        const matchPosition =
+          filterPosition === "all" || posLower.includes(filterPosLower);
+        return matchSearch && matchDept && matchPosition;
       }),
-    [users, search, filterDept, departments]
+    [users, search, filterDept, filterPosition, departments]
   );
 
   const createMutation = useMutation({
@@ -249,8 +254,8 @@ export default function StaffPage() {
         ))}
       </div>
 
-      <div className="flex gap-3 opacity-0 animate-auth-fade-in-up auth-stagger-2">
-        <div className="relative max-w-sm flex-1">
+      <div className="flex flex-wrap gap-3 opacity-0 animate-auth-fade-in-up auth-stagger-2">
+        <div className="relative max-w-sm flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Tìm nhân viên..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
@@ -260,6 +265,18 @@ export default function StaffPage() {
           onValueChange={setFilterDept}
           placeholder="Phòng ban"
           searchPlaceholder="Tìm phòng ban..."
+          emptyText="Không tìm thấy."
+          triggerClassName="w-48"
+        />
+        <SearchableSelect
+          options={[
+            { value: "all", label: "Tất cả chức vụ" },
+            ...POSITION_OPTIONS.map((p) => ({ value: p, label: p })),
+          ]}
+          value={filterPosition}
+          onValueChange={setFilterPosition}
+          placeholder="Chức vụ"
+          searchPlaceholder="Tìm chức vụ..."
           emptyText="Không tìm thấy."
           triggerClassName="w-48"
         />

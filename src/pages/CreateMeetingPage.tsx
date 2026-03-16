@@ -164,6 +164,29 @@ export default function CreateMeetingPage() {
     return list.filter((u: any) => u.role === "secretary");
   }, [users, meetingLevel, userDepartmentId, banLanhDaoDepartmentId]);
 
+  // Khi đổi cấp họp, nếu chủ trì / thư ký hiện tại không còn thuộc danh sách hợp lệ thì reset lại
+  useEffect(() => {
+    if (chairpersonId && !chairpersonCandidates.some((u: any) => String(u.id) === String(chairpersonId))) {
+      setChairpersonId("");
+    }
+    if (secretaryId && !secretaryCandidates.some((u: any) => String(u.id) === String(secretaryId))) {
+      setSecretaryId("");
+    }
+  }, [meetingLevel, chairpersonId, secretaryId, chairpersonCandidates, secretaryCandidates]);
+
+  // Auto-chọn thư ký: luôn lấy candidate đầu tiên (nếu có) cho cấp hiện tại, không cho sửa ở UI
+  useEffect(() => {
+    if (isEditMode) return;
+    if (secretaryCandidates.length === 0) {
+      setSecretaryId("");
+      return;
+    }
+    const first = secretaryCandidates[0] as any;
+    if (!secretaryId || !secretaryCandidates.some((u: any) => String(u.id) === String(secretaryId))) {
+      setSecretaryId(String(first.id));
+    }
+  }, [isEditMode, meetingLevel, secretaryId, secretaryCandidates]);
+
   const { data: existingAgendaItems = [] } = useQuery({
     queryKey: ["edit-meeting-agenda", meetingId],
     queryFn: () => getAgendaItemsByMeeting(meetingId!),
@@ -1030,43 +1053,22 @@ export default function CreateMeetingPage() {
                       ? (r.imageUrl.startsWith("/api/") ? API_BASE + r.imageUrl : r.imageUrl)
                       : "/placeholder.svg";
                     return (
-                      <div
+                      <button
                         key={r.id}
+                        type="button"
+                        onClick={() => available && setSelectedRoom(r.id)}
+                        disabled={!available}
                         className={`relative text-left rounded-xl border-2 overflow-hidden transition-all duration-200 hover:shadow-md ${
                           selected
                             ? "border-primary bg-primary/5 shadow-sm ring-2 ring-primary/20"
                             : available
                             ? "border-border hover:border-primary/40 bg-card"
-                            : "border-border bg-muted/30 opacity-60"
-                        } ${!available ? "cursor-not-allowed" : "cursor-pointer"}`}
+                            : "border-border bg-muted/30 opacity-60 cursor-not-allowed"
+                        }`}
+                        aria-label={r.name}
                       >
-                        <button
-                          type="button"
-                          onClick={() => available && setSelectedRoom(r.id)}
-                          disabled={!available}
-                          className="absolute inset-0 z-0 w-full h-full"
-                          aria-label={r.name}
-                        />
-                        <div className="aspect-[4/3] w-full overflow-hidden bg-muted relative">
-                          <img
-                            src={imgSrc}
-                            alt={r.name}
-                            className="h-full w-full object-cover"
-                          />
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="icon"
-                            className="absolute top-1.5 right-1.5 h-8 w-8 rounded-full shadow-md z-10 opacity-90 hover:opacity-100"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setRoomDetailDialog(r);
-                            }}
-                            title="Xem chi tiết phòng"
-                          >
-                            <Info className="h-4 w-4" />
-                          </Button>
+                        <div className="aspect-[4/3] w-full overflow-hidden bg-muted">
+                          <img src={imgSrc} alt={r.name} className="h-full w-full object-cover" />
                         </div>
                         <div className="p-2.5 relative z-0">
                           <p className="font-semibold text-sm truncate pr-6">{r.name}</p>
@@ -1116,7 +1118,7 @@ export default function CreateMeetingPage() {
                             <CheckCircle2 className="h-4 w-4" />
                           </div>
                         )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -1264,60 +1266,19 @@ export default function CreateMeetingPage() {
 
             <div>
               <Label>Thư ký cuộc họp</Label>
-              <Popover open={secretaryOpen} onOpenChange={setSecretaryOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={secretaryOpen}
-                    className="w-full mt-1.5 justify-between h-10 font-normal"
-                  >
-                    <span className="truncate">
-                      {secretaryId
-                        ? (() => {
-                            const u = (users as any[]).find((x: any) => String(x.id) === secretaryId);
-                            return u ? (u.name || u.login) + (u.position ? ` - ${u.position}` : "") : "Chọn thư ký (tùy chọn)";
-                          })()
-                        : "Chọn thư ký (tùy chọn)"}
-                    </span>
-                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Tìm theo tên, email..." />
-                    <CommandList>
-                      <CommandEmpty>Không tìm thấy thư ký.</CommandEmpty>
-                      <CommandGroup>
-                        <CommandItem
-                          value="none"
-                          onSelect={() => {
-                            setSecretaryId("");
-                            setSecretaryOpen(false);
-                          }}
-                        >
-                          Không chọn
-                        </CommandItem>
-                        {secretaryCandidates.map((u: any) => (
-                          <CommandItem
-                            key={u.id}
-                            value={`${u.name || u.login} ${u.email || ""} ${u.position || ""}`}
-                            onSelect={() => {
-                              setSecretaryId(String(u.id));
-                              setSecretaryOpen(false);
-                            }}
-                          >
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <UserAvatar userId={u.id} name={u.name || u.login} size={24} />
-                              <span className="truncate">{(u.name || u.login) + (u.position ? ` - ${u.position}` : "")}</span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <div className="mt-1.5 h-10 px-3 flex items-center rounded-md border bg-muted/40 text-sm text-muted-foreground">
+                {(() => {
+                  const u = secretaryId ? (users as any[]).find((x: any) => String(x.id) === secretaryId) : null;
+                  if (u) {
+                    return (u.name || u.login) + (u.position ? ` - ${u.position}` : "");
+                  }
+                  if (secretaryCandidates.length > 0) {
+                    const first = secretaryCandidates[0] as any;
+                    return (first.name || first.login) + (first.position ? ` - ${first.position}` : "");
+                  }
+                  return "Không có thư ký phù hợp";
+                })()}
+              </div>
             </div>
 
             <div>

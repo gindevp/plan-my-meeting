@@ -1299,9 +1299,11 @@ export default function MeetingPlanPage() {
                                 {participantTasks.map((task: any) => {
                                   const taskDocs = meetingDocuments.filter((doc: any) => doc.taskId === task.id);
                                   const isMyTask = !!task.assigneeId && String(task.assigneeId) === String(user?.id);
-                                  const isMyDeptTask = isRepresentative && myDepartmentId != null && String(task.departmentId) === String(myDepartmentId);
+                                  const isMyDeptTask = myDepartmentId != null && String(task.departmentId) === String(myDepartmentId);
                                   const isDeptSecretary = !!user?.position && user.position.toLowerCase().includes("thư ký");
-                                  const canUploadForTask = isMyTask || (isMyDeptTask && hasConfirmedParticipation && isDeptSecretary);
+                                  const deptHasConfirmedParticipant =
+                                    !!selectedMeeting?.id && secretaryDepartmentMeetingIds.has(String(selectedMeeting.id));
+                                  const canUploadForTask = isMyTask || (isMyDeptTask && isDeptSecretary && deptHasConfirmedParticipant);
                                   const taskStatus = String(task.status || "").toUpperCase();
                                   const isDone = taskStatus === "DONE";
                                   return (

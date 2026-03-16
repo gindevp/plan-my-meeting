@@ -34,7 +34,6 @@ interface DeptForm {
   code: string;
   description: string;
   status: string;
-  managerId: string;
 }
 
 const emptyForm: DeptForm = {
@@ -42,7 +41,6 @@ const emptyForm: DeptForm = {
   code: "",
   description: "",
   status: "ACTIVE",
-  managerId: "",
 };
 
 export default function DepartmentsPage() {
@@ -68,11 +66,19 @@ export default function DepartmentsPage() {
 
   const deptDetails = useMemo(
     () =>
-      departments.map((d) => ({
-        ...d,
-        staffCount: users.filter((u) => u.departmentId != null && String(u.departmentId) === d.id).length,
-        meetingCount: meetings.filter((m) => m.department === d.name).length,
-      })),
+      departments.map((d) => {
+        const staffInDept = users.filter((u) => u.departmentId != null && String(u.departmentId) === d.id);
+        const headUser =
+          staffInDept.find((u: any) => (u.position || "").toLowerCase().includes("trưởng phòng")) ??
+          staffInDept.find((u: any) => (u.position || "").toLowerCase().includes("truong phong"));
+        const headName = headUser ? headUser.name || headUser.login : d.managerLogin;
+        return {
+          ...d,
+          staffCount: staffInDept.length,
+          meetingCount: meetings.filter((m) => m.department === d.name).length,
+          headName,
+        };
+      }),
     [departments, users, meetings]
   );
 
@@ -81,7 +87,7 @@ export default function DepartmentsPage() {
     (d) =>
       d.name.toLowerCase().includes(searchLower) ||
       d.code.toLowerCase().includes(searchLower) ||
-      (d.managerLogin && d.managerLogin.toLowerCase().includes(searchLower))
+      (d.headName && d.headName.toLowerCase().includes(searchLower))
   );
 
   const staffOfDetailDept = useMemo(() => {
@@ -114,7 +120,7 @@ export default function DepartmentsPage() {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
         status: form.status || "ACTIVE",
-        managerId: form.managerId || null,
+        managerId: null,
       });
       toast({ title: "Đã thêm", description: "Phòng ban đã được tạo." });
       queryClient.invalidateQueries({ queryKey: ["departments"] });
@@ -142,7 +148,7 @@ export default function DepartmentsPage() {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
         status: form.status || "ACTIVE",
-        managerId: form.managerId || null,
+        managerId: null,
       });
       toast({ title: "Đã cập nhật", description: "Phòng ban đã được cập nhật." });
       queryClient.invalidateQueries({ queryKey: ["departments"] });
@@ -182,7 +188,6 @@ export default function DepartmentsPage() {
       code: d.code,
       description: d.description ?? "",
       status: d.status ?? "ACTIVE",
-      managerId: d.managerId ?? "",
     });
     setSaving(false);
     setEditOpen(true);
@@ -299,16 +304,16 @@ export default function DepartmentsPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {(dept.status === "DISABLED" || dept.managerLogin) && (
+              {(dept.status === "DISABLED" || dept.headName) && (
                 <div className="flex flex-wrap items-center gap-2">
                   {dept.status === "DISABLED" && (
                     <Badge variant="secondary" className="bg-muted text-muted-foreground">
                       Ngừng hoạt động
                     </Badge>
                   )}
-                  {dept.managerLogin && (
+                  {dept.headName && (
                     <span className="text-xs text-muted-foreground">
-                      Trưởng phòng: {dept.managerLogin}
+                      Trưởng phòng: {dept.headName}
                     </span>
                   )}
                 </div>
@@ -454,18 +459,7 @@ export default function DepartmentsPage() {
                 placeholder="VD: KT"
               />
             </div>
-            <div>
-              <Label>Trưởng phòng</Label>
-              <SearchableSelect
-                options={[{ value: "", label: "— Không chọn —" }, ...users.map((u) => ({ value: String(u.id), label: u.name || u.login }))]}
-                value={form.managerId ?? ""}
-                onValueChange={(v) => setForm({ ...form, managerId: v })}
-                placeholder="Chọn trưởng phòng"
-                searchPlaceholder="Tìm trưởng phòng..."
-                emptyText="Không tìm thấy."
-                triggerClassName="mt-1.5 h-11"
-              />
-            </div>
+            {/* Trưởng phòng được xác định tự động theo nhân viên có chức vụ Trưởng phòng trong phòng ban */}
             <div>
               <Label>Trạng thái</Label>
               <SearchableSelect
@@ -524,18 +518,7 @@ export default function DepartmentsPage() {
                 onChange={(e) => setForm({ ...form, code: e.target.value })}
               />
             </div>
-            <div>
-              <Label>Trưởng phòng</Label>
-              <SearchableSelect
-                options={[{ value: "", label: "— Không chọn —" }, ...users.map((u) => ({ value: String(u.id), label: u.name || u.login }))]}
-                value={form.managerId ?? ""}
-                onValueChange={(v) => setForm({ ...form, managerId: v })}
-                placeholder="Chọn trưởng phòng"
-                searchPlaceholder="Tìm trưởng phòng..."
-                emptyText="Không tìm thấy."
-                triggerClassName="mt-1.5 h-11"
-              />
-            </div>
+            {/* Trưởng phòng được xác định tự động theo nhân viên có chức vụ Trưởng phòng trong phòng ban */}
             <div>
               <Label>Trạng thái</Label>
               <SearchableSelect

@@ -24,9 +24,10 @@ import {
   getAgendaItemsByMeeting,
   getParticipantsByMeeting,
   getMeetingTasksByMeeting,
+  getAllParticipants,
 } from "@/services/api/meetings";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft, Building2, Users, MapPin, ChevronDown, Info } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, CheckCircle2, Send, Save, RotateCcw, Search, ArrowLeft, Building2, Users, MapPin, ChevronDown, Info, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { countChairsInLayout } from "@/lib/roomLayoutTemplates";
@@ -111,11 +112,19 @@ export default function CreateMeetingPage() {
   const [taskModalErrors, setTaskModalErrors] = useState<Record<string, string>>({});
   const [taskAssignmentsSnapshot, setTaskAssignmentsSnapshot] = useState<TaskAssignmentForm[] | null>(null);
   const [roomDetailDialog, setRoomDetailDialog] = useState<any>(null);
+  const [roomTimeConflictDialog, setRoomTimeConflictDialog] = useState<{ room: any; conflicts: any[] } | null>(null);
+  const [hostTimeConflictDialog, setHostTimeConflictDialog] = useState<{ host: any; conflicts: any[] } | null>(null);
+  const [secretaryTimeConflictDialog, setSecretaryTimeConflictDialog] = useState<{ secretary: any; conflicts: any[] } | null>(null);
+  const [attendeeTimeConflictDialog, setAttendeeTimeConflictDialog] = useState<{ attendee: any; conflicts: any[] } | null>(null);
   const skipNextFilterRef = useRef(false);
   const queryClient = useQueryClient();
 
   const { data: meetings = [] } = useMeetings();
   const existingMeeting = isEditMode ? meetings.find((m: any) => String(m.id) === String(meetingId)) : null;
+  const { data: allParticipantsForConflict = [] } = useQuery({
+    queryKey: ["all-participants"],
+    queryFn: getAllParticipants,
+  });
 
   const userDepartmentId = account?.departmentId != null ? String(account.departmentId) : null;
 
@@ -359,6 +368,14 @@ export default function CreateMeetingPage() {
     if ((meetingType === "offline" || meetingType === "hybrid") && !selectedRoom) newErrors.room = "Vui lòng chọn phòng họp";
     if ((meetingType === "online" || meetingType === "hybrid") && !meetingLink.trim()) newErrors.meetingLink = "Vui lòng nhập link họp";
 
+    // Thư ký bị trùng lịch (auto-fill, read-only): block tạo cuộc họp
+    if (secretaryId) {
+      const secConflicts = secretaryApprovedTimeConflicts.get(String(secretaryId)) ?? [];
+      if (secConflicts.length > 0) {
+        newErrors.secretary = "Thư ký cuộc họp đang bị trùng lịch trong khoảng thời gian này.";
+      }
+    }
+
     const now = Date.now();
     if (startDateTime) {
       const start = new Date(startDateTime).getTime();
@@ -473,6 +490,10 @@ export default function CreateMeetingPage() {
       if (room?.status === "occupied") found.push(`Phòng ${room.name} đang được sử dụng`);
       if (room?.status === "maintenance") found.push(`Phòng ${room.name} đang bảo trì`);
       if (room?.status === "disabled") found.push(`Phòng ${room.name} đang ngừng sử dụng`);
+      const timeConflicts = roomApprovedTimeConflicts.get(String(selectedRoom)) ?? [];
+      if (timeConflicts.length > 0) {
+        found.push(`Phòng ${room?.name ?? selectedRoom} bị trùng lịch trong khoảng thời gian đã chọn`);
+      }
 
       let totalParticipants = selectedAttendees.length;
       if (meetingLevel === "company") {
@@ -928,6 +949,189 @@ export default function CreateMeetingPage() {
     .filter((u: any) => (u.name || u.login || "").toLowerCase().includes(attendeeSearch.toLowerCase()));
   const errorClass = (field: string) => (errors[field] ? "border-destructive" : "");
 
+  const roomStatusMeta = (status?: string) => {
+    const s = String(status ?? "").toLowerCase();
+    if (s === "conflict") return { label: "Trùng lịch", className: "bg-destructive/15 text-destructive border border-destructive/30" };
+    if (s === "available") return { label: "Hoạt động", className: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30" };
+    if (s === "occupied") return { label: "Đang sử dụng", className: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30" };
+    if (s === "maintenance") return { label: "Bảo trì", className: "bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/30" };
+    if (s === "disabled") return { label: "Ngừng sử dụng", className: "bg-slate-500/10 text-slate-700 dark:text-slate-400 border border-slate-500/30" };
+    return { label: status || "—", className: "bg-muted text-muted-foreground border border-border" };
+  };
+
+  const roomApprovedTimeConflicts = useMemo(() => {
+    const map = new Map<string, any[]>();
+    if (!startDateTime || !endDateTime) return map;
+    const start = new Date(startDateTime).getTime();
+    const end = new Date(endDateTime).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return map;
+
+    (meetings as any[]).forEach((m: any) => {
+      if (!m?.roomId) return;
+      if (String(m.status) !== "approved") return;
+      if (isEditMode && meetingId && String(m.id) === String(meetingId)) return;
+      const ms = m.startTime ? new Date(m.startTime).getTime() : NaN;
+      const me = m.endTime ? new Date(m.endTime).getTime() : NaN;
+      if (!Number.isFinite(ms) || !Number.isFinite(me)) return;
+      // overlap: [start,end] intersects [ms,me]
+      if (start < me && end > ms) {
+        const key = String(m.roomId);
+        const arr = map.get(key) ?? [];
+        arr.push({
+          id: m.id,
+          title: m.title ?? "(Không tên)",
+          startTime: m.startTime,
+          endTime: m.endTime,
+          roomName: m.roomName,
+          chairperson: m.chairperson,
+          department: m.department,
+        });
+        map.set(key, arr);
+      }
+    });
+    return map;
+  }, [meetings, startDateTime, endDateTime, isEditMode, meetingId]);
+
+  const hostApprovedTimeConflicts = useMemo(() => {
+    const map = new Map<string, any[]>();
+    if (!startDateTime || !endDateTime) return map;
+    const start = new Date(startDateTime).getTime();
+    const end = new Date(endDateTime).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return map;
+
+    (meetings as any[]).forEach((m: any) => {
+      if (!m?.hostId) return;
+      if (String(m.status) !== "approved") return;
+      if (isEditMode && meetingId && String(m.id) === String(meetingId)) return;
+      const ms = m.startTime ? new Date(m.startTime).getTime() : NaN;
+      const me = m.endTime ? new Date(m.endTime).getTime() : NaN;
+      if (!Number.isFinite(ms) || !Number.isFinite(me)) return;
+      if (start < me && end > ms) {
+        const key = String(m.hostId);
+        const arr = map.get(key) ?? [];
+        arr.push({
+          id: m.id,
+          title: m.title ?? "(Không tên)",
+          startTime: m.startTime,
+          endTime: m.endTime,
+          roomName: m.roomName,
+          chairperson: m.chairperson,
+          department: m.department,
+        });
+        map.set(key, arr);
+      }
+    });
+    return map;
+  }, [meetings, startDateTime, endDateTime, isEditMode, meetingId]);
+
+  const secretaryApprovedTimeConflicts = useMemo(() => {
+    const map = new Map<string, any[]>();
+    if (!startDateTime || !endDateTime) return map;
+    const start = new Date(startDateTime).getTime();
+    const end = new Date(endDateTime).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return map;
+
+    (meetings as any[]).forEach((m: any) => {
+      if (!m?.secretaryId) return;
+      if (String(m.status) !== "approved") return;
+      if (isEditMode && meetingId && String(m.id) === String(meetingId)) return;
+      const ms = m.startTime ? new Date(m.startTime).getTime() : NaN;
+      const me = m.endTime ? new Date(m.endTime).getTime() : NaN;
+      if (!Number.isFinite(ms) || !Number.isFinite(me)) return;
+      if (start < me && end > ms) {
+        const key = String(m.secretaryId);
+        const arr = map.get(key) ?? [];
+        arr.push({
+          id: m.id,
+          title: m.title ?? "(Không tên)",
+          startTime: m.startTime,
+          endTime: m.endTime,
+          roomName: m.roomName,
+          chairperson: m.chairperson,
+          department: m.department,
+        });
+        map.set(key, arr);
+      }
+    });
+    return map;
+  }, [meetings, startDateTime, endDateTime, isEditMode, meetingId]);
+
+  const attendeeApprovedTimeConflicts = useMemo(() => {
+    const map = new Map<string, any[]>();
+    if (!startDateTime || !endDateTime) return map;
+    const start = new Date(startDateTime).getTime();
+    const end = new Date(endDateTime).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return map;
+
+    (allParticipantsForConflict as any[]).forEach((p: any) => {
+      if (!p?.userId || !p?.meeting?.id) return;
+      if (String(p.meeting?.status ?? "").toUpperCase() !== "APPROVED") return;
+      if (isEditMode && meetingId && String(p.meeting.id) === String(meetingId)) return;
+      const ms = p.meeting.startTime ? new Date(p.meeting.startTime).getTime() : NaN;
+      const me = p.meeting.endTime ? new Date(p.meeting.endTime).getTime() : NaN;
+      if (!Number.isFinite(ms) || !Number.isFinite(me)) return;
+      if (start < me && end > ms) {
+        const key = String(p.userId);
+        const arr = map.get(key) ?? [];
+        arr.push({
+          id: p.meeting.id,
+          title: p.meeting.title ?? "(Không tên)",
+          startTime: p.meeting.startTime,
+          endTime: p.meeting.endTime,
+          chairperson: p.meeting.chairperson,
+          department: p.meeting.department,
+        });
+        map.set(key, arr);
+      }
+    });
+    return map;
+  }, [allParticipantsForConflict, startDateTime, endDateTime, isEditMode, meetingId]);
+
+  useEffect(() => {
+    if (meetingLevel !== "department") return;
+    if (selectedAttendees.length === 0) return;
+    const conflictedNames = new Set<string>();
+    (usersByDepartment as any[]).forEach((u: any) => {
+      const conflicts = attendeeApprovedTimeConflicts.get(String(u.id)) ?? [];
+      if (conflicts.length === 0) return;
+      const name = u.name || u.login;
+      if (name) conflictedNames.add(String(name));
+    });
+    const next = selectedAttendees.filter((n) => !conflictedNames.has(String(n)));
+    if (next.length === selectedAttendees.length) return;
+    setSelectedAttendees(next);
+    toast({
+      variant: "destructive",
+      title: "Người tham dự bị trùng lịch",
+      description: "Một số người tham dự đã có cuộc họp Đã duyệt trong khoảng thời gian này và đã được bỏ chọn.",
+    });
+  }, [meetingLevel, selectedAttendees, usersByDepartment, attendeeApprovedTimeConflicts, toast]);
+
+  useEffect(() => {
+    if (!chairpersonId) return;
+    const hostConflicts = hostApprovedTimeConflicts.get(String(chairpersonId)) ?? [];
+    if (hostConflicts.length === 0) return;
+    setChairpersonId("");
+    toast({
+      variant: "destructive",
+      title: "Chủ trì bị trùng lịch",
+      description: "Người chủ trì bạn chọn đang có cuộc họp Đã duyệt trong khoảng thời gian này. Vui lòng chọn người khác.",
+    });
+  }, [chairpersonId, hostApprovedTimeConflicts, toast]);
+
+  useEffect(() => {
+    if (meetingType !== "offline" && meetingType !== "hybrid") return;
+    if (!selectedRoom) return;
+    const timeConflicts = roomApprovedTimeConflicts.get(String(selectedRoom)) ?? [];
+    if (timeConflicts.length === 0) return;
+    setSelectedRoom("");
+    toast({
+      variant: "destructive",
+      title: "Phòng bị trùng lịch",
+      description: "Phòng bạn vừa chọn đã có cuộc họp Đã duyệt trong khoảng thời gian này. Vui lòng chọn phòng khác.",
+    });
+  }, [meetingType, selectedRoom, roomApprovedTimeConflicts, toast]);
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -1059,26 +1263,57 @@ export default function CreateMeetingPage() {
                 <p className="text-xs text-muted-foreground mt-1 mb-2">Chọn một phòng từ các thẻ bên dưới</p>
                 <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[320px] overflow-y-auto p-1 rounded-lg border ${errorClass("room")} border-border bg-muted/5`}>
                   {roomsWithEquipment.map((r: any) => {
-                    const available = r.status === "available";
+                    const timeConflicts = roomApprovedTimeConflicts.get(String(r.id)) ?? [];
+                    const isTimeConflict = timeConflicts.length > 0;
+                    const available = r.status === "available" && !isTimeConflict;
                     const selected = selectedRoom === r.id;
                     const imgSrc = r.imageUrl
                       ? (r.imageUrl.startsWith("/api/") ? API_BASE + r.imageUrl : r.imageUrl)
                       : "/placeholder.svg";
+                    const statusMeta = isTimeConflict ? roomStatusMeta("conflict") : roomStatusMeta(r.status);
                     return (
-                      <button
+                      <div
                         key={r.id}
-                        type="button"
+                        role="button"
+                        tabIndex={available ? 0 : -1}
+                        aria-disabled={!available}
                         onClick={() => available && setSelectedRoom(r.id)}
-                        disabled={!available}
+                        onKeyDown={(e) => {
+                          if (!available) return;
+                          if (e.key === "Enter" || e.key === " ") setSelectedRoom(r.id);
+                        }}
                         className={`relative text-left rounded-xl border-2 overflow-hidden transition-all duration-200 hover:shadow-md ${
                           selected
                             ? "border-primary bg-primary/5 shadow-sm ring-2 ring-primary/20"
                             : available
-                            ? "border-border hover:border-primary/40 bg-card"
+                            ? "border-border hover:border-primary/40 bg-card cursor-pointer"
+                            : isTimeConflict
+                            ? "border-destructive/30 bg-destructive/5 cursor-not-allowed"
                             : "border-border bg-muted/30 opacity-60 cursor-not-allowed"
                         }`}
                         aria-label={r.name}
                       >
+                        <div className="absolute bottom-2 right-2 z-10">
+                          {isTimeConflict ? (
+                            <button
+                              type="button"
+                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium shadow-sm bg-background/90 hover:bg-background ${statusMeta.className} opacity-100`}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setRoomTimeConflictDialog({ room: r, conflicts: timeConflicts });
+                              }}
+                              title="Xem chi tiết trùng lịch"
+                            >
+                              <Eye className="h-3 w-3" />
+                              {statusMeta.label}
+                            </button>
+                          ) : (
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${statusMeta.className}`}>
+                              {statusMeta.label}
+                            </span>
+                          )}
+                        </div>
                         <div className="aspect-[4/3] w-full overflow-hidden bg-muted">
                           <img src={imgSrc} alt={r.name} className="h-full w-full object-cover" />
                         </div>
@@ -1105,11 +1340,6 @@ export default function CreateMeetingPage() {
                               )}
                             </div>
                           )}
-                          {!available && (
-                            <p className="text-[10px] text-amber-600 dark:text-amber-500 mt-1">
-                              {r.status === "occupied" ? "Đang sử dụng" : r.status === "maintenance" ? "Bảo trì" : "Ngừng sử dụng"}
-                            </p>
-                          )}
                           <Button
                             type="button"
                             variant="ghost"
@@ -1130,7 +1360,7 @@ export default function CreateMeetingPage() {
                             <CheckCircle2 className="h-4 w-4" />
                           </div>
                         )}
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -1211,6 +1441,262 @@ export default function CreateMeetingPage() {
                     )}
                   </DialogContent>
                 </Dialog>
+                {/* Dialog trùng lịch phòng */}
+                <Dialog open={!!roomTimeConflictDialog} onOpenChange={(open) => !open && setRoomTimeConflictDialog(null)}>
+                  <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="font-display">Trùng lịch phòng</DialogTitle>
+                    </DialogHeader>
+                    {roomTimeConflictDialog && (
+                      <div className="space-y-3 text-sm">
+                        <div className="rounded-lg border border-border bg-muted/20 p-3">
+                          <p className="font-semibold">{roomTimeConflictDialog.room?.name ?? "Phòng họp"}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Khoảng thời gian bạn chọn:{" "}
+                            <span className="text-foreground font-medium">
+                              {startDateTime ? new Date(startDateTime).toLocaleString("vi-VN") : "—"} →{" "}
+                              {endDateTime ? new Date(endDateTime).toLocaleString("vi-VN") : "—"}
+                            </span>
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          {roomTimeConflictDialog.conflicts.map((c: any) => (
+                            <div key={c.id ?? `${c.title}-${c.startTime}`} className="rounded-lg border border-border p-3">
+                              <p className="font-medium">{c.title}</p>
+                              <div className="mt-1 grid grid-cols-1 gap-1 text-xs text-muted-foreground">
+                                {c.chairperson && (
+                                  <p>Chủ trì: <span className="text-foreground font-medium">{c.chairperson}</span></p>
+                                )}
+                                {c.department && (
+                                  <p>Đơn vị: <span className="text-foreground font-medium">{c.department}</span></p>
+                                )}
+                                <p>
+                                  Thời gian:{" "}
+                                  <span className="text-foreground font-medium">
+                                    {c.startTime ? new Date(c.startTime).toLocaleString("vi-VN") : "—"} →{" "}
+                                    {c.endTime ? new Date(c.endTime).toLocaleString("vi-VN") : "—"}
+                                  </span>
+                                </p>
+                                {(() => {
+                                  const s = startDateTime ? new Date(startDateTime).getTime() : NaN;
+                                  const e = endDateTime ? new Date(endDateTime).getTime() : NaN;
+                                  const cs = c?.startTime ? new Date(c.startTime).getTime() : NaN;
+                                  const ce = c?.endTime ? new Date(c.endTime).getTime() : NaN;
+                                  if (!Number.isFinite(s) || !Number.isFinite(e) || !Number.isFinite(cs) || !Number.isFinite(ce)) return null;
+                                  const os = Math.max(s, cs);
+                                  const oe = Math.min(e, ce);
+                                  if (oe <= os) return null;
+                                  return (
+                                    <p>
+                                      Trùng trong khoảng:{" "}
+                                      <span className="text-destructive font-semibold">
+                                        {new Date(os).toLocaleString("vi-VN")} → {new Date(oe).toLocaleString("vi-VN")}
+                                      </span>
+                                    </p>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </DialogContent>
+                </Dialog>
+                {/* Dialog trùng lịch chủ trì */}
+                <Dialog open={!!hostTimeConflictDialog} onOpenChange={(open) => !open && setHostTimeConflictDialog(null)}>
+                  <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="font-display">Trùng lịch chủ trì</DialogTitle>
+                    </DialogHeader>
+                    {hostTimeConflictDialog && (
+                      <div className="space-y-3 text-sm">
+                        <div className="rounded-lg border border-border bg-muted/20 p-3">
+                          <p className="font-semibold">
+                            {hostTimeConflictDialog.host?.name || hostTimeConflictDialog.host?.login || "Người chủ trì"}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Khoảng thời gian bạn chọn:{" "}
+                            <span className="text-foreground font-medium">
+                              {startDateTime ? new Date(startDateTime).toLocaleString("vi-VN") : "—"} →{" "}
+                              {endDateTime ? new Date(endDateTime).toLocaleString("vi-VN") : "—"}
+                            </span>
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          {hostTimeConflictDialog.conflicts.map((c: any) => (
+                            <div key={c.id ?? `${c.title}-${c.startTime}`} className="rounded-lg border border-border p-3">
+                              <p className="font-medium">{c.title}</p>
+                              <div className="mt-1 grid grid-cols-1 gap-1 text-xs text-muted-foreground">
+                                {c.roomName && (
+                                  <p>Phòng: <span className="text-foreground font-medium">{c.roomName}</span></p>
+                                )}
+                                {c.department && (
+                                  <p>Đơn vị: <span className="text-foreground font-medium">{c.department}</span></p>
+                                )}
+                                <p>
+                                  Thời gian:{" "}
+                                  <span className="text-foreground font-medium">
+                                    {c.startTime ? new Date(c.startTime).toLocaleString("vi-VN") : "—"} →{" "}
+                                    {c.endTime ? new Date(c.endTime).toLocaleString("vi-VN") : "—"}
+                                  </span>
+                                </p>
+                                {(() => {
+                                  const s = startDateTime ? new Date(startDateTime).getTime() : NaN;
+                                  const e = endDateTime ? new Date(endDateTime).getTime() : NaN;
+                                  const cs = c?.startTime ? new Date(c.startTime).getTime() : NaN;
+                                  const ce = c?.endTime ? new Date(c.endTime).getTime() : NaN;
+                                  if (!Number.isFinite(s) || !Number.isFinite(e) || !Number.isFinite(cs) || !Number.isFinite(ce)) return null;
+                                  const os = Math.max(s, cs);
+                                  const oe = Math.min(e, ce);
+                                  if (oe <= os) return null;
+                                  return (
+                                    <p>
+                                      Trùng trong khoảng:{" "}
+                                      <span className="text-destructive font-semibold">
+                                        {new Date(os).toLocaleString("vi-VN")} → {new Date(oe).toLocaleString("vi-VN")}
+                                      </span>
+                                    </p>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </DialogContent>
+                </Dialog>
+                <Dialog open={!!secretaryTimeConflictDialog} onOpenChange={(open) => !open && setSecretaryTimeConflictDialog(null)}>
+                  <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="font-display">Trùng lịch thư ký</DialogTitle>
+                    </DialogHeader>
+                    {secretaryTimeConflictDialog && (
+                      <div className="space-y-3 text-sm">
+                        <div className="rounded-lg border border-border bg-muted/20 p-3">
+                          <p className="font-semibold">
+                            {secretaryTimeConflictDialog.secretary?.name || secretaryTimeConflictDialog.secretary?.login || "Thư ký"}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Khoảng thời gian bạn chọn:{" "}
+                            <span className="text-foreground font-medium">
+                              {startDateTime ? new Date(startDateTime).toLocaleString("vi-VN") : "—"} →{" "}
+                              {endDateTime ? new Date(endDateTime).toLocaleString("vi-VN") : "—"}
+                            </span>
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          {secretaryTimeConflictDialog.conflicts.map((c: any) => (
+                            <div key={c.id ?? `${c.title}-${c.startTime}`} className="rounded-lg border border-border p-3">
+                              <p className="font-medium">{c.title}</p>
+                              <div className="mt-1 grid grid-cols-1 gap-1 text-xs text-muted-foreground">
+                                {c.roomName && (
+                                  <p>Phòng: <span className="text-foreground font-medium">{c.roomName}</span></p>
+                                )}
+                                {c.department && (
+                                  <p>Đơn vị: <span className="text-foreground font-medium">{c.department}</span></p>
+                                )}
+                                <p>
+                                  Thời gian:{" "}
+                                  <span className="text-foreground font-medium">
+                                    {c.startTime ? new Date(c.startTime).toLocaleString("vi-VN") : "—"} →{" "}
+                                    {c.endTime ? new Date(c.endTime).toLocaleString("vi-VN") : "—"}
+                                  </span>
+                                </p>
+                                {(() => {
+                                  const s = startDateTime ? new Date(startDateTime).getTime() : NaN;
+                                  const e = endDateTime ? new Date(endDateTime).getTime() : NaN;
+                                  const cs = c?.startTime ? new Date(c.startTime).getTime() : NaN;
+                                  const ce = c?.endTime ? new Date(c.endTime).getTime() : NaN;
+                                  if (!Number.isFinite(s) || !Number.isFinite(e) || !Number.isFinite(cs) || !Number.isFinite(ce)) return null;
+                                  const os = Math.max(s, cs);
+                                  const oe = Math.min(e, ce);
+                                  if (oe <= os) return null;
+                                  return (
+                                    <p>
+                                      Trùng trong khoảng:{" "}
+                                      <span className="text-destructive font-semibold">
+                                        {new Date(os).toLocaleString("vi-VN")} → {new Date(oe).toLocaleString("vi-VN")}
+                                      </span>
+                                    </p>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </DialogContent>
+                </Dialog>
+                <Dialog open={!!attendeeTimeConflictDialog} onOpenChange={(open) => !open && setAttendeeTimeConflictDialog(null)}>
+                  <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="font-display">Trùng lịch người tham dự</DialogTitle>
+                    </DialogHeader>
+                    {attendeeTimeConflictDialog && (
+                      <div className="space-y-3 text-sm">
+                        <div className="rounded-lg border border-border bg-muted/20 p-3">
+                          <p className="font-semibold">
+                            {attendeeTimeConflictDialog.attendee?.name || attendeeTimeConflictDialog.attendee?.login || "Người tham dự"}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Khoảng thời gian bạn chọn:{" "}
+                            <span className="text-foreground font-medium">
+                              {startDateTime ? new Date(startDateTime).toLocaleString("vi-VN") : "—"} →{" "}
+                              {endDateTime ? new Date(endDateTime).toLocaleString("vi-VN") : "—"}
+                            </span>
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          {attendeeTimeConflictDialog.conflicts.map((c: any) => (
+                            <div key={c.id ?? `${c.title}-${c.startTime}`} className="rounded-lg border border-border p-3">
+                              <p className="font-medium">{c.title}</p>
+                              <div className="mt-1 grid grid-cols-1 gap-1 text-xs text-muted-foreground">
+                                {c.chairperson && (
+                                  <p>Chủ trì: <span className="text-foreground font-medium">{c.chairperson}</span></p>
+                                )}
+                                {c.department && (
+                                  <p>Đơn vị: <span className="text-foreground font-medium">{c.department}</span></p>
+                                )}
+                                <p>
+                                  Thời gian:{" "}
+                                  <span className="text-foreground font-medium">
+                                    {c.startTime ? new Date(c.startTime).toLocaleString("vi-VN") : "—"} →{" "}
+                                    {c.endTime ? new Date(c.endTime).toLocaleString("vi-VN") : "—"}
+                                  </span>
+                                </p>
+                                {(() => {
+                                  const s = startDateTime ? new Date(startDateTime).getTime() : NaN;
+                                  const e = endDateTime ? new Date(endDateTime).getTime() : NaN;
+                                  const cs = c?.startTime ? new Date(c.startTime).getTime() : NaN;
+                                  const ce = c?.endTime ? new Date(c.endTime).getTime() : NaN;
+                                  if (!Number.isFinite(s) || !Number.isFinite(e) || !Number.isFinite(cs) || !Number.isFinite(ce)) return null;
+                                  const os = Math.max(s, cs);
+                                  const oe = Math.min(e, ce);
+                                  if (oe <= os) return null;
+                                  return (
+                                    <p>
+                                      Trùng trong khoảng:{" "}
+                                      <span className="text-destructive font-semibold">
+                                        {new Date(os).toLocaleString("vi-VN")} → {new Date(oe).toLocaleString("vi-VN")}
+                                      </span>
+                                    </p>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </DialogContent>
+                </Dialog>
                 {roomsWithEquipment.length === 0 && (
                   <p className="text-sm text-muted-foreground py-4 text-center">Chưa có phòng họp nào. Vui lòng liên hệ quản trị để thêm phòng.</p>
                 )}
@@ -1254,19 +1740,62 @@ export default function CreateMeetingPage() {
                       <CommandEmpty>Không tìm thấy người dùng.</CommandEmpty>
                       <CommandGroup>
                         {chairpersonCandidates.map((u: any) => (
-                          <CommandItem
-                            key={u.id}
-                            value={`${u.name || u.login} ${u.email || ""} ${u.position || ""}`}
-                            onSelect={() => {
-                              setChairpersonId(String(u.id));
-                              setChairpersonOpen(false);
-                            }}
-                          >
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <UserAvatar userId={u.id} name={u.name || u.login} size={24} />
-                              <span className="truncate">{(u.name || u.login) + (u.position ? ` - ${u.position}` : "")}</span>
-                            </div>
-                          </CommandItem>
+                          (() => {
+                            const hostConflicts = hostApprovedTimeConflicts.get(String(u.id)) ?? [];
+                            const isHostConflict = hostConflicts.length > 0;
+                            const formatRange = (a?: string, b?: string) =>
+                              a && b ? `${new Date(a).toLocaleString("vi-VN")} → ${new Date(b).toLocaleString("vi-VN")}` : "—";
+                            const overlapText = (c: any) => {
+                              const s = startDateTime ? new Date(startDateTime).getTime() : NaN;
+                              const e = endDateTime ? new Date(endDateTime).getTime() : NaN;
+                              const cs = c?.startTime ? new Date(c.startTime).getTime() : NaN;
+                              const ce = c?.endTime ? new Date(c.endTime).getTime() : NaN;
+                              if (!Number.isFinite(s) || !Number.isFinite(e) || !Number.isFinite(cs) || !Number.isFinite(ce)) return "";
+                              const os = Math.max(s, cs);
+                              const oe = Math.min(e, ce);
+                              if (oe <= os) return "";
+                              return `${new Date(os).toLocaleString("vi-VN")} → ${new Date(oe).toLocaleString("vi-VN")}`;
+                            };
+                            const tipLines = hostConflicts.slice(0, 2).map((c: any) => {
+                              const ov = overlapText(c);
+                              return `• ${c.title} (${formatRange(c.startTime, c.endTime)})${ov ? ` | Trùng: ${ov}` : ""}`;
+                            });
+                            const tip = tipLines.length ? `Trùng lịch với:\n${tipLines.join("\n")}` : "Trùng lịch";
+                            return (
+                              <CommandItem
+                                key={u.id}
+                                value={`${u.name || u.login} ${u.email || ""} ${u.position || ""}`}
+                                onSelect={() => {
+                                  if (isHostConflict) return;
+                                  setChairpersonId(String(u.id));
+                                  setChairpersonOpen(false);
+                                }}
+                                className={isHostConflict ? "border border-destructive/30 bg-destructive/5 rounded-md cursor-not-allowed" : ""}
+                              >
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <UserAvatar userId={u.id} name={u.name || u.login} size={24} />
+                                  <span className="truncate">{(u.name || u.login) + (u.position ? ` - ${u.position}` : "")}</span>
+                                </div>
+                                {isHostConflict && (
+                                  <button
+                                    type="button"
+                                    className="ml-2 inline-flex h-7 w-7 items-center justify-center rounded-md bg-background text-destructive hover:bg-destructive/10 opacity-100 shadow-sm group/hostwarn"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setHostTimeConflictDialog({ host: u, conflicts: hostConflicts });
+                                    }}
+                                    title="Bị trùng lịch (bấm để xem)"
+                                  >
+                                    <span className="relative h-4 w-4">
+                                      <AlertTriangle className="h-4 w-4 absolute inset-0 opacity-100 transition-opacity group-hover/hostwarn:opacity-0" />
+                                      <Eye className="h-4 w-4 absolute inset-0 opacity-0 transition-opacity group-hover/hostwarn:opacity-100" />
+                                    </span>
+                                  </button>
+                                )}
+                              </CommandItem>
+                            );
+                          })()
                         ))}
                       </CommandGroup>
                     </CommandList>
@@ -1278,19 +1807,35 @@ export default function CreateMeetingPage() {
 
             <div>
               <Label>Thư ký cuộc họp</Label>
-              <div className="mt-1.5 h-10 px-3 flex items-center rounded-md border bg-muted/40 text-sm text-muted-foreground">
-                {(() => {
-                  const u = secretaryId ? (users as any[]).find((x: any) => String(x.id) === secretaryId) : null;
-                  if (u) {
-                    return (u.name || u.login) + (u.position ? ` - ${u.position}` : "");
-                  }
-                  if (secretaryCandidates.length > 0) {
-                    const first = secretaryCandidates[0] as any;
-                    return (first.name || first.login) + (first.position ? ` - ${first.position}` : "");
-                  }
-                  return "Không có thư ký phù hợp";
-                })()}
-              </div>
+              {(() => {
+                const u = secretaryId ? (users as any[]).find((x: any) => String(x.id) === String(secretaryId)) : null;
+                const fallback = secretaryCandidates.length > 0 ? (secretaryCandidates[0] as any) : null;
+                const secUser = u ?? fallback;
+                const secLabel = secUser ? (secUser.name || secUser.login) + (secUser.position ? ` - ${secUser.position}` : "") : "Không có thư ký phù hợp";
+                const secId = secUser?.id != null ? String(secUser.id) : "";
+                const secConflicts = secId ? (secretaryApprovedTimeConflicts.get(secId) ?? []) : [];
+                const isSecConflict = secConflicts.length > 0;
+                return (
+                  <div
+                    className={`mt-1.5 h-10 px-3 flex items-center justify-between gap-2 rounded-md border text-sm ${
+                      isSecConflict ? "border-destructive/30 bg-destructive/5 text-foreground" : "bg-muted/40 text-muted-foreground"
+                    }`}
+                  >
+                    <span className="truncate">{secLabel}</span>
+                    {isSecConflict && (
+                      <button
+                        type="button"
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-background text-destructive hover:bg-destructive/10 shadow-sm"
+                        onClick={() => setSecretaryTimeConflictDialog({ secretary: secUser, conflicts: secConflicts })}
+                        title="Xem chi tiết trùng lịch"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+              {errors.secretary && <p className="text-xs text-destructive mt-1">{errors.secretary}</p>}
             </div>
 
             <div>
@@ -1404,22 +1949,57 @@ export default function CreateMeetingPage() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto">
-                  {filteredUsers.map((u: any) => (
-                    <button
-                      key={u.id}
-                      onClick={() => toggleAttendee(u.name || u.login)}
-                      className={`flex items-center gap-3 p-3 rounded-lg border text-left text-sm transition-all ${
-                        selectedAttendees.includes(u.name || u.login) ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/30"
-                      }`}
-                    >
-                      <UserAvatar userId={u.id} name={u.name || u.login} size={32} />
-                      <div>
-                        <p className="font-medium text-xs">{u.name || u.login}</p>
-                        <p className="text-[10px] text-muted-foreground">{[u.position, u.department].filter(Boolean).join(" • ") || "—"}</p>
+                  {filteredUsers.map((u: any) => {
+                    const name = u.name || u.login;
+                    const conflicts = attendeeApprovedTimeConflicts.get(String(u.id)) ?? [];
+                    const isConflict = conflicts.length > 0;
+                    const isSelected = selectedAttendees.includes(name);
+                    return (
+                      <div
+                        key={u.id}
+                        role="button"
+                        tabIndex={isConflict ? -1 : 0}
+                        aria-disabled={isConflict}
+                        onClick={() => !isConflict && toggleAttendee(name)}
+                        onKeyDown={(e) => {
+                          if (isConflict) return;
+                          if (e.key === "Enter" || e.key === " ") toggleAttendee(name);
+                        }}
+                        className={`flex items-center gap-3 p-3 rounded-lg border text-left text-sm transition-all ${
+                          isSelected
+                            ? "border-primary bg-primary/5 shadow-sm"
+                            : isConflict
+                            ? "border-destructive/30 bg-destructive/5 cursor-not-allowed"
+                            : "border-border hover:border-primary/30 cursor-pointer"
+                        }`}
+                      >
+                        <UserAvatar userId={u.id} name={name} size={32} />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-xs truncate">{name}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{[u.position, u.department].filter(Boolean).join(" • ") || "—"}</p>
+                        </div>
+                        {isConflict ? (
+                          <button
+                            type="button"
+                            className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-md bg-background text-destructive hover:bg-destructive/10 shadow-sm group/attwarn"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setAttendeeTimeConflictDialog({ attendee: u, conflicts });
+                            }}
+                            title="Bị trùng lịch (bấm để xem)"
+                          >
+                            <span className="relative h-4 w-4">
+                              <AlertTriangle className="h-4 w-4 absolute inset-0 opacity-100 transition-opacity group-hover/attwarn:opacity-0" />
+                              <Eye className="h-4 w-4 absolute inset-0 opacity-0 transition-opacity group-hover/attwarn:opacity-100" />
+                            </span>
+                          </button>
+                        ) : isSelected ? (
+                          <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
+                        ) : null}
                       </div>
-                      {selectedAttendees.includes(u.name || u.login) && <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />}
-                    </button>
-                  ))}
+                    );
+                  })}
                   {filteredUsers.length === 0 && (
                     <p className="col-span-2 text-center text-sm text-muted-foreground py-4">
                       {userDepartment ? `Không có nhân viên nào trong phòng ban ${userDepartment}` : "Vui lòng chọn phòng ban của bạn trong hồ sơ"}

@@ -12,7 +12,7 @@ import { useDepartments } from "@/hooks/useDepartments";
 import { useIncidents } from "@/hooks/useIncidents";
 import { useQuery } from "@tanstack/react-query";
 import { getAllParticipants } from "@/services/api/meetings";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 
 const statusColorMap: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
@@ -28,6 +28,26 @@ const typeColorMap: Record<string, string> = {
   online: "bg-meeting-online/15 text-meeting-online",
   hybrid: "bg-meeting-hybrid/15 text-meeting-hybrid",
 };
+
+function ChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload || payload.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-border bg-background/95 backdrop-blur px-3 py-2 shadow-lg">
+      <p className="text-xs font-medium text-foreground">{label}</p>
+      <div className="mt-1 space-y-0.5">
+        {payload.map((p: any) => (
+          <div key={p.dataKey} className="flex items-center justify-between gap-4 text-xs">
+            <span className="flex items-center gap-2 text-muted-foreground">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: p.color }} />
+              {p.name}
+            </span>
+            <span className="font-semibold text-foreground">{p.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -164,6 +184,50 @@ export default function Dashboard() {
     { name: "Kết hợp", value: meetings.filter((m) => m.type === "hybrid").length, color: "hsl(280, 60%, 50%)" },
   ];
 
+  const meetingsByStatus = useMemo(() => {
+    const order: { key: string; label: string; color: string }[] = [
+      { key: "pending", label: "Chờ duyệt", color: "hsl(40, 90%, 50%)" },
+      { key: "approved", label: "Đã duyệt", color: "hsl(152, 60%, 40%)" },
+      { key: "rejected", label: "Từ chối", color: "hsl(0, 70%, 50%)" },
+      { key: "completed", label: "Hoàn thành", color: "hsl(210, 80%, 52%)" },
+      { key: "draft", label: "Nháp", color: "hsl(220, 10%, 55%)" },
+      { key: "cancelled", label: "Đã xóa", color: "hsl(220, 10%, 65%)" },
+    ];
+    return order
+      .map((o) => ({
+        key: o.key,
+        name: o.label,
+        value: (meetings as any[]).filter((m: any) => String(m.status) === o.key).length,
+        color: o.color,
+      }))
+      .filter((x) => x.value > 0);
+  }, [meetings]);
+
+  const meetingsStatusStackData = useMemo(() => {
+    const row: any = { name: "Phân bổ" };
+    (meetingsByStatus as any[]).forEach((s: any) => {
+      row[String(s.key)] = s.value ?? 0;
+    });
+    return [row];
+  }, [meetingsByStatus]);
+
+  const tasksByStatus = useMemo(() => {
+    const order: { key: string; label: string; color: string }[] = [
+      { key: "not_started", label: "Chưa bắt đầu", color: "hsl(40, 90%, 50%)" },
+      { key: "in_progress", label: "Đang làm", color: "hsl(210, 80%, 52%)" },
+      { key: "completed", label: "Hoàn thành", color: "hsl(152, 60%, 40%)" },
+      { key: "overdue", label: "Quá hạn", color: "hsl(0, 70%, 50%)" },
+    ];
+    return order
+      .map((o) => ({
+        key: o.key,
+        name: o.label,
+        value: (tasks as any[]).filter((t: any) => String(t.status) === o.key).length,
+        color: o.color,
+      }))
+      .filter((x) => x.value > 0);
+  }, [tasks]);
+
   const dayNames = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
   const nowDate = new Date();
   const startOfWeek = new Date(nowDate);
@@ -172,7 +236,14 @@ export default function Dashboard() {
     const d = new Date(startOfWeek);
     d.setDate(startOfWeek.getDate() + i);
     const count = meetings.filter((m) => new Date(m.startTime).toDateString() === d.toDateString()).length;
-    return { day, meetings: count };
+    const incidentCount = (incidents as any[]).filter((it: any) => {
+      const raw = it?.createdAt ?? it?.reportedAt ?? it?.time ?? null;
+      if (!raw) return false;
+      const dt = new Date(raw);
+      if (Number.isNaN(dt.getTime())) return false;
+      return dt.toDateString() === d.toDateString();
+    }).length;
+    return { day, meetings: count, incidents: incidentCount };
   });
 
   const staggerClasses = ["auth-stagger-1", "auth-stagger-2", "auth-stagger-3", "auth-stagger-4", "auth-stagger-1", "auth-stagger-2"];
@@ -212,18 +283,23 @@ export default function Dashboard() {
           <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={weeklyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 90%)" />
+                <defs>
+                  <linearGradient id="meetingsGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(222, 60%, 22%)" stopOpacity={0.95} />
+                    <stop offset="100%" stopColor="hsl(222, 60%, 22%)" stopOpacity={0.35} />
+                  </linearGradient>
+                  <linearGradient id="incidentsGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(0, 70%, 50%)" stopOpacity={0.95} />
+                    <stop offset="100%" stopColor="hsl(0, 70%, 50%)" stopOpacity={0.35} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 90%)" vertical={false} />
                 <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(0, 0%, 100%)",
-                    border: "1px solid hsl(220, 13%, 90%)",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                  }}
-                />
-                <Bar dataKey="meetings" fill="hsl(222, 60%, 22%)" radius={[6, 6, 0, 0]} />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: "transparent" }} />
+                <Legend wrapperStyle={{ fontSize: "12px" }} />
+                <Bar name="Cuộc họp" dataKey="meetings" fill="url(#meetingsGradient)" radius={[8, 8, 0, 0]} />
+                <Bar name="Sự cố" dataKey="incidents" fill="url(#incidentsGradient)" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -250,7 +326,7 @@ export default function Dashboard() {
                     <Cell key={i} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip content={<ChartTooltip />} />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex flex-wrap gap-2 sm:gap-4 mt-1 sm:mt-2 justify-center">
@@ -261,6 +337,57 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
+        <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-2 transition-all duration-300 hover:shadow-lg">
+          <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-sm sm:text-base font-display">Theo trạng thái cuộc họp</CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <ResponsiveContainer width="100%" height={170}>
+              <BarChart data={meetingsStatusStackData} layout="vertical" margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 90%)" horizontal={false} />
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="name" hide />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: "transparent" }} />
+                <Legend wrapperStyle={{ fontSize: "12px" }} />
+                {(meetingsByStatus as any[]).map((s: any) => (
+                  <Bar key={s.key} name={s.name} dataKey={s.key} stackId="meetingStatus" fill={s.color} radius={[10, 10, 10, 10]} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="flex flex-wrap gap-2 sm:gap-4 mt-1 sm:mt-2 justify-center">
+              {meetingsByStatus.map((item: any) => (
+                <div key={item.name} className="flex items-center gap-1.5 text-xs">
+                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                  <span className="text-muted-foreground">{item.name}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-3 transition-all duration-300 hover:shadow-lg">
+          <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-sm sm:text-base font-display">Theo trạng thái nhiệm vụ</CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <ResponsiveContainer width="100%" height={170}>
+              <BarChart data={tasksByStatus as any[]} layout="vertical" margin={{ top: 8, right: 8, bottom: 8, left: 32 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 90%)" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 12 }} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={90} />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: "transparent" }} />
+                <Bar name="Nhiệm vụ" dataKey="value" radius={[10, 10, 10, 10]}>
+                  {(tasksByStatus as any[]).map((entry: any, index: number) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>

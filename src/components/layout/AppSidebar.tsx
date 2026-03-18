@@ -1,5 +1,8 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { getAllParticipants } from "@/services/api/meetings";
+import { useMeetings } from "@/hooks/useMeetings";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -52,6 +55,67 @@ export default function AppSidebar({ isMobile, isMobileOpen, onCloseMobile }: Ap
   const { user, signOut } = useAuth();
   const { t } = useI18n();
   const isAdmin = user?.authorities?.includes("ROLE_ADMIN") ?? false;
+  const isSecretary = user?.authorities?.includes("ROLE_SECRETARY") ?? false;
+  const userDepartmentId = user?.departmentId != null ? String(user.departmentId) : null;
+
+  const { data: allParticipants = [] } = useQuery({
+    queryKey: ["all-participants"],
+    queryFn: getAllParticipants,
+  });
+  const { data: meetings = [] } = useMeetings();
+
+  const isCorporateLevel = (level?: string): boolean => {
+    const n = (level ?? "").toUpperCase();
+    return ["CORPORATE", "COMPANY", "TONG_CONG_TY", "CAP_TONG_CONG_TY"].includes(n);
+  };
+
+  const invitationsTotal = (() => {
+    const meetingIds = new Set<string>();
+
+    // Lời mời tham dự (theo user)
+    (allParticipants as any[]).forEach((p: any) => {
+      if (
+        p.userId != null &&
+        String(p.userId) === String(user?.id) &&
+        (p.confirmationStatus === "PENDING" || p.confirmationStatus === undefined) &&
+        String(p.meeting?.status ?? "").toUpperCase() === "APPROVED" &&
+        p.meeting?.id != null
+      ) {
+        meetingIds.add(String(p.meeting.id));
+      }
+    });
+
+    // Lời mời theo phòng ban (company-level) cho thư ký phòng
+    if (isSecretary && userDepartmentId) {
+      (allParticipants as any[]).forEach((p: any) => {
+        if (
+          p.userId == null &&
+          p.departmentId != null &&
+          String(p.departmentId) === userDepartmentId &&
+          String(p.meeting?.status ?? "").toUpperCase() === "APPROVED" &&
+          isCorporateLevel(p.meeting?.level) &&
+          (p.confirmationStatus === "PENDING" || p.confirmationStatus === undefined) &&
+          p.meeting?.id != null
+        ) {
+          meetingIds.add(String(p.meeting.id));
+        }
+      });
+    }
+
+    // Lời mời làm thư ký cuộc họp (theo meeting.secretaryId)
+    (meetings as any[]).forEach((m: any) => {
+      if (
+        m?.id != null &&
+        m.secretaryId != null &&
+        String(m.secretaryId) === String(user?.id) &&
+        String(m.status ?? "").toLowerCase() === "approved"
+      ) {
+        meetingIds.add(String(m.id));
+      }
+    });
+
+    return meetingIds.size;
+  })();
 
   const visibleNavigation = navigation;
   const visibleManagement = management.filter(item => (item.href !== "/reports" && item.href !== "/incidents") || isAdmin);
@@ -101,7 +165,12 @@ export default function AppSidebar({ isMobile, isMobileOpen, onCloseMobile }: Ap
                   }
                 >
                   <item.icon className="h-4.5 w-4.5 shrink-0" />
-                  {t(item.key)}
+                  <span className="flex-1 min-w-0 truncate">{t(item.key)}</span>
+                  {item.href === "/invitations" && invitationsTotal > 0 && (
+                    <span className="ml-auto inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-semibold text-destructive-foreground">
+                      {invitationsTotal}
+                    </span>
+                  )}
                 </NavLink>
               </li>
             ))}

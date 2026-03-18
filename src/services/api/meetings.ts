@@ -73,12 +73,16 @@ export async function getMeetings(params?: { page?: number; size?: number }) {
     }
   });
 
-  return (meetings as any[]).map((m: any) => ({
+  return (meetings as any[]).map((m: any) => {
+    const statusRecord = String(m.statusRecord ?? "ACTIVE").toUpperCase();
+    const statusBase = meetingStatusMap[m.status] ?? "draft";
+    const status = statusRecord === "INACTIVE" ? "deleted" : statusBase;
+    return ({
     id: String(m.id),
     title: m.title ?? "",
     type: meetingModeMap[m.mode] ?? "offline",
     level: normalizeMeetingLevel(m.level?.name),
-    status: meetingStatusMap[m.status] ?? "draft",
+    status,
     statusRecord: m.statusRecord ?? "ACTIVE",
     startTime: m.startTime,
     endTime: m.endTime,
@@ -97,7 +101,7 @@ export async function getMeetings(params?: { page?: number; size?: number }) {
     secretaryName: m.secretary ? [m.secretary.firstName, m.secretary.lastName].filter(Boolean).join(" ").trim() || m.secretary.login : undefined,
     attendees: [] as string[],
     agenda: [] as { order: number; title: string; presenter: string; duration: number }[],
-  }));
+  })});
 }
 
 /** Lấy chi tiết một cuộc họp theo id (dùng cho modal mobile) */
@@ -114,12 +118,15 @@ export async function getMeetingById(id: number | string): Promise<MeetingListIt
         rejectionReasons[String(a.meeting.id)] = a.reason ?? "";
       }
     });
+    const statusRecord = String(meeting.statusRecord ?? "ACTIVE").toUpperCase();
+    const statusBase = meetingStatusMap[meeting.status] ?? "draft";
+    const status = statusRecord === "INACTIVE" ? "deleted" : statusBase;
     return {
       id: String(meeting.id),
       title: meeting.title ?? "",
       type: meetingModeMap[meeting.mode] ?? "offline",
       level: normalizeMeetingLevel(meeting.level?.name),
-      status: meetingStatusMap[meeting.status] ?? "draft",
+      status,
       startTime: meeting.startTime,
       endTime: meeting.endTime,
       roomId: meeting.room?.id != null ? String(meeting.room.id) : undefined,

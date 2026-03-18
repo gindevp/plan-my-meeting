@@ -690,11 +690,24 @@ export default function RoomManagementPage() {
               </div>
               <div>
                 <Label>Vị trí (tầng) *</Label>
-                <Input
+                <SearchableSelect
+                  options={[
+                    { value: "Tầng 1", label: "Tầng 1" },
+                    { value: "Tầng 2", label: "Tầng 2" },
+                    { value: "Tầng 3", label: "Tầng 3" },
+                    { value: "Tầng 4", label: "Tầng 4" },
+                    { value: "Tầng 5", label: "Tầng 5" },
+                    { value: "Tầng 6", label: "Tầng 6" },
+                    { value: "Tầng 7", label: "Tầng 7" },
+                    { value: "Tầng 8", label: "Tầng 8" },
+                    { value: "Tầng 9", label: "Tầng 9" },
+                  ]}
                   value={form.floor}
-                  onChange={(e) => setForm({ ...form, floor: e.target.value })}
-                  placeholder="VD: Tầng 2"
-                  className="mt-1.5 h-11"
+                  onValueChange={(v) => setForm({ ...form, floor: v })}
+                  placeholder="Chọn tầng"
+                  searchPlaceholder="Tìm tầng..."
+                  emptyText="Không tìm thấy."
+                  triggerClassName="mt-1.5 h-11"
                 />
               </div>
             </div>

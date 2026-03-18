@@ -1,5 +1,5 @@
 export type MeetingType = 'offline' | 'online' | 'hybrid';
-export type MeetingStatus = 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled' | 'completed';
+export type MeetingStatus = 'draft' | 'pending' | 'approved' | 'rejected' | 'cancelled' | 'deleted' | 'completed';
 export type MeetingLevel = 'company' | 'department' | 'team';
 export type TaskStatus = 'not_started' | 'in_progress' | 'completed' | 'overdue';
 export type UserRole = 'admin' | 'employee' | 'secretary' | 'room_manager';
@@ -166,7 +166,13 @@ export const meetingLevels: { value: MeetingLevel; label: string }[] = [
   { value: 'team', label: 'Nhóm/Team' },
 ];
 export const statusLabels: Record<MeetingStatus, string> = {
-  draft: 'Nháp', pending: 'Chờ duyệt', approved: 'Đã duyệt', rejected: 'Từ chối', cancelled: 'Hủy', completed: 'Hoàn thành',
+  draft: 'Nháp',
+  pending: 'Chờ duyệt',
+  approved: 'Đã duyệt',
+  rejected: 'Từ chối',
+  cancelled: 'Đã hủy',
+  deleted: 'Đã xóa',
+  completed: 'Hoàn thành',
 };
 export const typeLabels: Record<MeetingType, string> = {
   offline: 'Trực tiếp', online: 'Trực tuyến', hybrid: 'Kết hợp',

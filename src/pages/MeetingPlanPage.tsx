@@ -36,7 +36,7 @@ import {
   deleteMeetingTask,
 } from "@/services/api/meetings";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
-import { Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit, UserCheck, UserX, AlertTriangle, FileText, Upload, Download, Loader2, ListTodo, PlayCircle, Circle, Calendar, X } from "lucide-react";
+import { Ban, Search, Filter, Eye, Pencil, Trash2, Plus, MapPin, Video, Users, CheckCircle, Clock, XCircle, FileX, FileEdit, UserCheck, UserX, AlertTriangle, FileText, Upload, Download, Loader2, ListTodo, PlayCircle, Circle, Calendar, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
@@ -61,12 +61,13 @@ function formatTime(dateStr: string): string {
   return `${hours}:${minutes}`;
 }
 
-const statusTabs: { key: MeetingStatus | "cancelled" | "completed"; label: string; icon: typeof CheckCircle }[] = [
+const statusTabs: { key: MeetingStatus | "cancelled" | "deleted" | "completed"; label: string; icon: typeof CheckCircle }[] = [
   { key: "approved", label: "Đã phê duyệt", icon: CheckCircle },
   { key: "pending", label: "Chờ phê duyệt", icon: Clock },
   { key: "rejected", label: "Từ chối", icon: XCircle },
-  { key: "cancelled", label: "Đã xóa", icon: FileX },
   { key: "draft", label: "Lưu nháp", icon: FileEdit },
+  { key: "deleted", label: "Đã xóa", icon: FileX },
+  { key: "cancelled", label: "Đã hủy", icon: Ban },
   { key: "completed", label: "Hoàn thành", icon: CheckCircle },
 ];
 
@@ -75,7 +76,8 @@ const statusColorMap: Record<string, string> = {
   pending: "bg-warning/15 text-warning border border-warning/20",
   approved: "bg-success/15 text-success border border-success/20",
   rejected: "bg-destructive/15 text-destructive border border-destructive/20",
-  cancelled: "bg-muted text-muted-foreground",
+  deleted: "bg-muted text-muted-foreground",
+  cancelled: "bg-muted/40 text-muted-foreground border border-border",
   completed: "bg-info/15 text-info border border-info/20",
 };
 
@@ -137,6 +139,7 @@ export default function MeetingPlanPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [deleteConfirmMeeting, setDeleteConfirmMeeting] = useState<typeof meetings[0] | null>(null);
+  const [cancelConfirmMeeting, setCancelConfirmMeeting] = useState<typeof meetings[0] | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [pendingUploadTaskId, setPendingUploadTaskId] = useState<string | null>(null);
   const taskFileInputRef = useRef<HTMLInputElement>(null);
@@ -156,6 +159,12 @@ export default function MeetingPlanPage() {
   const [representativesModal, setRepresentativesModal] = useState<{ departmentName: string; representativeParticipants: any[] } | null>(null);
   const [taskDetailDialog, setTaskDetailDialog] = useState<any>(null);
   const [taskDeleteConfirmId, setTaskDeleteConfirmId] = useState<string | null>(null);
+  const [nowTs, setNowTs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTs(Date.now()), 30000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const { data: allParticipantsForPlan = [] } = useQuery({
     queryKey: ["all-participants"],
@@ -388,9 +397,9 @@ export default function MeetingPlanPage() {
       const isSecretaryDeptInvited = secretaryDepartmentMeetingIdsAllStatuses.has(String(m.id));
 
       let visibleToUser: boolean;
-      if (activeTab === "draft" || activeTab === "cancelled") {
+      if (activeTab === "draft" || activeTab === "deleted") {
         visibleToUser = isRequester;
-      } else if ((activeTab === "approved" || activeTab === "pending" || activeTab === "rejected" || activeTab === "completed") && isRoomManager) {
+      } else if ((activeTab === "approved" || activeTab === "pending" || activeTab === "rejected" || activeTab === "completed" || activeTab === "cancelled") && isRoomManager) {
         visibleToUser = true;
       } else {
         visibleToUser = isRequester || isHost || isSecretary || isParticipant || isSecretaryDeptInvited;
@@ -417,14 +426,14 @@ export default function MeetingPlanPage() {
   }, [meetingsForTabs, activeTab, search, user?.id, isRoomManager, secretaryOfMeetingIds, participantInAnyStatusMeetingIds, secretaryDepartmentMeetingIdsAllStatuses, filterStartDate, filterStartTime, filterEndDate, filterEndTime, filterLevel, filterType]);
 
   const isMeetingVisibleToUser = (m: any, status: string) => {
-    if ((status === "approved" || status === "pending" || status === "rejected" || status === "completed") && isRoomManager) return true;
+    if ((status === "approved" || status === "pending" || status === "rejected" || status === "completed" || status === "cancelled") && isRoomManager) return true;
     const isRequester = m.requesterId != null && String(m.requesterId) === String(user?.id);
     const isHost = m.hostId != null && String(m.hostId) === String(user?.id);
     const isSecretary =
       (m.secretaryId != null && String(m.secretaryId) === String(user?.id)) || secretaryOfMeetingIds.has(String(m.id));
     const isParticipant = participantInAnyStatusMeetingIds.has(String(m.id));
     const isSecretaryDeptInvited = secretaryDepartmentMeetingIdsAllStatuses.has(String(m.id));
-    if (status === "draft" || status === "cancelled") return isRequester;
+    if (status === "draft" || status === "deleted") return isRequester;
     return isRequester || isHost || isSecretary || isParticipant || isSecretaryDeptInvited;
   };
 
@@ -489,11 +498,31 @@ export default function MeetingPlanPage() {
       queryClient.invalidateQueries({ queryKey: ["meetings"] });
       setDetailOpen(false);
       setSelectedMeeting(null);
-      toast({ title: "Đã xóa", description: "Cuộc họp đã được chuyển sang danh sách đã xóa." });
+      toast({ title: "Đã hủy", description: "Cuộc họp đã được hủy." });
       setActiveTab("cancelled");
+      const params = new URLSearchParams(location.search);
+      params.delete("meetingId");
+      navigate(`/plans?tab=cancelled${params.toString() ? "&" + params.toString() : ""}`, { replace: true });
     },
     onError: () => {
-      toast({ variant: "destructive", title: "Lỗi", description: "Không thể xóa/hủy cuộc họp." });
+      toast({ variant: "destructive", title: "Lỗi", description: "Không thể hủy cuộc họp." });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => softDeleteMeeting(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      setDetailOpen(false);
+      setSelectedMeeting(null);
+      toast({ title: "Đã xóa", description: "Cuộc họp đã được chuyển sang danh sách đã xóa." });
+      setActiveTab("deleted");
+      const params = new URLSearchParams(location.search);
+      params.delete("meetingId");
+      navigate(`/plans?tab=deleted${params.toString() ? "&" + params.toString() : ""}`, { replace: true });
+    },
+    onError: () => {
+      toast({ variant: "destructive", title: "Lỗi", description: "Không thể xóa cuộc họp." });
     },
   });
 
@@ -921,12 +950,12 @@ export default function MeetingPlanPage() {
     <div className="page-content">
       <div className="opacity-0 animate-auth-fade-in-up">
         <PageHeader
-          title="Quản lý kế hoạch lịch họp"
+          title="Kế hoạch họp"
           description="Quản lý và theo dõi các kế hoạch cuộc họp"
         >
           <Button onClick={() => navigate("/meetings/new")} className="gap-2 h-11 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]">
             <Plus className="h-4 w-4" />
-            Lên lịch họp
+            Tạo mới
           </Button>
         </PageHeader>
       </div>
@@ -1041,6 +1070,7 @@ export default function MeetingPlanPage() {
               <TableHead className="font-medium">Chủ trì</TableHead>
               <TableHead className="font-medium">Bắt đầu</TableHead>
               <TableHead className="font-medium">Kết thúc</TableHead>
+              {activeTab === "approved" && <TableHead className="font-medium">Trạng thái</TableHead>}
               <TableHead className="font-medium">Người tạo</TableHead>
               {activeTab === "rejected" && <TableHead>Lý do từ chối</TableHead>}
               <TableHead className="text-right">Thao tác</TableHead>
@@ -1049,6 +1079,16 @@ export default function MeetingPlanPage() {
           <TableBody>
             {filtered.map((meeting, i) => {
               const TypeIcon = typeIconMap[meeting.type];
+              const startMs = meeting.startTime ? new Date(meeting.startTime).getTime() : NaN;
+              const endMs = meeting.endTime ? new Date(meeting.endTime).getTime() : NaN;
+              const timeStatus =
+                Number.isFinite(startMs) && Number.isFinite(endMs)
+                  ? nowTs < startMs
+                    ? { label: "Sắp diễn ra", className: "bg-info/15 text-info border border-info/20" }
+                    : nowTs <= endMs
+                    ? { label: "Đang diễn ra", className: "bg-success/15 text-success border border-success/20" }
+                    : { label: "Đã kết thúc", className: "bg-muted/40 text-muted-foreground border border-border" }
+                  : null;
               return (
                 <TableRow
                   key={meeting.id}
@@ -1082,6 +1122,15 @@ export default function MeetingPlanPage() {
                     <div className="font-medium">{new Date(meeting.endTime).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</div>
                     <div className="text-muted-foreground text-xs">{new Date(meeting.endTime).toLocaleDateString("vi-VN")}</div>
                   </TableCell>
+                  {activeTab === "approved" && (
+                    <TableCell className="text-sm">
+                      {timeStatus ? (
+                        <Badge variant="outline" className={`text-[11px] ${timeStatus.className}`}>{timeStatus.label}</Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="text-sm">
                     <span className="text-muted-foreground">{meeting.organizer || "—"}</span>
                   </TableCell>
@@ -1122,14 +1171,14 @@ export default function MeetingPlanPage() {
             })}
             {filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={activeTab === "rejected" ? 10 : 9} className="p-0">
+                <TableCell colSpan={activeTab === "rejected" || activeTab === "approved" ? 10 : 9} className="p-0">
                   <div className="empty-state opacity-0 animate-auth-fade-in-up auth-stagger-2">
                     <Calendar className="h-12 w-12 text-muted-foreground/50 mb-3" />
                     <p className="text-sm font-medium text-muted-foreground">Không tìm thấy cuộc họp nào</p>
                     <p className="text-xs text-muted-foreground/80 mt-1">Thử điều chỉnh bộ lọc hoặc tạo cuộc họp mới</p>
                     <Button variant="outline" size="sm" className="mt-4 gap-1.5" onClick={() => navigate("/meetings/new")}>
                       <Plus className="h-4 w-4" />
-                      Lên lịch họp
+                      Tạo mới
                     </Button>
                   </div>
                 </TableCell>
@@ -1944,10 +1993,20 @@ export default function MeetingPlanPage() {
                   </>
                 )}
 
-                {selectedMeeting.status === "approved" && (String(selectedMeeting.host?.id) === String(user?.id) || String(selectedMeeting.requesterId) === String(user?.id) || String(selectedMeeting.secretaryId) === String(user?.id)) && (
+                {selectedMeeting.status === "approved" && (String(selectedMeeting.host?.id) === String(user?.id) || String(selectedMeeting.secretaryId) === String(user?.id) || isAdmin) && (
                   <>
                     <Separator />
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-2">
+                      {isMeetingNotStarted(selectedMeeting) && (
+                        <Button
+                          variant="destructive"
+                          className="gap-2"
+                          onClick={() => setCancelConfirmMeeting(selectedMeeting)}
+                        >
+                          <Ban className="h-4 w-4" />
+                          Hủy
+                        </Button>
+                      )}
                       <Button onClick={() => setShowCompleteModal(true)} className="gap-2">
                         <CheckCircle className="h-4 w-4" />
                         Hoàn thành
@@ -2365,6 +2424,24 @@ export default function MeetingPlanPage() {
                   </div>
                 )}
               </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                {(selectedMeeting?.host?.id === user?.id || selectedMeeting?.secretaryId === user?.id || isAdmin) && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="gap-1.5"
+                    onClick={() => {
+                      setTaskDetailDialog(null);
+                      setTaskDeleteConfirmId(String(taskDetailDialog.task.id));
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Xóa task
+                  </Button>
+                )}
+                <Button type="button" variant="outline" onClick={() => setTaskDetailDialog(null)}>Đóng</Button>
+              </div>
             </div>
           )}
         </DialogContent>
@@ -2483,17 +2560,17 @@ export default function MeetingPlanPage() {
             <Button
               variant="destructive"
               className="h-11 gap-2"
-              disabled={cancelMutation.isPending}
+              disabled={deleteMutation.isPending}
               onClick={() => {
                 if (deleteConfirmMeeting) {
-                  cancelMutation.mutate(
-                    { id: deleteConfirmMeeting.id, status: deleteConfirmMeeting.status },
+                  deleteMutation.mutate(
+                    deleteConfirmMeeting.id,
                     { onSettled: () => setDeleteConfirmMeeting(null) }
                   );
                 }
               }}
             >
-              {cancelMutation.isPending ? (
+              {deleteMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin shrink-0" />
                   Đang xóa...
@@ -2502,6 +2579,62 @@ export default function MeetingPlanPage() {
                 <>
                   <Trash2 className="h-4 w-4 shrink-0" />
                   Xóa cuộc họp
+                </>
+              )}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!cancelConfirmMeeting} onOpenChange={(open) => !open && setCancelConfirmMeeting(null)}>
+        <AlertDialogContent className="max-w-md rounded-xl border-border shadow-lg">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                <Ban className="h-6 w-6 text-destructive" />
+              </div>
+              <div>
+                <AlertDialogTitle className="text-lg font-display font-semibold tracking-tight">
+                  Hủy cuộc họp
+                </AlertDialogTitle>
+                <AlertDialogDescription className="mt-1">
+                  Bạn có chắc chắn muốn hủy cuộc họp này? Hệ thống sẽ thông báo tới tất cả người liên quan.
+                </AlertDialogDescription>
+              </div>
+            </div>
+            {cancelConfirmMeeting && (
+              <div className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+                <p className="font-medium text-foreground">{cancelConfirmMeeting.title}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {new Date(cancelConfirmMeeting.startTime).toLocaleString("vi-VN")}
+                </p>
+              </div>
+            )}
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6 flex gap-2 sm:justify-end">
+            <AlertDialogCancel className="h-11">Không</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              className="h-11 gap-2"
+              disabled={cancelMutation.isPending}
+              onClick={() => {
+                if (cancelConfirmMeeting) {
+                  cancelMutation.mutate(
+                    { id: cancelConfirmMeeting.id, status: cancelConfirmMeeting.status },
+                    { onSettled: () => setCancelConfirmMeeting(null) }
+                  );
+                }
+              }}
+            >
+              {cancelMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                  Đang hủy...
+                </>
+              ) : (
+                <>
+                  <Ban className="h-4 w-4 shrink-0" />
+                  Hủy cuộc họp
                 </>
               )}
             </Button>

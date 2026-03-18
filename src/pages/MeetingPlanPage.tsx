@@ -2007,10 +2007,12 @@ export default function MeetingPlanPage() {
                           Hủy
                         </Button>
                       )}
-                      <Button onClick={() => setShowCompleteModal(true)} className="gap-2">
-                        <CheckCircle className="h-4 w-4" />
-                        Hoàn thành
-                      </Button>
+                      {(isMeetingInProgress(selectedMeeting) || isMeetingOver(selectedMeeting)) && (
+                        <Button onClick={() => setShowCompleteModal(true)} className="gap-2">
+                          <CheckCircle className="h-4 w-4" />
+                          Hoàn thành
+                        </Button>
+                      )}
                     </div>
                   </>
                 )}

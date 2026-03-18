@@ -363,7 +363,7 @@ export default function RoomManagementPage() {
       layoutData: form.layoutData?.trim() || undefined,
     };
     try {
-      if (editingRoom) {
+    if (editingRoom) {
         const raw = await getRoomEquipmentsRaw();
         const toDelete = raw.filter((re) => re.roomId === editingRoom.id);
         for (const re of toDelete) {
@@ -394,7 +394,7 @@ export default function RoomManagementPage() {
         if (form.layoutData && countChairsInLayout(form.layoutData) === 0) {
           toast({ title: "Lưu ý", description: "Layout chưa bố trí ghế ngồi." });
         }
-      } else {
+    } else {
         const res = (await createRoom(payload)) as { id?: number };
         const roomId = res?.id;
         if (roomId) {
@@ -423,8 +423,8 @@ export default function RoomManagementPage() {
         if (form.layoutData && countChairsInLayout(form.layoutData) === 0) {
           toast({ title: "Lưu ý", description: "Layout chưa bố trí ghế ngồi." });
         }
-      }
-      setModalOpen(false);
+    }
+    setModalOpen(false);
     } catch (e: any) {
       toast({ variant: "destructive", title: "Lỗi", description: e?.message ?? "Không thể lưu phòng họp." });
     } finally {
@@ -512,13 +512,13 @@ export default function RoomManagementPage() {
               emptyText="Không tìm thấy."
               triggerClassName="h-9 w-[140px]"
             />
-          </div>
-          {canCrudRoom && (
-            <Button onClick={openCreate} className="gap-2 shrink-0">
-              <Plus className="h-4 w-4" /> Thêm phòng họp
-            </Button>
-          )}
         </div>
+        {canCrudRoom && (
+            <Button onClick={openCreate} className="gap-2 shrink-0">
+            <Plus className="h-4 w-4" /> Thêm phòng họp
+          </Button>
+        )}
+      </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -594,12 +594,12 @@ export default function RoomManagementPage() {
                           >
                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-background">
                               <Icon className="h-3.5 w-3.5 text-primary" />
-                            </div>
+                  </div>
                             {eq.quantity > 1 && <span className="text-xs font-medium text-muted-foreground">x{eq.quantity}</span>}
-                          </div>
-                        );
-                      })}
-                    </div>
+                </div>
+                      );
+                    })}
+                  </div>
                   ) : (
                     <p className="text-sm text-muted-foreground italic py-2 px-3 rounded-lg bg-muted/30">
                       Chưa có thiết bị
@@ -611,7 +611,7 @@ export default function RoomManagementPage() {
                   <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => { setDetailRoom(room); setDetailOpen(true); }}>
                     <Eye className="h-3.5 w-3.5" /> Chi tiết
                   </Button>
-                  {canCrudRoom && (
+                {canCrudRoom && (
                     <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => openEdit(room)}>
                       <SquarePen className="h-3.5 w-3.5" /> Sửa
                     </Button>
@@ -626,7 +626,7 @@ export default function RoomManagementPage() {
                       <Trash2 className="h-3.5 w-3.5" /> Xóa
                     </Button>
                   )}
-                </div>
+                  </div>
               </CardContent>
             </Card>
           );

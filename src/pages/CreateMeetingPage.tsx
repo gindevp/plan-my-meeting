@@ -98,6 +98,7 @@ export default function CreateMeetingPage() {
   const [endDateTime, setEndDateTime] = useState("");
   const [chairpersonId, setChairpersonId] = useState("");
   const [secretaryId, setSecretaryId] = useState<string>("");
+  const [requireSecretary, setRequireSecretary] = useState(false);
   const [chairpersonOpen, setChairpersonOpen] = useState(false);
   const [secretaryOpen, setSecretaryOpen] = useState(false);
   const [meetingLink, setMeetingLink] = useState("");
@@ -185,8 +186,27 @@ export default function CreateMeetingPage() {
     }
   }, [meetingLevel, chairpersonId, secretaryId, chairpersonCandidates, secretaryCandidates]);
 
-  // Auto-chọn thư ký: luôn lấy candidate đầu tiên (nếu có) cho cấp hiện tại, không cho sửa ở UI
+  // Cấp tổng công ty: luôn cần thư ký và auto-chọn.
+  // Cấp phòng ban: thư ký là tùy chọn, chỉ auto-chọn khi người dùng bật "Cần thư ký".
   useEffect(() => {
+    if (meetingLevel === "company") {
+      setRequireSecretary(true);
+      if (secretaryCandidates.length === 0) {
+        setSecretaryId("");
+        return;
+      }
+      const first = secretaryCandidates[0] as any;
+      if (!secretaryId || !secretaryCandidates.some((u: any) => String(u.id) === String(secretaryId))) {
+        setSecretaryId(String(first.id));
+      }
+      return;
+    }
+
+    if (!requireSecretary) {
+      setSecretaryId("");
+      return;
+    }
+
     if (isEditMode) return;
     if (secretaryCandidates.length === 0) {
       setSecretaryId("");
@@ -196,7 +216,7 @@ export default function CreateMeetingPage() {
     if (!secretaryId || !secretaryCandidates.some((u: any) => String(u.id) === String(secretaryId))) {
       setSecretaryId(String(first.id));
     }
-  }, [isEditMode, meetingLevel, secretaryId, secretaryCandidates]);
+  }, [isEditMode, meetingLevel, requireSecretary, secretaryId, secretaryCandidates]);
 
   const { data: existingAgendaItems = [] } = useQuery({
     queryKey: ["edit-meeting-agenda", meetingId],
@@ -248,7 +268,9 @@ export default function CreateMeetingPage() {
     setSelectedRoom(existingMeeting.roomId || "");
     setMeetingLink(existingMeeting.meetingLink || "");
     setChairpersonId(existingMeeting.host?.id?.toString() || existingMeeting.hostId?.toString() || "");
-    setSecretaryId(existingMeeting.secretaryId != null ? String(existingMeeting.secretaryId) : "");
+    const existingSecretaryId = existingMeeting.secretaryId != null ? String(existingMeeting.secretaryId) : "";
+    setSecretaryId(existingSecretaryId);
+    setRequireSecretary(levelValue === "company" || Boolean(existingSecretaryId));
   }, [existingMeeting]);
 
   useEffect(() => {
@@ -1807,7 +1829,24 @@ export default function CreateMeetingPage() {
 
             <div>
               <Label>Thư ký cuộc họp</Label>
-              {(() => {
+              {meetingLevel === "department" && (
+                <div className="mt-2 mb-2 flex items-center gap-2">
+                  <Checkbox
+                    id="requireSecretary"
+                    checked={requireSecretary}
+                    onCheckedChange={(v) => setRequireSecretary(!!v)}
+                  />
+                  <Label htmlFor="requireSecretary" className="text-sm font-normal cursor-pointer text-muted-foreground">
+                    Cần thư ký cuộc họp
+                  </Label>
+                </div>
+              )}
+              {meetingLevel === "department" && !requireSecretary ? (
+                <div className="mt-1.5 h-10 px-3 flex items-center rounded-md border bg-muted/40 text-sm text-muted-foreground">
+                  Không chọn thư ký
+                </div>
+              ) : (
+              (() => {
                 const u = secretaryId ? (users as any[]).find((x: any) => String(x.id) === String(secretaryId)) : null;
                 const fallback = secretaryCandidates.length > 0 ? (secretaryCandidates[0] as any) : null;
                 const secUser = u ?? fallback;
@@ -1834,7 +1873,8 @@ export default function CreateMeetingPage() {
                     )}
                   </div>
                 );
-              })()}
+              })()
+              )}
               {errors.secretary && <p className="text-xs text-destructive mt-1">{errors.secretary}</p>}
             </div>
 

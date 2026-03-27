@@ -53,6 +53,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { setAiBridgeContext } from "@/lib/aiContextBridge";
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -752,6 +753,11 @@ export default function MeetingPlanPage() {
       toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể xóa task." });
     },
   });
+  // AI suggestion feature removed; usage direction being revisited.
+
+  // Meeting detail Q&A moved to global AI Assistant overlay.
+
+  // Controlled task suggestions removed for now.
 
   const { data: agendaItems = [] } = useQuery({
     queryKey: ["agenda-items", selectedMeeting?.id],
@@ -897,6 +903,8 @@ export default function MeetingPlanPage() {
     }
   };
 
+  // Controlled task suggestions removed for now.
+
   const { data: meetingIncidents = [] } = useQuery({
     queryKey: ["incidents", selectedMeeting?.id],
     queryFn: () => getIncidentsByMeeting(selectedMeeting!.id),
@@ -914,6 +922,80 @@ export default function MeetingPlanPage() {
     queryFn: () => getMeetingDocumentsByMeeting(selectedMeeting!.id),
     enabled: !!selectedMeeting,
   });
+
+  const aiMeetingSnapshot = useMemo(() => {
+    if (!selectedMeeting) return null;
+    const now = Date.now();
+    const startTs = selectedMeeting.startTime ? new Date(selectedMeeting.startTime).getTime() : 0;
+    const endTs = selectedMeeting.endTime ? new Date(selectedMeeting.endTime).getTime() : 0;
+    const phase = endTs > 0 && now > endTs ? "ended" : startTs > 0 && now >= startTs ? "ongoing" : "upcoming";
+    return {
+      id: Number(selectedMeeting.id),
+      title: selectedMeeting.title,
+      type: selectedMeeting.type,
+      level: selectedMeeting.level,
+      status: selectedMeeting.status,
+      startTime: selectedMeeting.startTime,
+      endTime: selectedMeeting.endTime,
+      roomName: selectedMeeting.roomName,
+      meetingLink: selectedMeeting.meetingLink,
+      chairperson: selectedMeeting.chairperson,
+      secretaryId: selectedMeeting.secretaryId,
+      secretaryName: selectedMeeting.secretaryName,
+      department: selectedMeeting.department,
+      description: selectedMeeting.description,
+      phaseNow: phase,
+      agendaItems: (agendaItems as any[]).slice(0, 100),
+      participants: (participants as any[]).slice(0, 200),
+      tasks: (meetingTasks as any[]).slice(0, 200),
+      documents: (meetingDocuments as any[]).slice(0, 200),
+      incidents: (meetingIncidents as any[]).slice(0, 100),
+      stats: {
+        agendaCount: (agendaItems as any[]).length,
+        participantCount: (participants as any[]).length,
+        taskCount: (meetingTasks as any[]).length,
+        documentCount: (meetingDocuments as any[]).length,
+        incidentCount: (meetingIncidents as any[]).length,
+      },
+    };
+  }, [selectedMeeting, agendaItems, participants, meetingTasks, meetingDocuments, meetingIncidents]);
+
+  useEffect(() => {
+    const openModals: string[] = [];
+    if (detailOpen) openModals.push("meetingDetail");
+    if (showRejectDialog) openModals.push("rejectMeeting");
+    if (showCompleteModal) openModals.push("completeMeeting");
+    if (taskDetailDialog) openModals.push("taskDetail");
+    if (representativesModal) openModals.push("representatives");
+
+    setAiBridgeContext({
+      meetingId: selectedMeeting?.id != null ? Number(selectedMeeting.id) : null,
+      openModals,
+      selectedItems: {
+        activeTab,
+        selectedMeetingId: selectedMeeting?.id != null ? Number(selectedMeeting.id) : null,
+        selectedMeetingTitle: selectedMeeting?.title ?? "",
+        meetingListSnapshot: (filtered as any[]).slice(0, 30).map((m: any) => ({
+          id: Number(m.id),
+          title: m.title,
+          status: m.status,
+          startTime: m.startTime,
+          endTime: m.endTime,
+        })),
+        meetingDetailContext: aiMeetingSnapshot,
+      },
+    });
+  }, [
+    detailOpen,
+    showRejectDialog,
+    showCompleteModal,
+    taskDetailDialog,
+    representativesModal,
+    selectedMeeting,
+    activeTab,
+    filtered,
+    aiMeetingSnapshot,
+  ]);
 
   const draftValidation = (() => {
     if (!selectedMeeting || selectedMeeting.status !== "draft") {
@@ -2669,6 +2751,8 @@ export default function MeetingPlanPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* AI suggestions dialog removed */}
     </div>
   );
 }

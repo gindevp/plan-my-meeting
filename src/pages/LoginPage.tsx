@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input, PasswordInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { LogIn, Loader2, ArrowRight } from "lucide-react";
+import { LogIn, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { AuthLayout } from "@/components/auth/AuthLayout";
@@ -111,12 +111,7 @@ export default function LoginPage() {
                   </Button>
                 </div>
               </form>
-              <p className="text-center text-sm text-muted-foreground pt-2 border-t opacity-0 animate-auth-fade-in-up auth-stagger-5">
-                Chưa có tài khoản?{" "}
-                <Link to="/register" className="text-primary font-semibold hover:underline inline-flex items-center gap-1 transition-opacity hover:opacity-80">
-                  Đăng ký <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </p>
+              <div className="pt-2 border-t opacity-0 animate-auth-fade-in-up auth-stagger-5" />
             </CardContent>
           </Card>
     </AuthLayout>

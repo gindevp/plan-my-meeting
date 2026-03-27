@@ -354,6 +354,50 @@ export async function completeMeeting(id: number | string) {
   });
 }
 
+export type AiSuggestedTask = {
+  title: string;
+  description?: string;
+  dueAt?: string | null;
+  assigneeId?: number | string | null;
+  departmentId?: number | string | null;
+};
+
+export type AiMeetingSuggestion = {
+  id: number;
+  meetingId: number;
+  status: "DRAFT" | "APPLIED";
+  model?: string | null;
+  promptVersion?: string | null;
+  inputHash?: string | null;
+  summary?: string | null;
+  decisions?: string | null;
+  suggestedTasks?: AiSuggestedTask[];
+  createdBy?: string | null;
+  createdDate?: string | null;
+};
+
+export async function aiSuggestMeetingMinutes(meetingId: number | string, opts?: { forceRegenerate?: boolean }) {
+  return fetchApi<AiMeetingSuggestion>(`/api/meetings/${meetingId}/ai/suggest-minutes`, {
+    method: "POST",
+    body: JSON.stringify({ forceRegenerate: opts?.forceRegenerate === true }),
+  });
+}
+
+export async function aiApplyMeetingSuggestion(meetingId: number | string, suggestionId: number | string) {
+  return fetchApi<any[]>(`/api/meetings/${meetingId}/ai/apply-suggestion/${suggestionId}`, {
+    method: "POST",
+  });
+}
+
+export type AiChatMessage = { role: "user" | "assistant"; content: string };
+
+export async function aiChatMeeting(meetingId: number | string, messages: AiChatMessage[]) {
+  return fetchApi<{ answer: string }>(`/api/meetings/${meetingId}/ai/chat`, {
+    method: "POST",
+    body: JSON.stringify({ messages }),
+  });
+}
+
 export async function softDeleteMeeting(id: number | string) {
   return fetchApi<any>(`/api/meetings/${id}`, {
     method: "PATCH",

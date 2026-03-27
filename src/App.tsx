@@ -13,6 +13,7 @@ import { getIsApiLoading, subscribeApiLoading } from "@/lib/api";
 import { useRegisterExpoPushToken } from "@/hooks/useRegisterExpoPushToken";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { EmbedAuthGate } from "@/components/EmbedAuthGate";
+import AiAssistantOverlay from "@/components/ai/AiAssistantOverlay";
 import AppLayout from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import CalendarPage from "./pages/CalendarPage";
@@ -73,6 +74,7 @@ const App = () => (
             <RegisterExpoPushTokenInEmbed />
             <EmbedAuthGate>
             <AvatarVersionProvider>
+            <AiAssistantOverlay />
             <Routes>
               <Route path="/login" element={<ErrorBoundary><LoginPage /></ErrorBoundary>} />
               <Route path="/register" element={<RegisterPage />} />

@@ -19,6 +19,7 @@ import { Plus, Search, SquarePen, Trash2, AlertTriangle, Eye } from "lucide-reac
 import { useToast } from "@/hooks/use-toast";
 import { useIncidents } from "@/hooks/useIncidents";
 import { useMeetings } from "@/hooks/useMeetings";
+import { useRooms } from "@/hooks/useRooms";
 import { useUsers } from "@/hooks/useUsers";
 import {
   createIncident,
@@ -50,6 +51,7 @@ interface IncidentForm {
   severity: string;
   status: string;
   meetingId: string;
+  roomId: string;
   reportedById: string;
   assignedToId: string;
 }
@@ -60,6 +62,7 @@ const emptyForm: IncidentForm = {
   severity: "MEDIUM",
   status: "OPEN",
   meetingId: "",
+  roomId: "",
   reportedById: "",
   assignedToId: "",
 };
@@ -84,6 +87,7 @@ export default function IncidentsPage() {
     severity: filterSeverity === "__all__" ? undefined : filterSeverity,
   });
   const { data: meetings = [] } = useMeetings();
+  const { data: rooms = [] } = useRooms();
   const { data: users = [] } = useUsers();
   const queryClient = useQueryClient();
 
@@ -135,6 +139,7 @@ export default function IncidentsPage() {
           status: form.status,
           reportedAt: current?.reportedAt ?? new Date().toISOString(),
           meetingId: form.meetingId,
+          roomId: form.roomId || null,
           reportedById: form.reportedById,
           assignedToId: form.assignedToId || null,
         });
@@ -145,6 +150,7 @@ export default function IncidentsPage() {
           description: form.description.trim() || undefined,
           severity: form.severity,
           meetingId: form.meetingId || undefined,
+          roomId: form.roomId || undefined,
           reportedById: form.reportedById,
           assignedToId: form.assignedToId || undefined,
         });
@@ -181,6 +187,7 @@ export default function IncidentsPage() {
       severity: inc.severity ?? "MEDIUM",
       status: inc.status ?? "OPEN",
       meetingId: inc.meetingId ?? "",
+      roomId: inc.roomId ?? "",
       reportedById,
       assignedToId: inc.assignedToId ?? "",
     });
@@ -265,6 +272,7 @@ export default function IncidentsPage() {
               <TableHead className="font-medium w-10"></TableHead>
               <TableHead className="font-medium">Tiêu đề</TableHead>
               <TableHead className="font-medium">Cuộc họp</TableHead>
+              <TableHead className="font-medium">Phòng họp bị sự cố</TableHead>
               <TableHead className="font-medium">Người báo</TableHead>
               <TableHead className="font-medium">Người phụ trách</TableHead>
               <TableHead className="font-medium">Mức độ</TableHead>
@@ -290,6 +298,9 @@ export default function IncidentsPage() {
                 </TableCell>
                 <TableCell className="max-w-[180px] truncate" title={inc.meetingTitle}>
                   {inc.meetingTitle || "—"}
+                </TableCell>
+                <TableCell className="text-sm max-w-[180px] truncate" title={inc.roomName ?? ""}>
+                  {inc.roomName || "—"}
                 </TableCell>
                 <TableCell className="text-sm">{inc.reportedByLogin || "—"}</TableCell>
                 <TableCell className="text-sm max-w-[120px] truncate" title={inc.assignedToLogin ?? ""}>
@@ -343,7 +354,7 @@ export default function IncidentsPage() {
             {filtered.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={isAdmin ? 9 : 8}
+                  colSpan={isAdmin ? 10 : 9}
                   className="p-0"
                 >
                   <div className="flex flex-col items-center justify-center py-16 px-4 rounded-xl border-2 border-dashed border-muted-foreground/20 bg-muted/20">
@@ -396,6 +407,21 @@ export default function IncidentsPage() {
                   placeholder="Chọn cuộc họp"
                   searchPlaceholder="Tìm cuộc họp..."
                   emptyText="Không tìm thấy cuộc họp."
+                  clearable
+                  triggerClassName="h-11"
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Phòng họp bị sự cố (tùy chọn)</Label>
+              <div className="mt-1.5">
+                <SearchableSelect
+                  options={rooms.map((r: any) => ({ value: String(r.id), label: r.name || r.code || "" }))}
+                  value={form.roomId || ""}
+                  onValueChange={(v) => setForm({ ...form, roomId: v })}
+                  placeholder="Chọn phòng họp"
+                  searchPlaceholder="Tìm phòng họp..."
+                  emptyText="Không tìm thấy phòng."
                   clearable
                   triggerClassName="h-11"
                 />
@@ -498,6 +524,10 @@ export default function IncidentsPage() {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Cuộc họp</p>
                 <p className="mt-0.5">{detailIncident.meetingTitle || "—"}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Phòng họp bị sự cố</p>
+                <p className="mt-0.5">{detailIncident.roomName || "—"}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Người báo</p>

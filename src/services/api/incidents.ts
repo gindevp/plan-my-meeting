@@ -13,6 +13,8 @@ export interface IncidentListItem {
   reportedById?: string;
   assignedToId?: string;
   assignedToLogin?: string;
+  roomId?: string;
+  roomName?: string;
 }
 
 interface IncidentPayload {
@@ -39,6 +41,8 @@ function mapIncident(raw: any): IncidentListItem {
     reportedById: raw.reportedBy?.id != null ? String(raw.reportedBy.id) : undefined,
     assignedToId: raw.assignedTo?.id != null ? String(raw.assignedTo.id) : undefined,
     assignedToLogin: raw.assignedTo?.login ?? "",
+    roomId: raw.room?.id != null ? String(raw.room.id) : undefined,
+    roomName: raw.room?.name ?? "",
   };
 }
 
@@ -70,6 +74,7 @@ export async function createIncident(data: {
   description?: string;
   severity?: string;
   meetingId?: string | number | null;
+  roomId?: string | number | null;
   reportedById: string | number;
   assignedToId?: string | number | null;
 }) {
@@ -87,6 +92,9 @@ export async function createIncident(data: {
   if (data.assignedToId != null && data.assignedToId !== "") {
     (body as any).assignedTo = { id: Number(data.assignedToId) };
   }
+  if (data.roomId != null && data.roomId !== "") {
+    (body as any).room = { id: Number(data.roomId) };
+  }
   const res = await fetchApi<any>("/api/incidents", {
     method: "POST",
     body: JSON.stringify(body),
@@ -103,6 +111,7 @@ export async function updateIncident(
     status?: string;
     reportedAt?: string;
     meetingId?: string | number | null;
+    roomId?: string | number | null;
     reportedById: string | number;
     assignedToId?: string | number | null;
   }
@@ -116,6 +125,7 @@ export async function updateIncident(
     reportedAt: data.reportedAt ?? new Date().toISOString(),
     reportedBy: { id: Number(data.reportedById) },
     assignedTo: data.assignedToId != null && data.assignedToId !== "" ? { id: Number(data.assignedToId) } : null,
+    room: data.roomId != null && data.roomId !== "" ? { id: Number(data.roomId) } : null,
   };
   if (data.meetingId != null && data.meetingId !== "") {
     (body as any).meeting = { id: Number(data.meetingId) };

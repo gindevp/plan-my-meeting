@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, Search, CheckCircle, CalendarDays, MapPin, XCircle, Menu } from "lucide-react";
+import { Bell, Search, CheckCircle, CalendarDays, MapPin, XCircle, Menu, PanelLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -63,9 +63,18 @@ function notificationIcon(n: NotificationDTO): { Icon: typeof Bell; iconClass: s
 interface AppHeaderProps {
   showMenuButton?: boolean;
   onMenuClick?: () => void;
+  showSidebarToggle?: boolean;
+  isSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }
 
-export default function AppHeader({ showMenuButton = false, onMenuClick }: AppHeaderProps) {
+export default function AppHeader({
+  showMenuButton = false,
+  onMenuClick,
+  showSidebarToggle = false,
+  isSidebarOpen = true,
+  onToggleSidebar,
+}: AppHeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
@@ -164,7 +173,19 @@ export default function AppHeader({ showMenuButton = false, onMenuClick }: AppHe
 
   return (
     <header className="sticky top-0 z-40 flex min-h-14 flex-wrap items-center gap-2 border-b border-border bg-card/95 px-3 py-2 shadow-sm backdrop-blur-md sm:h-16 sm:flex-nowrap sm:justify-between sm:gap-0 sm:px-6 sm:py-0">
-      <div className="order-2 flex w-full items-center gap-4 sm:order-1 sm:flex-1 sm:max-w-md" ref={searchRef}>
+      <div className="order-2 flex w-full items-center gap-2 sm:order-1 sm:flex-1 sm:max-w-md" ref={searchRef}>
+        {showSidebarToggle && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden md:inline-flex shrink-0"
+            onClick={onToggleSidebar}
+            title={isSidebarOpen ? "Thu gọn thanh điều hướng" : "Mở rộng thanh điều hướng"}
+            aria-label={isSidebarOpen ? "Thu gọn thanh điều hướng" : "Mở rộng thanh điều hướng"}
+          >
+            <PanelLeft className="h-5 w-5" />
+          </Button>
+        )}
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input

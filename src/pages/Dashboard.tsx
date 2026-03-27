@@ -153,9 +153,14 @@ export default function Dashboard() {
     const now = Date.now();
     return (meetingsForTabs as any[])
       .filter((m) => {
-        if (m.status !== "approved") return false;
-        if (new Date(m.startTime).getTime() < now) return false;
-        const isOwner = m.requesterId === user?.id || m.hostId === user?.id;
+        const status = String(m.status ?? "").toLowerCase();
+        if (status !== "approved") return false;
+        const startTs = m.startTime ? new Date(m.startTime).getTime() : NaN;
+        if (!Number.isFinite(startTs) || startTs < now) return false;
+        const isOwner =
+          (m.requesterId != null && String(m.requesterId) === String(user?.id)) ||
+          (m.hostId != null && String(m.hostId) === String(user?.id)) ||
+          (m.secretaryId != null && String(m.secretaryId) === String(user?.id));
         const isParticipant = participantMeetingIds.has(String(m.id));
         const isSecretaryDept = secretaryDepartmentMeetingIds.has(String(m.id));
         const visibleToUser = isAdmin || isOwner || isParticipant || isSecretaryDept;
@@ -228,6 +233,22 @@ export default function Dashboard() {
       .filter((x) => x.value > 0);
   }, [tasks]);
 
+  const incidentsBySeverity = useMemo(() => {
+    const options = [
+      { key: "LOW", name: "Thấp", color: "hsl(152, 60%, 40%)" },
+      { key: "MEDIUM", name: "Trung bình", color: "hsl(40, 90%, 50%)" },
+      { key: "HIGH", name: "Cao", color: "hsl(0, 70%, 50%)" },
+    ];
+    return options
+      .map((o) => ({
+        key: o.key,
+        name: o.name,
+        color: o.color,
+        value: (incidents as any[]).filter((i: any) => String(i.severity || "").toUpperCase() === o.key).length,
+      }))
+      .filter((x) => x.value > 0);
+  }, [incidents]);
+
   const dayNames = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
   const nowDate = new Date();
   const startOfWeek = new Date(nowDate);
@@ -274,8 +295,8 @@ export default function Dashboard() {
       </div>
 
       {/* Charts + Upcoming */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
-        {/* Bar chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 lg:auto-rows-fr">
+        {/* Row 1 - left */}
         <Card className="lg:col-span-2 card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-2 transition-all duration-300 hover:shadow-lg">
           <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
             <CardTitle className="text-sm sm:text-base font-display">Cuộc họp trong tuần</CardTitle>
@@ -305,7 +326,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Pie chart */}
+        {/* Row 1 - right */}
         <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-3 transition-all duration-300 hover:shadow-lg">
           <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
             <CardTitle className="text-sm sm:text-base font-display">Theo hình thức</CardTitle>
@@ -339,10 +360,38 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
+        {/* Row 2 - left */}
         <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-2 transition-all duration-300 hover:shadow-lg">
+          <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-sm sm:text-base font-display">Theo trạng thái nhiệm vụ</CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <ResponsiveContainer width="100%" height={170}>
+              <BarChart data={tasksByStatus as any[]} layout="vertical" margin={{ top: 8, right: 8, bottom: 8, left: 32 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 90%)" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 12 }} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={90} />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: "transparent" }} />
+                <Bar name="Nhiệm vụ" dataKey="value" radius={[0, 0, 0, 0]}>
+                  {(tasksByStatus as any[]).map((entry: any, index: number) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="flex flex-wrap gap-2 sm:gap-4 mt-1 sm:mt-2 justify-center">
+              {tasksByStatus.map((item: any) => (
+                <div key={item.name} className="flex items-center gap-1.5 text-xs">
+                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                  <span className="text-muted-foreground">{item.name}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Row 2 - middle */}
+        <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-3 transition-all duration-300 hover:shadow-lg">
           <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
             <CardTitle className="text-sm sm:text-base font-display">Theo trạng thái cuộc họp</CardTitle>
           </CardHeader>
@@ -353,9 +402,8 @@ export default function Dashboard() {
                 <XAxis type="number" hide />
                 <YAxis type="category" dataKey="name" hide />
                 <Tooltip content={<ChartTooltip />} cursor={{ fill: "transparent" }} />
-                <Legend wrapperStyle={{ fontSize: "12px" }} />
                 {(meetingsByStatus as any[]).map((s: any) => (
-                  <Bar key={s.key} name={s.name} dataKey={s.key} stackId="meetingStatus" fill={s.color} radius={[10, 10, 10, 10]} />
+                  <Bar key={s.key} name={s.name} dataKey={s.key} stackId="meetingStatus" fill={s.color} radius={[0, 0, 0, 0]} />
                 ))}
               </BarChart>
             </ResponsiveContainer>
@@ -370,69 +418,82 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-3 transition-all duration-300 hover:shadow-lg">
+        {/* Upcoming Meetings - span 2 chart rows on right */}
+        <Card className="lg:col-start-3 lg:row-start-1 lg:row-span-2 h-full card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-4 transition-all duration-300 hover:shadow-lg flex flex-col">
+          <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-sm sm:text-base font-display">Cuộc họp sắp tới</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0 flex-1 min-h-0">
+            <div className="divide-y divide-border max-h-[420px] overflow-y-auto">
+              {upcomingMeetings.length === 0 ? (
+                <p className="px-4 sm:px-6 py-5 sm:py-8 text-center text-xs sm:text-sm text-muted-foreground">Không có cuộc họp sắp tới</p>
+              ) : (
+                upcomingMeetings.map((meeting, i) => (
+                <div
+                  key={meeting.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/plans?tab=approved&meetingId=${meeting.id}`)}
+                  onKeyDown={(e) => e.key === "Enter" && navigate(`/plans?tab=approved&meetingId=${meeting.id}`)}
+                  className="flex items-center gap-2 sm:gap-4 px-3 sm:px-6 py-3 sm:py-4 hover:bg-secondary/30 transition-all duration-200 opacity-0 animate-auth-fade-in-up cursor-pointer"
+                  style={{ animationDelay: `${0.5 + i * 0.08}s`, animationFillMode: "forwards" }}
+                >
+                  <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <CalendarDays className="h-4 w-4 sm:h-5 sm:w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm font-medium truncate">{meeting.title}</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+                      {new Date(meeting.startTime).toLocaleDateString('vi-VN')} • {new Date(meeting.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - {new Date(meeting.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className={`text-[10px] sm:text-xs shrink-0 ${typeColorMap[meeting.type] ?? typeColorMap.offline}`}>
+                    {typeLabels[meeting.type] ?? typeLabels.offline}
+                  </Badge>
+                  <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] sm:text-xs shrink-0 ${statusColorMap[meeting.status] ?? statusColorMap.approved}`}>
+                    {statusLabels[meeting.status] ?? statusLabels.approved}
+                  </Badge>
+                </div>
+              ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Row 3 - left filler chart */}
+        <Card className="lg:col-span-2 card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-3 transition-all duration-300 hover:shadow-lg">
           <CardHeader className="pb-1 sm:pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
-            <CardTitle className="text-sm sm:text-base font-display">Theo trạng thái nhiệm vụ</CardTitle>
+            <CardTitle className="text-sm sm:text-base font-display">Sự cố theo mức độ</CardTitle>
           </CardHeader>
           <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
             <ResponsiveContainer width="100%" height={170}>
-              <BarChart data={tasksByStatus as any[]} layout="vertical" margin={{ top: 8, right: 8, bottom: 8, left: 32 }}>
+              <BarChart data={incidentsBySeverity as any[]} layout="vertical" margin={{ top: 8, right: 8, bottom: 8, left: 32 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 90%)" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 12 }} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={90} />
                 <Tooltip content={<ChartTooltip />} cursor={{ fill: "transparent" }} />
-                <Bar name="Nhiệm vụ" dataKey="value" radius={[10, 10, 10, 10]}>
-                  {(tasksByStatus as any[]).map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
+                <Bar name="Sự cố" dataKey="value" radius={[0, 0, 0, 0]}>
+                  {(incidentsBySeverity as any[]).map((entry: any, index: number) => (
+                    <Cell key={`incident-severity-cell-${index}`} fill={entry.color} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            <div className="flex flex-wrap gap-2 sm:gap-4 mt-1 sm:mt-2 justify-center">
+              {(incidentsBySeverity as any[]).length > 0 ? (
+                incidentsBySeverity.map((item: any) => (
+                  <div key={item.name} className="flex items-center gap-1.5 text-xs">
+                    <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                    <span className="text-muted-foreground">{item.name}</span>
+                  </div>
+                ))
+              ) : (
+                <span className="text-xs text-muted-foreground">Chưa có dữ liệu sự cố</span>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Upcoming Meetings */}
-      <Card className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up auth-stagger-4 transition-all duration-300 hover:shadow-lg">
-        <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
-          <CardTitle className="text-sm sm:text-base font-display">Cuộc họp sắp tới</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="divide-y divide-border">
-            {upcomingMeetings.length === 0 ? (
-              <p className="px-4 sm:px-6 py-5 sm:py-8 text-center text-xs sm:text-sm text-muted-foreground">Không có cuộc họp sắp tới</p>
-            ) : (
-              upcomingMeetings.map((meeting, i) => (
-              <div
-                key={meeting.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => navigate(`/plans?tab=approved&meetingId=${meeting.id}`)}
-                onKeyDown={(e) => e.key === "Enter" && navigate(`/plans?tab=approved&meetingId=${meeting.id}`)}
-                className="flex items-center gap-2 sm:gap-4 px-3 sm:px-6 py-3 sm:py-4 hover:bg-secondary/30 transition-all duration-200 opacity-0 animate-auth-fade-in-up cursor-pointer"
-                style={{ animationDelay: `${0.5 + i * 0.08}s`, animationFillMode: "forwards" }}
-              >
-                <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <CalendarDays className="h-4 w-4 sm:h-5 sm:w-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm font-medium truncate">{meeting.title}</p>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
-                    {new Date(meeting.startTime).toLocaleDateString('vi-VN')} • {new Date(meeting.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - {new Date(meeting.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-                <Badge variant="outline" className={`text-[10px] sm:text-xs shrink-0 ${typeColorMap[meeting.type] ?? typeColorMap.offline}`}>
-                  {typeLabels[meeting.type] ?? typeLabels.offline}
-                </Badge>
-                <Badge variant="outline" className={`hidden sm:inline-flex text-[10px] sm:text-xs shrink-0 ${statusColorMap[meeting.status] ?? statusColorMap.approved}`}>
-                  {statusLabels[meeting.status] ?? statusLabels.approved}
-                </Badge>
-              </div>
-            ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

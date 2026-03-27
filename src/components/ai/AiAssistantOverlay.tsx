@@ -66,7 +66,7 @@ export default function AiAssistantOverlay() {
   const suppressClickRef = useRef(false);
   const bubbleAboveChatRef = useRef(true);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const BUBBLE_SIZE = 48;
+  const BUBBLE_SIZE = 64;
   const GAP = 8;
   const CHAT_WIDTH = 360;
   const CHAT_HEIGHT = 420;
@@ -380,14 +380,38 @@ export default function AiAssistantOverlay() {
 
   return (
     <>
+      <style>{`
+        @keyframes aiFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-6px); }
+        }
+        @keyframes aiShimmer {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        @keyframes aiWiggle {
+          0%, 100% { transform: rotate(0deg); }
+          25% { transform: rotate(-3deg); }
+          75% { transform: rotate(3deg); }
+        }
+        .ai-bubble-float { animation: aiFloat 3.2s ease-in-out infinite; }
+        .ai-bubble-shimmer { background-size: 200% 200%; animation: aiShimmer 6s ease-in-out infinite; }
+        .ai-icon-wiggle { animation: aiWiggle 2.8s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .ai-bubble-float, .ai-bubble-shimmer, .ai-icon-wiggle { animation: none !important; }
+        }
+      `}</style>
       <button
         type="button"
-        className={`fixed z-[10000] h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg ${open ? "" : "animate-pulse"}`}
+        className={`fixed z-[10000] h-16 w-16 rounded-2xl bg-gradient-to-br from-primary via-indigo-500 to-cyan-400 text-primary-foreground shadow-[0_10px_30px_rgba(59,130,246,0.45)] ring-1 ring-white/20 transition-transform duration-200 hover:scale-105 active:scale-95 ${
+          open ? "" : "ai-bubble-float ai-bubble-shimmer"
+        }`}
         style={{ left: bubblePos.x, top: bubblePos.y }}
         onPointerDown={!open ? startDrag(setBubblePos, "bubble") : undefined}
         onClick={toggleOpen}
       >
-        <Bot className="h-6 w-6 mx-auto" />
+        <Bot className={`h-8 w-8 mx-auto drop-shadow-sm ${open ? "" : "ai-icon-wiggle"}`} />
       </button>
 
       {open && (

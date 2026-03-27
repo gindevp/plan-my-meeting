@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { typeLabels } from "@/data/mockData";
@@ -145,10 +144,6 @@ export default function CalendarPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [weekIndex, setWeekIndex] = useState(0);
   const [showFilter, setShowFilter] = useState(false);
-  const [filterStartDate, setFilterStartDate] = useState("");
-  const [filterStartTime, setFilterStartTime] = useState("");
-  const [filterEndDate, setFilterEndDate] = useState("");
-  const [filterEndTime, setFilterEndTime] = useState("");
   const [filterLevel, setFilterLevel] = useState<string>("");
   const [filterType, setFilterType] = useState<string>("");
   const [, setTick] = useState(0);
@@ -160,14 +155,6 @@ export default function CalendarPage() {
 
   const filteredMeetings = useMemo(() => {
     return meetingsForTabs.filter((m: any) => {
-      if (filterStartDate && filterStartTime) {
-        const filterStart = new Date(`${filterStartDate}T${filterStartTime}`).getTime();
-        if (new Date(m.endTime).getTime() < filterStart) return false;
-      }
-      if (filterEndDate && filterEndTime) {
-        const filterEnd = new Date(`${filterEndDate}T${filterEndTime}`).getTime();
-        if (new Date(m.startTime).getTime() > filterEnd) return false;
-      }
       if (filterLevel) {
         const mLevel = normalizeLevel(m.level);
         if (mLevel !== filterLevel) return false;
@@ -175,7 +162,7 @@ export default function CalendarPage() {
       if (filterType && m.type !== filterType) return false;
       return true;
     });
-  }, [meetingsForTabs, filterStartDate, filterStartTime, filterEndDate, filterEndTime, filterLevel, filterType]);
+  }, [meetingsForTabs, filterLevel, filterType]);
 
   /** Chỉ cuộc họp đã phê duyệt hoặc đã hoàn thành mới hiển thị trên lịch (thời gian thực). */
   const calendarMeetings = useMemo(
@@ -446,25 +433,7 @@ export default function CalendarPage() {
 
       {showFilter && (
         <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4 opacity-0 animate-auth-scale-in">
-          <p className="text-sm font-medium">Lọc theo thời gian và điều kiện</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="space-y-1">
-              <Label className="text-xs">Từ ngày</Label>
-              <Input type="date" value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)} className="text-sm" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Từ giờ</Label>
-              <Input type="time" value={filterStartTime} onChange={e => setFilterStartTime(e.target.value)} className="text-sm" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Đến ngày</Label>
-              <Input type="date" value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)} className="text-sm" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Đến giờ</Label>
-              <Input type="time" value={filterEndTime} onChange={e => setFilterEndTime(e.target.value)} className="text-sm" />
-            </div>
-          </div>
+          <p className="text-sm font-medium">Lọc theo điều kiện</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label className="text-xs">Cấp họp</Label>
@@ -501,7 +470,7 @@ export default function CalendarPage() {
               />
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => { setFilterStartDate(""); setFilterStartTime(""); setFilterEndDate(""); setFilterEndTime(""); setFilterLevel(""); setFilterType(""); }}>
+          <Button variant="ghost" size="sm" onClick={() => { setFilterLevel(""); setFilterType(""); }}>
             Xóa bộ lọc
           </Button>
         </div>

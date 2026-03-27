@@ -225,9 +225,9 @@ export default function ReportsPage() {
           <CardContent className="flex flex-col items-center">
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={meetingsByType} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value">
+                <Pie data={meetingsByType} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={0} stroke="none" dataKey="value">
                   {meetingsByType.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
+                    <Cell key={i} fill={entry.color} stroke="none" />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -278,9 +278,9 @@ export default function ReportsPage() {
           <CardContent className="flex flex-col items-center">
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={meetingsByLevel} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value">
+                <Pie data={meetingsByLevel} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={0} stroke="none" dataKey="value">
                   {meetingsByLevel.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
+                    <Cell key={i} fill={entry.color} stroke="none" />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -343,11 +343,12 @@ export default function ReportsPage() {
                   cy="50%"
                   innerRadius={50}
                   outerRadius={80}
-                  paddingAngle={4}
+                  paddingAngle={0}
+                  stroke="none"
                   dataKey="value"
                 >
                   {incidentBySeverity.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
+                    <Cell key={i} fill={entry.color} stroke="none" />
                   ))}
                 </Pie>
                 <Tooltip />
@@ -374,9 +375,9 @@ export default function ReportsPage() {
           <CardContent className="flex flex-col items-center">
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
-                <Pie data={taskStatusData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={4} dataKey="value">
+                <Pie data={taskStatusData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={0} stroke="none" dataKey="value">
                   {taskStatusData.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
+                    <Cell key={i} fill={entry.color} stroke="none" />
                   ))}
                 </Pie>
                 <Tooltip />

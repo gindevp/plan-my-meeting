@@ -680,6 +680,8 @@ export async function getIncidentsByMeeting(meetingId: number | string) {
       severity: i.severity ?? "",
       status: i.status ?? "",
       reportedAt: i.reportedAt ?? "",
+      meetingTitle: i.meetingTitle ?? "",
+      roomName: i.roomName ?? "",
       reportedBy: i.reportedByLogin ?? "",
       assignedTo: i.assignedToLogin ?? "",
     }));
@@ -692,6 +694,7 @@ export async function getAllIncidents(): Promise<any[]> {
 
 export async function createIncident(payload: {
   meetingId?: number | string | null;
+  roomId?: number | string | null;
   reportedById: number | string;
   title: string;
   description?: string;
@@ -708,6 +711,9 @@ export async function createIncident(payload: {
   };
   if (payload.meetingId != null && payload.meetingId !== "") {
     body.meeting = { id: Number(payload.meetingId) };
+  }
+  if (payload.roomId != null && payload.roomId !== "") {
+    body.room = { id: Number(payload.roomId) };
   }
   if (payload.assignedToId != null && payload.assignedToId !== "") {
     body.assignedTo = { id: Number(payload.assignedToId) };

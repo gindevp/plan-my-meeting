@@ -95,6 +95,13 @@ const normalizeLevel = (level?: string) => {
   return value || "department";
 };
 
+const normalizeText = (s?: string) =>
+  String(s ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
 export default function MeetingPlanPage() {
   const { toast } = useToast();
   const { data: meetings = [] } = useMeetings();
@@ -172,6 +179,22 @@ export default function MeetingPlanPage() {
     queryFn: getAllParticipants,
   });
   const { data: departments = [] } = useDepartments();
+  const operationDepartment = useMemo(
+    () => (departments as any[]).find((d: any) => normalizeText(d?.name) === "phong van hanh"),
+    [departments]
+  );
+  const incidentAssigneeOptions = useMemo(
+    () =>
+      (users as any[])
+        .filter(
+          (u: any) =>
+            operationDepartment?.id != null &&
+            String(u?.departmentId ?? "") === String(operationDepartment.id) &&
+            u?.activated !== false
+        )
+        .map((u: any) => ({ value: String(u.id), label: u.name || u.login || "" })),
+    [users, operationDepartment]
+  );
 
   const visibleStatusTabs = statusTabs;
 
@@ -247,6 +270,8 @@ export default function MeetingPlanPage() {
       const m = p.meeting;
       const sec = m.secretary;
       const secretaryName = sec ? [sec.firstName, sec.lastName].filter(Boolean).join(" ").trim() || sec.login : undefined;
+      const roomId = m.room?.id != null ? String(m.room.id) : (m.roomId != null ? String(m.roomId) : undefined);
+      const roomName = m.room?.name ?? m.roomName ?? undefined;
       list.push({
         id,
         title: m.title ?? "",
@@ -255,7 +280,8 @@ export default function MeetingPlanPage() {
         status: "approved",
         startTime: m.startTime,
         endTime: m.endTime,
-        roomName: undefined,
+        roomId,
+        roomName,
         meetingLink: undefined,
         organizer: m.chairperson ?? "",
         chairperson: m.chairperson ?? "",
@@ -287,6 +313,8 @@ export default function MeetingPlanPage() {
       const m = p.meeting;
       const sec = m.secretary;
       const secretaryName = sec ? [sec.firstName, sec.lastName].filter(Boolean).join(" ").trim() || sec.login : undefined;
+      const roomId = m.room?.id != null ? String(m.room.id) : (m.roomId != null ? String(m.roomId) : undefined);
+      const roomName = m.room?.name ?? m.roomName ?? undefined;
       list.push({
         id,
         title: m.title ?? "",
@@ -295,7 +323,8 @@ export default function MeetingPlanPage() {
         status: "approved",
         startTime: m.startTime,
         endTime: m.endTime,
-        roomName: undefined,
+        roomId,
+        roomName,
         meetingLink: undefined,
         organizer: m.chairperson ?? "",
         chairperson: m.chairperson ?? "",
@@ -360,6 +389,8 @@ export default function MeetingPlanPage() {
       const m = fromParticipant.meeting;
       const sec = m.secretary;
       const secretaryName = sec ? [sec.firstName, sec.lastName].filter(Boolean).join(" ").trim() || sec.login : undefined;
+      const roomId = m.room?.id != null ? String(m.room.id) : (m.roomId != null ? String(m.roomId) : undefined);
+      const roomName = m.room?.name ?? m.roomName ?? undefined;
       setSelectedMeeting({
         id: String(m.id),
         title: m.title ?? "",
@@ -368,7 +399,8 @@ export default function MeetingPlanPage() {
         status: (m.status ?? "APPROVED").toLowerCase(),
         startTime: m.startTime,
         endTime: m.endTime,
-        roomName: undefined,
+        roomId,
+        roomName,
         meetingLink: undefined,
         organizer: m.chairperson ?? "",
         chairperson: m.chairperson ?? "",
@@ -387,7 +419,7 @@ export default function MeetingPlanPage() {
   }, [location.search, meetingsForTabs, allParticipantsForPlan, user?.id]);
 
   const filtered = useMemo(() => {
-    return meetingsForTabs.filter((m: any) => {
+    const list = meetingsForTabs.filter((m: any) => {
       const matchStatus = m.status === activeTab;
       const matchSearch = m.title?.toLowerCase().includes(search.toLowerCase());
       const isRequester = m.requesterId != null && String(m.requesterId) === String(user?.id);
@@ -424,7 +456,38 @@ export default function MeetingPlanPage() {
 
       return true;
     });
-  }, [meetingsForTabs, activeTab, search, user?.id, isRoomManager, secretaryOfMeetingIds, participantInAnyStatusMeetingIds, secretaryDepartmentMeetingIdsAllStatuses, filterStartDate, filterStartTime, filterEndDate, filterEndTime, filterLevel, filterType]);
+
+    const runtimeBucket = (m: any): number => {
+      const start = m.startTime ? new Date(m.startTime).getTime() : NaN;
+      const end = m.endTime ? new Date(m.endTime).getTime() : NaN;
+      if (!Number.isFinite(start) || !Number.isFinite(end)) return 3;
+      if (nowTs >= start && nowTs <= end) return 0; // đang họp
+      if (nowTs < start) return 1; // sắp họp
+      return 2; // đã kết thúc
+    };
+
+    return list.sort((a: any, b: any) => {
+      const ba = runtimeBucket(a);
+      const bb = runtimeBucket(b);
+      if (ba !== bb) return ba - bb;
+
+      const sa = a.startTime ? new Date(a.startTime).getTime() : NaN;
+      const sb = b.startTime ? new Date(b.startTime).getTime() : NaN;
+      const ea = a.endTime ? new Date(a.endTime).getTime() : NaN;
+      const eb = b.endTime ? new Date(b.endTime).getTime() : NaN;
+
+      // Trong nhóm "đang họp": cuộc họp sắp kết thúc trước thì ưu tiên trên.
+      if (ba === 0 && Number.isFinite(ea) && Number.isFinite(eb)) return ea - eb;
+      // Trong nhóm "sắp họp": thời gian bắt đầu gần nhất lên trước.
+      if (ba === 1 && Number.isFinite(sa) && Number.isFinite(sb)) return sa - sb;
+      // Trong nhóm "đã kết thúc": cuộc họp mới kết thúc gần đây lên trước.
+      if (ba === 2 && Number.isFinite(ea) && Number.isFinite(eb)) return eb - ea;
+
+      // Fallback ổn định theo thời gian bắt đầu.
+      if (Number.isFinite(sa) && Number.isFinite(sb)) return sa - sb;
+      return String(a?.id ?? "").localeCompare(String(b?.id ?? ""));
+    });
+  }, [meetingsForTabs, activeTab, search, user?.id, isRoomManager, secretaryOfMeetingIds, participantInAnyStatusMeetingIds, secretaryDepartmentMeetingIdsAllStatuses, filterStartDate, filterStartTime, filterEndDate, filterEndTime, filterLevel, filterType, nowTs]);
 
   const isMeetingVisibleToUser = (m: any, status: string) => {
     if ((status === "approved" || status === "pending" || status === "rejected" || status === "completed" || status === "cancelled") && isRoomManager) return true;
@@ -618,7 +681,15 @@ export default function MeetingPlanPage() {
   });
 
   const createIncidentMutation = useMutation({
-    mutationFn: (payload: { reportedById: number | string; title: string; description?: string; severity?: string; assignedToId?: string | null }) =>
+    mutationFn: (payload: {
+      meetingId?: number | string | null;
+      roomId?: number | string | null;
+      reportedById: number | string;
+      title: string;
+      description?: string;
+      severity?: string;
+      assignedToId?: string | null;
+    }) =>
       createIncident(payload),
     onSuccess: () => {
       if (selectedMeeting?.id) queryClient.invalidateQueries({ queryKey: ["incidents", selectedMeeting.id] });
@@ -1148,7 +1219,7 @@ export default function MeetingPlanPage() {
               <TableHead className="font-semibold tracking-tight">Tên cuộc họp</TableHead>
               <TableHead className="font-medium">Cấp</TableHead>
               <TableHead className="font-medium">Loại</TableHead>
-              <TableHead className="font-medium">Cơ quan chủ trì</TableHead>
+              <TableHead className="font-medium">Phòng họp</TableHead>
               <TableHead className="font-medium">Chủ trì</TableHead>
               <TableHead className="font-medium">Bắt đầu</TableHead>
               <TableHead className="font-medium">Kết thúc</TableHead>
@@ -1194,7 +1265,11 @@ export default function MeetingPlanPage() {
                       {typeLabels[meeting.type]}
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm">{meeting.department}</TableCell>
+                  <TableCell className="text-sm">
+                    {meeting.type === "online"
+                      ? ""
+                      : meeting.roomName || (meeting.type === "hybrid" ? "Chưa chọn phòng" : "Chưa chọn phòng")}
+                  </TableCell>
                   <TableCell className="text-sm">{meeting.chairperson}</TableCell>
                   <TableCell className="text-sm whitespace-nowrap">
                     <div className="font-medium">{new Date(meeting.startTime).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}</div>
@@ -2002,17 +2077,34 @@ export default function MeetingPlanPage() {
                               <div className="flex items-center gap-2">
                                 <Label className="text-xs text-muted-foreground whitespace-nowrap">Gửi tới người phụ trách:</Label>
                                 <SearchableSelect
-                                  options={(users as any[]).map((u: any) => ({ value: String(u.id), label: u.name || u.login || "" }))}
+                                  options={incidentAssigneeOptions}
                                   value={incidentAssignedToId || ""}
                                   onValueChange={v => setIncidentAssignedToId(v)}
                                   placeholder="Không chọn"
                                   searchPlaceholder="Tìm người..."
-                                  emptyText="Không tìm thấy."
+                                  emptyText="Không có nhân sự thuộc Phòng Vận hành."
                                   clearable
                                   triggerClassName="w-[200px] h-8 text-xs"
                                 />
                               </div>
-                              <Button size="sm" onClick={() => { if (incidentTitle.trim()) createIncidentMutation.mutate({ reportedById: user?.id!, title: incidentTitle.trim(), description: incidentDescription.trim(), severity: incidentSeverity, assignedToId: incidentAssignedToId || undefined }); }} disabled={createIncidentMutation.isPending || !incidentTitle.trim()}>Gửi</Button>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  if (!incidentTitle.trim() || !selectedMeeting?.id) return;
+                                  createIncidentMutation.mutate({
+                                    meetingId: selectedMeeting.id,
+                                    roomId: selectedMeeting.roomId || undefined,
+                                    reportedById: user?.id!,
+                                    title: incidentTitle.trim(),
+                                    description: incidentDescription.trim(),
+                                    severity: incidentSeverity,
+                                    assignedToId: incidentAssignedToId || undefined,
+                                  });
+                                }}
+                                disabled={createIncidentMutation.isPending || !incidentTitle.trim()}
+                              >
+                                Gửi
+                              </Button>
                               <Button size="sm" variant="ghost" onClick={() => { setShowIncidentForm(false); setIncidentTitle(""); setIncidentDescription(""); setIncidentAssignedToId(""); }}>Hủy</Button>
                             </div>
                           </div>

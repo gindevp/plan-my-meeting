@@ -47,15 +47,17 @@ const isPlansActive = (pathname: string) => {
 interface AppSidebarProps {
   isMobile: boolean;
   isMobileOpen: boolean;
+  isDesktopExpanded: boolean;
   onCloseMobile: () => void;
 }
 
-export default function AppSidebar({ isMobile, isMobileOpen, onCloseMobile }: AppSidebarProps) {
+export default function AppSidebar({ isMobile, isMobileOpen, isDesktopExpanded, onCloseMobile }: AppSidebarProps) {
   const location = useLocation();
   const { user, signOut } = useAuth();
   const { t } = useI18n();
   const isAdmin = user?.authorities?.includes("ROLE_ADMIN") ?? false;
   const isSecretary = user?.authorities?.includes("ROLE_SECRETARY") ?? false;
+  const isRoomManager = user?.authorities?.includes("ROLE_ROOM_MANAGER") ?? false;
   const userDepartmentId = user?.departmentId != null ? String(user.departmentId) : null;
 
   const { data: allParticipants = [] } = useQuery({
@@ -118,7 +120,11 @@ export default function AppSidebar({ isMobile, isMobileOpen, onCloseMobile }: Ap
   })();
 
   const visibleNavigation = navigation;
-  const visibleManagement = management.filter(item => (item.href !== "/reports" && item.href !== "/incidents") || isAdmin);
+  const visibleManagement = management.filter(item => {
+    if (item.href === "/reports") return isAdmin;
+    if (item.href === "/incidents") return isAdmin || isRoomManager;
+    return true;
+  });
 
   return (
     <>
@@ -128,26 +134,30 @@ export default function AppSidebar({ isMobile, isMobileOpen, onCloseMobile }: Ap
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex flex-col bg-gradient-sidebar border-r border-sidebar-border shadow-xl transition-transform duration-300",
-          "w-64 md:translate-x-0 md:w-64",
+          isMobile ? "w-[85vw] max-w-[320px]" : isDesktopExpanded ? "w-64" : "w-[76px]",
           isMobile ? "w-[85vw] max-w-[320px]" : "",
-          isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+          isMobile ? (isMobileOpen ? "translate-x-0" : "-translate-x-full") : "translate-x-0"
         )}
       >
-      <div className="flex h-16 items-center gap-3 px-5 border-b border-sidebar-border">
+      <div className={cn("flex h-16 items-center gap-3 border-b border-sidebar-border", isDesktopExpanded || isMobile ? "px-5" : "px-3 justify-center")}>
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sidebar-primary shadow-md">
           <CalendarDays className="h-5 w-5 text-sidebar-primary-foreground" />
         </div>
-        <div>
-          <h1 className="text-sm font-display font-bold text-sidebar-accent-foreground tracking-tight">MeetViet</h1>
-          <p className="text-[10px] text-sidebar-muted">Nền tảng quản lý cuộc họp</p>
-        </div>
+        {(isDesktopExpanded || isMobile) && (
+          <div>
+            <h1 className="text-sm font-display font-bold text-sidebar-accent-foreground tracking-tight">MeetViet</h1>
+            <p className="text-[10px] text-sidebar-muted">Nền tảng quản lý cuộc họp</p>
+          </div>
+        )}
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-5 space-y-6">
         <div>
-          <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-sidebar-muted">
+          {(isDesktopExpanded || isMobile) && (
+            <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-sidebar-muted">
             {t("sidebar.main")}
-          </p>
+            </p>
+          )}
           <ul className="space-y-0.5">
             {visibleNavigation.map(item => (
               <li key={item.key}>
@@ -157,20 +167,26 @@ export default function AppSidebar({ isMobile, isMobileOpen, onCloseMobile }: Ap
                   end={item.href !== "/plans"}
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                      "flex items-center rounded-lg text-sm font-medium transition-all duration-200",
+                      isDesktopExpanded || isMobile ? "gap-3 px-3 py-2.5" : "justify-center px-2 py-2.5",
                       (item.href === "/plans" ? isPlansActive(location.pathname) : item.href === "/invitations" ? location.pathname === "/invitations" : isActive)
                         ? "bg-sidebar-accent text-sidebar-primary shadow-sm"
                         : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
                     )
                   }
+                  title={isDesktopExpanded || isMobile ? undefined : t(item.key)}
                 >
                   <item.icon className="h-4.5 w-4.5 shrink-0" />
-                  <span className="flex-1 min-w-0 truncate">{t(item.key)}</span>
-                  {item.href === "/invitations" && invitationsTotal > 0 && (
+                  {(isDesktopExpanded || isMobile) && <span className="flex-1 min-w-0 truncate">{t(item.key)}</span>}
+                  {item.href === "/invitations" && invitationsTotal > 0 && (isDesktopExpanded || isMobile ? (
                     <span className="ml-auto inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-semibold text-destructive-foreground">
                       {invitationsTotal}
                     </span>
-                  )}
+                  ) : (
+                    <span className="absolute ml-0 translate-x-[10px] -translate-y-[10px] inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
+                      {invitationsTotal > 9 ? "9+" : invitationsTotal}
+                    </span>
+                  ))}
                 </NavLink>
               </li>
             ))}
@@ -178,9 +194,11 @@ export default function AppSidebar({ isMobile, isMobileOpen, onCloseMobile }: Ap
         </div>
 
         <div>
-          <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-sidebar-muted">
-            {t("sidebar.management")}
-          </p>
+          {(isDesktopExpanded || isMobile) && (
+            <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-sidebar-muted">
+              {t("sidebar.management")}
+            </p>
+          )}
           <ul className="space-y-0.5">
             {visibleManagement.map(item => (
               <li key={item.key}>
@@ -190,15 +208,17 @@ export default function AppSidebar({ isMobile, isMobileOpen, onCloseMobile }: Ap
                   end
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                      "flex items-center rounded-lg text-sm font-medium transition-all duration-200",
+                      isDesktopExpanded || isMobile ? "gap-3 px-3 py-2.5" : "justify-center px-2 py-2.5",
                       isActive
                         ? "bg-sidebar-accent text-sidebar-primary shadow-sm"
                         : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
                     )
                   }
+                  title={isDesktopExpanded || isMobile ? undefined : t(item.key)}
                 >
                   <item.icon className="h-4.5 w-4.5 shrink-0" />
-                  {t(item.key)}
+                  {(isDesktopExpanded || isMobile) && t(item.key)}
                 </NavLink>
               </li>
             ))}
@@ -206,17 +226,32 @@ export default function AppSidebar({ isMobile, isMobileOpen, onCloseMobile }: Ap
         </div>
       </nav>
 
-      <div className="border-t border-sidebar-border p-4">
-        <div className="flex items-center gap-3">
-          <UserAvatar size={36} className="ring-2 ring-sidebar-accent/50" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-sidebar-accent-foreground truncate">
-              {user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : user?.login ?? "User"}
-            </p>
-            <button onClick={signOut} className="flex items-center gap-1 text-[11px] text-sidebar-muted hover:text-destructive transition-colors">
-              <LogOut className="h-3 w-3" /> {t("sidebar.logout")}
-            </button>
+      <div className={cn("border-t border-sidebar-border", isDesktopExpanded || isMobile ? "p-4" : "p-3")}>
+        <div className={cn("flex", isDesktopExpanded || isMobile ? "items-center gap-3" : "flex-col items-center justify-center")}>
+          <div>
+            <UserAvatar size={36} className="ring-2 ring-sidebar-accent/50" />
           </div>
+          {(isDesktopExpanded || isMobile) && (
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-sidebar-accent-foreground truncate">
+                {user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : user?.login ?? "User"}
+              </p>
+              <button onClick={signOut} className="flex items-center gap-1 text-[11px] text-sidebar-muted hover:text-destructive transition-colors">
+                <LogOut className="h-3 w-3" /> {t("sidebar.logout")}
+              </button>
+            </div>
+          )}
+          {!(isDesktopExpanded || isMobile) && (
+            <button
+              type="button"
+              onClick={signOut}
+              className="mt-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-sidebar-accent/60 text-destructive hover:bg-sidebar-accent transition-colors"
+              aria-label={t("sidebar.logout")}
+              title={t("sidebar.logout")}
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       </div>
       </aside>

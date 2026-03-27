@@ -35,10 +35,24 @@ export async function aiAssistantChat(payload: {
   userId?: number | string;
   conversationId?: string;
   recentMessages?: AiAssistantMessage[];
+  timeoutMs?: number;
 }) {
-  return fetchApi<AiAssistantChatResponse>("/api/ai/chat", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  const timeoutMs = Math.max(5000, Number(payload.timeoutMs ?? 45000));
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetchApi<AiAssistantChatResponse>("/api/ai/chat", {
+      method: "POST",
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("AI phản hồi quá lâu, vui lòng thử lại.");
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 

@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { getAllParticipants, respondToInvitation, selectRepresentatives, deleteMeetingParticipant } from "@/services/api/meetings";
+import { getAllParticipants, respondToInvitation, selectRepresentatives, deleteMeetingParticipant, declineDepartmentInvitation } from "@/services/api/meetings";
 import { useMeetings } from "@/hooks/useMeetings";
 import { getUsersByDepartment } from "@/services/api/users";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,6 +53,8 @@ export default function InvitationsPage() {
   const [declineParticipantId, setDeclineParticipantId] = useState<number | null>(null);
   const [declineReason, setDeclineReason] = useState("");
   const [requiredDeclineParticipantId, setRequiredDeclineParticipantId] = useState<number | null>(null);
+  const [deptDeclineParticipantId, setDeptDeclineParticipantId] = useState<number | null>(null);
+  const [deptDeclineReason, setDeptDeclineReason] = useState("");
   const [selectModal, setSelectModal] = useState<{ participantId: number; meeting: any; departmentName: string } | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
   const [representativeSearch, setRepresentativeSearch] = useState("");
@@ -155,6 +157,21 @@ export default function InvitationsPage() {
     },
   });
 
+  const deptDeclineMutation = useMutation({
+    mutationFn: ({ participantId, reason }: { participantId: number; reason: string }) =>
+      declineDepartmentInvitation(participantId, reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["all-participants"] });
+      queryClient.invalidateQueries({ queryKey: ["meetings"] });
+      setDeptDeclineParticipantId(null);
+      setDeptDeclineReason("");
+      toast({ title: "Đã từ chối", description: "Bạn đã từ chối lời mời tham dự cho phòng ban." });
+    },
+    onError: (err: Error) => {
+      toast({ variant: "destructive", title: "Lỗi", description: err.message || "Không thể từ chối." });
+    },
+  });
+
   const openMeetingDetail = (meetingId: string) => {
     navigate(`/plans?meetingId=${meetingId}`);
   };
@@ -252,6 +269,7 @@ export default function InvitationsPage() {
             {departmentInvitations.map((inv: any) => {
               const meeting = inv.meeting;
               if (!meeting) return null;
+              const isDeptDeclineMode = deptDeclineParticipantId === inv.id;
               return (
                 <Card key={inv.id} className="card-elevated overflow-hidden opacity-0 animate-auth-fade-in-up transition-all duration-300 hover:shadow-lg" style={{ animationDelay: `${0.2 + departmentInvitations.indexOf(inv) * 0.05}s`, animationFillMode: "forwards" }}>
                   <CardHeader className="pb-2">
@@ -280,16 +298,68 @@ export default function InvitationsPage() {
                     <p className="text-sm text-muted-foreground mb-3">
                       Phòng ban của bạn được mời tham dự. Vui lòng chọn cá nhân đại diện tham dự cuộc họp.
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openMeetingDetail(meeting.id)}>
-                        <Eye className="h-4 w-4" />
-                        Xem chi tiết
-                      </Button>
-                      <Button size="sm" className="gap-1.5" onClick={() => openSelectModal(inv)}>
-                        <Users className="h-4 w-4" />
-                        Chọn đại diện
-                      </Button>
-                    </div>
+                    {!isDeptDeclineMode ? (
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openMeetingDetail(meeting.id)}>
+                          <Eye className="h-4 w-4" />
+                          Xem chi tiết
+                        </Button>
+                        <Button size="sm" className="gap-1.5" onClick={() => openSelectModal(inv)}>
+                          <Users className="h-4 w-4" />
+                          Chọn đại diện
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="gap-1.5"
+                          onClick={() => setDeptDeclineParticipantId(inv.id)}
+                          disabled={isMeetingOver(meeting)}
+                          title={isMeetingOver(meeting) ? "Đã quá thời gian họp. Không thể từ chối lời mời." : undefined}
+                        >
+                          <UserX className="h-4 w-4" />
+                          Từ chối
+                        </Button>
+                        {isMeetingOver(meeting) && (
+                          <span className="text-xs text-muted-foreground">
+                            Đã quá thời gian họp. Không thể từ chối lời mời.
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                        <Label className="text-xs">Lý do từ chối (bắt buộc)</Label>
+                        <Textarea
+                          value={deptDeclineReason}
+                          onChange={(e) => setDeptDeclineReason(e.target.value)}
+                          placeholder="Nhập lý do..."
+                          rows={2}
+                          className="text-sm"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => {
+                              if (!deptDeclineReason.trim()) {
+                                toast({ variant: "destructive", title: "Lỗi", description: "Vui lòng nhập lý do từ chối." });
+                                return;
+                              }
+                              deptDeclineMutation.mutate({ participantId: inv.id, reason: deptDeclineReason.trim() });
+                            }}
+                            disabled={deptDeclineMutation.isPending}
+                          >
+                            Gửi từ chối
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => { setDeptDeclineParticipantId(null); setDeptDeclineReason(""); }}
+                          >
+                            Hủy
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );

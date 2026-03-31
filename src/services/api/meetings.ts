@@ -595,6 +595,14 @@ export async function respondToInvitation(
   });
 }
 
+/** Thư ký phòng ban từ chối lời mời phòng ban (participant theo phòng ban). */
+export async function declineDepartmentInvitation(participantId: number | string, absentReason: string) {
+  return fetchApi<any>(`/api/meeting-participants/${participantId}/decline-department`, {
+    method: "POST",
+    body: JSON.stringify({ absentReason }),
+  });
+}
+
 /** Xóa lời mời (chỉ được gọi khi cuộc họp đã quá giờ; hoặc admin xóa bất kỳ lúc nào). */
 export async function deleteMeetingParticipant(participantId: number | string): Promise<void> {
   await fetchApi(`/api/meeting-participants/${participantId}`, { method: "DELETE" });
